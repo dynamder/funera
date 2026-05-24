@@ -98,7 +98,7 @@ impl Message for FuneraMessage {
 }
 
 impl FuneraMessage {
-    pub fn format_request(&self) -> JsonValue {
+    pub fn format_json(&self) -> JsonValue {
         match &self.msg_variant {
             MsgVariant::Text(text_msg) => {
                 json!({
