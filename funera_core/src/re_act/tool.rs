@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use thiserror::Error;
@@ -15,10 +16,11 @@ impl Display for ToolType {
     }
 }
 
+#[async_trait]
 pub trait Tool {
     fn name(&self) -> &str;
     fn description(&self) -> &str;
-    fn execute(&self, args: &HashMap<String, String>) -> Result<String, ToolExecError>;
+    async fn execute(&self, args: JsonValue) -> Result<String, ToolCallError>;
     fn get_type(&self) -> ToolType {
         ToolType::Function
     }
@@ -26,13 +28,15 @@ pub trait Tool {
 }
 
 #[derive(Debug, Error)]
-pub enum ToolExecError {
-    #[error("parameter mismatch: {mismatched:?}")]
-    ParameterMismatch {
-        mismatched: HashMap<String, String>, //mismatched parameter name, required value
-    },
+pub enum ToolCallError {
+    #[error("parameter mismatch: {0}")]
+    ParameterMismatch(JsonValue),
     #[error("tool execution error: {0}")]
     ToolExecutionError(#[from] anyhow::Error),
+    #[error("tool unavailable: {0}")]
+    ToolUnavailable(String),
+    #[error("tool not found: {0}")]
+    ToolNotFound(String),
 }
 
 pub struct ToolRegistryEntry {
@@ -97,5 +101,16 @@ impl ToolRegistry {
             })
             .collect::<Vec<_>>()
             .into()
+    }
+    pub async fn call_tool(&self, name: &str, args: JsonValue) -> Result<String, ToolCallError> {
+        if let Some(tool) = self.get_tool(name) {
+            if tool.is_available() {
+                tool.tool.execute(args).await
+            } else {
+                Err(ToolCallError::ToolUnavailable(name.to_string()))
+            }
+        } else {
+            Err(ToolCallError::ToolNotFound(name.to_string()))
+        }
     }
 }

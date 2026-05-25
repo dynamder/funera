@@ -1,6 +1,5 @@
-pub(crate) mod chat;
-pub(crate) mod env;
-pub(crate) mod re_act;
-pub(crate) mod security;
-
-//TODO: refactor it to workspace
+pub mod chat;
+pub mod env;
+pub mod event_bus;
+pub mod re_act;
+pub mod security;

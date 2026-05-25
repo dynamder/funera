@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.102"
 async-openai = { version = "0.38.0", features = ["_api", "chat-completion", "responses", "skill"] }
+async-trait = "0.1.89"
 chrono = { version = "0.4.44", features = ["serde"] }
+futures = "0.3.32"
 parking_lot = { version = "0.12.5", features = ["serde"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }

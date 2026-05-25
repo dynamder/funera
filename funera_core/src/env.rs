@@ -46,6 +46,13 @@ impl FuneraEnvWatcher {
         self.client_rx.borrow_and_update().clone()
     }
 
+    pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {
+        let client = self.client_rx.borrow_and_update().clone();
+        todo!(
+            "create token and msg channel and wire them up correctly, by sending request to FuneraEnv."
+        )
+    }
+
     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {
         self.tool_rx.changed().await
     }
