@@ -1,8 +1,4 @@
-pub(crate) mod chat;
-pub(crate) mod env;
-pub(crate) mod re_act;
-pub(crate) mod security;
-pub(crate) mod tui;
+//TODO: refactor it to workspace
 
 fn main() {
     println!("Hello, world!");
