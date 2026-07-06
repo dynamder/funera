@@ -17,6 +17,7 @@ pub enum EditOp {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Edit {
     #[serde(rename = "op")]
     pub operation: EditOp,
@@ -370,5 +371,298 @@ impl Tool for EditTool {
         result.push_str(&anchors);
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn make_edit(op: &str, pos: Option<&str>, lines: Vec<&str>, old_text: Option<&str>, new_text: Option<&str>) -> Edit {
+        Edit {
+            operation: serde_json::from_value(json!(op)).unwrap(),
+            pos: pos.map(|s| s.to_string()),
+            end: None,
+            lines: lines.into_iter().map(String::from).collect(),
+            old_text: old_text.map(String::from),
+            new_text: new_text.map(String::from),
+        }
+    }
+
+    fn test_dir() -> PathBuf {
+        std::env::temp_dir().join(format!("funera_edit_test_{}", std::process::id()))
+    }
+
+    async fn write_test_file(name: &str, content: &str) -> PathBuf {
+        let dir = test_dir();
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let path = dir.join(name);
+        tokio::fs::write(&path, content).await.unwrap();
+        path
+    }
+
+    async fn cleanup() {
+        let _ = tokio::fs::remove_dir_all(test_dir()).await;
+    }
+
+    fn compute_line_anchor(lines: &[String], line_num: usize) -> String {
+        let idx = line_num.saturating_sub(1);
+        let prev = if idx > 0 { &lines[idx - 1] } else { &String::new() };
+        let curr = &lines[idx];
+        let next = if idx + 1 < lines.len() { &lines[idx + 1] } else { &String::new() };
+        hashline::compute_anchor(prev, curr, next)
+    }
+
+    // --- parse_anchor tests ---
+
+    #[test]
+    fn parse_anchor_valid() {
+        let (num, hash) = EditTool::parse_anchor("5#KT").unwrap();
+        assert_eq!(num, 5);
+        assert_eq!(hash, "KT");
+    }
+
+    #[test]
+    fn parse_anchor_trimmed() {
+        let (num, hash) = EditTool::parse_anchor("  10#VR  ").unwrap();
+        assert_eq!(num, 10);
+        assert_eq!(hash, "VR");
+    }
+
+    #[test]
+    fn parse_anchor_no_hash() {
+        assert!(EditTool::parse_anchor("5").is_none());
+    }
+
+    #[test]
+    fn parse_anchor_non_numeric() {
+        assert!(EditTool::parse_anchor("abc#KT").is_none());
+    }
+
+    // --- verify_anchor tests ---
+
+    #[test]
+    fn verify_anchor_matches() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let hash = compute_line_anchor(&lines, 2);
+        assert!(EditTool::verify_anchor(2, &hash, &lines).is_ok());
+    }
+
+    #[test]
+    fn verify_anchor_mismatch() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let result = EditTool::verify_anchor(2, "ZZ", &lines);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("STALE_ANCHOR"));
+    }
+
+    #[test]
+    fn verify_anchor_out_of_bounds() {
+        let lines: Vec<String> = vec!["a".into()];
+        let result = EditTool::verify_anchor(5, "KT", &lines);
+        assert!(result.is_err());
+    }
+
+    // --- apply_ops: replace ---
+
+    #[test]
+    fn replace_single_line() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let hash = compute_line_anchor(&lines, 2);
+        let edit = make_edit("replace", Some(&format!("2#{}", hash)), vec!["x", "y"], None, None);
+        let result = EditTool::apply_ops("a\nb\nc", &[edit]).unwrap();
+        assert_eq!(result, "a\nx\ny\nc");
+    }
+
+    // --- apply_ops: append ---
+
+    #[test]
+    fn append_after_line() {
+        let lines: Vec<String> = vec!["a".into(), "b".into()];
+        let hash = compute_line_anchor(&lines, 1);
+        let edit = make_edit("append", Some(&format!("1#{}", hash)), vec!["x"], None, None);
+        let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
+        assert_eq!(result, "a\nx\nb");
+    }
+
+    #[test]
+    fn append_at_end() {
+        let lines: Vec<String> = vec!["a".into(), "b".into()];
+        let hash = compute_line_anchor(&lines, 2);
+        let edit = make_edit("append", Some(&format!("2#{}", hash)), vec!["c"], None, None);
+        let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
+        assert_eq!(result, "a\nb\nc");
+    }
+
+    // --- apply_ops: prepend ---
+
+    #[test]
+    fn prepend_before_line() {
+        let lines: Vec<String> = vec!["a".into(), "b".into()];
+        let hash = compute_line_anchor(&lines, 2);
+        let edit = make_edit("prepend", Some(&format!("2#{}", hash)), vec!["x"], None, None);
+        let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
+        assert_eq!(result, "a\nx\nb");
+    }
+
+    // --- apply_ops: replace_text ---
+
+    #[test]
+    fn replace_text_unique() {
+        let edit = make_edit("replace_text", None, vec![], Some("hello"), Some("hi"));
+        let result = EditTool::apply_ops("say hello world", &[edit]).unwrap();
+        assert_eq!(result, "say hi world");
+    }
+
+    #[test]
+    fn replace_text_not_found() {
+        let edit = make_edit("replace_text", None, vec![], Some("nope"), Some("hi"));
+        let result = EditTool::apply_ops("hello world", &[edit]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("STALE_ANCHOR"));
+    }
+
+    #[test]
+    fn replace_text_not_unique() {
+        let edit = make_edit("replace_text", None, vec![], Some("a"), Some("b"));
+        let result = EditTool::apply_ops("a a a", &[edit]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("INVALID_PATCH"));
+    }
+
+    // --- apply_ops: bottom-up ordering ---
+
+    #[test]
+    fn multiple_edits_bottom_up() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let h1 = compute_line_anchor(&lines, 1);
+        let h3 = compute_line_anchor(&lines, 3);
+        let e1 = make_edit("replace", Some(&format!("1#{}", h1)), vec!["x"], None, None);
+        let e2 = make_edit("replace", Some(&format!("3#{}", h3)), vec!["z"], None, None);
+        let result = EditTool::apply_ops("a\nb\nc", &[e1, e2]).unwrap();
+        assert_eq!(result, "x\nb\nz");
+    }
+
+    // --- apply_ops: stale anchor ---
+
+    #[test]
+    fn stale_anchor_rejected() {
+        let edit = make_edit("replace", Some("2#ZZ"), vec!["x"], None, None);
+        let result = EditTool::apply_ops("a\nb\nc", &[edit]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("STALE_ANCHOR"));
+    }
+
+    // --- Full execute flow ---
+
+    #[tokio::test]
+    async fn edit_execute_replace() {
+        let path = write_test_file("exec_replace.txt", "line1\nline2\nline3\n").await;
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let hash = compute_line_anchor(&lines, 2);
+
+        let tool = EditTool;
+        let result = tool.execute(json!({
+            "filePath": path.to_string_lossy(),
+            "edits": [{
+                "op": "replace",
+                "pos": format!("2#{}", hash),
+                "lines": ["modified!"]
+            }]
+        })).await;
+        assert!(result.is_ok(), "replace failed: {:?}", result.err());
+        let new_content = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(new_content, "line1\nmodified!\nline3\n");
+        cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn edit_execute_replace_text() {
+        let path = write_test_file("exec_replacetext.txt", "hello world\n").await;
+        let tool = EditTool;
+        let result = tool.execute(json!({
+            "filePath": path.to_string_lossy(),
+            "edits": [{
+                "op": "replace_text",
+                "oldText": "hello",
+                "newText": "hi"
+            }]
+        })).await;
+        assert!(result.is_ok(), "replace_text failed: {:?}", result.err());
+        let new_content = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(new_content, "hi world\n");
+        cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn edit_execute_missing_file() {
+        let tool = EditTool;
+        let result = tool.execute(json!({
+            "filePath": "C:\\nonexistent_edit_test_file_xyz.txt",
+            "edits": [{"op": "replace", "pos": "1#KT", "lines": ["x"]}]
+        })).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn edit_execute_missing_file_path() {
+        let tool = EditTool;
+        let result = tool.execute(json!({"edits": []})).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ToolCallError::ParameterMismatch(_) => {}
+            e => panic!("expected ParameterMismatch, got {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn edit_execute_noop_loop() {
+        let path = write_test_file("noop.txt", "hello\n").await;
+        let tool = EditTool;
+        let result = tool.execute(json!({
+            "filePath": path.to_string_lossy(),
+            "edits": [{"op": "replace_text", "oldText": "hello", "newText": "hello"}]
+        })).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("NOOP_LOOP"));
+        cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn edit_execute_append() {
+        let path = write_test_file("append.txt", "a\nb\n").await;
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let hash = compute_line_anchor(&lines, 2);
+
+        let tool = EditTool;
+        let result = tool.execute(json!({
+            "filePath": path.to_string_lossy(),
+            "edits": [{"op": "append", "pos": format!("2#{}", hash), "lines": ["c"]}]
+        })).await;
+        assert!(result.is_ok(), "append failed: {:?}", result.err());
+        let new_content = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(new_content, "a\nb\nc\n");
+        cleanup().await;
+    }
+
+    #[tokio::test]
+    async fn edit_execute_prepend() {
+        let path = write_test_file("prepend.txt", "b\nc\n").await;
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let hash = compute_line_anchor(&lines, 1);
+
+        let tool = EditTool;
+        let result = tool.execute(json!({
+            "filePath": path.to_string_lossy(),
+            "edits": [{"op": "prepend", "pos": format!("1#{}", hash), "lines": ["a"]}]
+        })).await;
+        assert!(result.is_ok(), "prepend failed: {:?}", result.err());
+        let new_content = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(new_content, "a\nb\nc\n");
+        cleanup().await;
     }
 }

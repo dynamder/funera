@@ -118,3 +118,121 @@ impl Tool for ReadTool {
         Ok(output.trim_end().to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn test_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("funera_read_test_{}_{}", std::process::id(), label))
+    }
+
+    async fn setup_file(label: &str, name: &str, content: &str) -> PathBuf {
+        let dir = test_dir(label);
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let path = dir.join(name);
+        tokio::fs::write(&path, content).await.unwrap();
+        path
+    }
+
+    async fn cleanup(label: &str) {
+        let _ = tokio::fs::remove_dir_all(test_dir(label)).await;
+    }
+
+    #[tokio::test]
+    async fn read_missing_file_path_param() {
+        let tool = ReadTool;
+        let result = tool.execute(json!({})).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ToolCallError::ParameterMismatch(_) => {}
+            e => panic!("expected ParameterMismatch, got {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn read_nonexistent_file() {
+        let tool = ReadTool;
+        let result = tool.execute(json!({"filePath": "C:\\nonexistent_file_xyz\\test.txt"})).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn read_simple_file() {
+        let path = setup_file("simple", "simple.txt", "hello\nworld\n").await;
+        let tool = ReadTool;
+        let result = tool.execute(json!({"filePath": path.to_string_lossy()})).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("hello"));
+        assert!(output.contains("world"));
+        assert!(output.contains("#"));
+        cleanup("simple").await;
+    }
+
+    #[tokio::test]
+    async fn read_raw_mode() {
+        let path = setup_file("raw", "raw_test.txt", "line1\nline2\nline3\n").await;
+        let tool = ReadTool;
+        let result = tool.execute(json!({"filePath": path.to_string_lossy(), "raw": true})).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "line1\nline2\nline3");
+        cleanup("raw").await;
+    }
+
+    #[tokio::test]
+    async fn read_with_offset() {
+        let path = setup_file("offset", "offset.txt", "a\nb\nc\nd\n").await;
+        let tool = ReadTool;
+        let result = tool.execute(
+            json!({"filePath": path.to_string_lossy(), "offset": 3})
+        ).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(!output.contains("a"));
+        assert!(output.contains("c"));
+        assert!(output.contains("d"));
+        cleanup("offset").await;
+    }
+
+    #[tokio::test]
+    async fn read_with_limit() {
+        let path = setup_file("limit", "limit.txt", "1\n2\n3\n4\n5\n").await;
+        let tool = ReadTool;
+        let result = tool.execute(
+            json!({"filePath": path.to_string_lossy(), "limit": 2})
+        ).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("1"));
+        assert!(output.contains("2"));
+        assert!(!output.contains("3"));
+        cleanup("limit").await;
+    }
+
+    #[tokio::test]
+    async fn read_empty_file() {
+        let path = setup_file("empty", "empty.txt", "").await;
+        let tool = ReadTool;
+        let result = tool.execute(json!({"filePath": path.to_string_lossy()})).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("empty file"));
+        cleanup("empty").await;
+    }
+
+    #[tokio::test]
+    async fn read_directory() {
+        let dir = test_dir("dir");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        tokio::fs::write(dir.join("a.txt"), "").await.unwrap();
+        tokio::fs::write(dir.join("b.txt"), "").await.unwrap();
+        let tool = ReadTool;
+        let result = tool.execute(json!({"filePath": dir.to_string_lossy()})).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("a.txt"));
+        assert!(output.contains("b.txt"));
+        cleanup("dir").await;
+    }
+}

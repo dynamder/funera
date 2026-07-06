@@ -116,3 +116,61 @@ impl Tool for ShellTool {
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn shell_missing_command() {
+        let tool = ShellTool;
+        let result = tool.execute(json!({})).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            ToolCallError::ParameterMismatch(_) => {}
+            e => panic!("expected ParameterMismatch, got {:?}", e),
+        }
+    }
+
+    #[tokio::test]
+    async fn shell_echo() {
+        let tool = ShellTool;
+        let result = tool.execute(json!({"command": "echo hello"})).await;
+        assert!(result.is_ok(), "echo failed: {:?}", result.err());
+        let output = result.unwrap();
+        assert!(output.contains("hello"));
+    }
+
+    #[tokio::test]
+    async fn shell_exit_code() {
+        let tool = ShellTool;
+        let cmd = if cfg!(target_os = "windows") {
+            "cmd /c exit 42"
+        } else {
+            "exit 42"
+        };
+        let result = tool.execute(json!({"command": cmd})).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("42"));
+    }
+
+    #[tokio::test]
+    async fn shell_timeout_param() {
+        let tool = ShellTool;
+        let result = tool.execute(json!({"command": "echo quick", "timeout": 5})).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn shell_workdir() {
+        let tool = ShellTool;
+        let dir = std::env::temp_dir().to_string_lossy().to_string();
+        let cmd = if cfg!(target_os = "windows") {
+            "cd"
+        } else {
+            "pwd"
+        };
+        let result = tool.execute(json!({"command": cmd, "workdir": dir})).await;
+        assert!(result.is_ok());
+    }
+}
