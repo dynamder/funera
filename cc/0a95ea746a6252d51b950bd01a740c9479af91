@@ -1,0 +1,83 @@
+funera_core_tune/src/utils/fixtures.rs
+  s_8ed6ea876f9466::t_6fe42ae58405e4 27
+  s_8ed6ea876f9466::t_25119745fa2b42 1-26,28-63
+funera_core_tune/src/utils/mock_client.rs
+  s_8ed6ea876f9466::t_511e9462928f63 2-3,13
+  s_8ed6ea876f9466::t_ad880c40452e75 4-7,17,19-23,25,27-32,35-36,38-39,41-42
+  s_8ed6ea876f9466::t_e8caf85f102295 1,8-12,14-16,18,24,26,33-34,37,40
+funera_core_tune/src/analysis/reporter.rs
+  s_8ed6ea876f9466::t_1de72d57b25cbb 1-18
+funera_core_tune/src/lib.rs
+  s_8ed6ea876f9466::t_6220c23ffb8901 1-3
+funera_core_tune/src/analysis/metrics.rs
+  s_8ed6ea876f9466::t_e6f41d7cd063b5 1-47
+funera_core_tune/src/debug.rs
+  s_8ed6ea876f9466::t_73e71ba5d9e069 1
+funera_core_tune/Cargo.toml
+  s_8ed6ea876f9466::t_f7e1dd6de608df 6-9,14-15,19,25-28
+  s_8ed6ea876f9466::t_11bbad9f9269ca 11-13,16-18,20-24
+  s_8ed6ea876f9466::t_10d2b7d9accb1c 1-5,10
+funera_core_tune/src/utils/harness.rs
+  s_8ed6ea876f9466::t_450b1dcda069af 1-50
+funera_core_tune/tests/env.rs
+  s_8ed6ea876f9466::t_511e9462928f63 22,32,74
+  s_8ed6ea876f9466::t_965c87a3b7aed3 1-21,23-31,33-42,44-60,62-73,75-104
+  s_8ed6ea876f9466::t_4c840c843188fb 43,61
+funera_core_tune/tests/tool_executor.rs
+  s_8ed6ea876f9466::t_1491390910744a 4
+  s_8ed6ea876f9466::t_2e14c74bb09734 1-3,5-61
+funera_core_tune/tests/session_lifecycle.rs
+  s_8ed6ea876f9466::t_b0f7a85d866a4c 2-4,7-19,24-36,38-43,45,47-57,60-67,72
+  s_8ed6ea876f9466::t_2b991fd9061cbb 5-6,20-23,37,44,46,58-59,68-71
+  s_8ed6ea876f9466::t_b02eaebdf2c9b7 1
+funera_core_tune/tests/message.rs
+  s_8ed6ea876f9466::t_31f4a3bde0b410 3,106-113,147
+  s_8ed6ea876f9466::t_f0171a9b017652 1-2,4-105,114-146,148
+funera_core_tune/tests/event_buses.rs
+  s_8ed6ea876f9466::t_195df169b20292 1-12,14-32,35-117,119-143,145-171,173-184,186-222,224
+  s_8ed6ea876f9466::t_7b2199896c81ee 13,33-34,118,144,172,185,223
+funera_core_tune/tests/session.rs
+  s_8ed6ea876f9466::t_eca68eea48abc9 2-30,33-43
+  s_8ed6ea876f9466::t_f4e77da7700766 31-32
+  s_8ed6ea876f9466::t_b02eaebdf2c9b7 1
+funera_core_tune/src/utils.rs
+  s_8ed6ea876f9466::t_cb4b5219d5031e 1-4
+funera_core_tune/tests/tool.rs
+  s_8ed6ea876f9466::t_85d282e46158b6 1
+  s_8ed6ea876f9466::t_4a141e0348e94a 79
+  s_8ed6ea876f9466::t_7cd93c7ad22230 2-48,50-78,80-155
+  s_8ed6ea876f9466::t_9bda7708257566 49
+funera_core_tune/src/debug/tracer.rs
+  s_8ed6ea876f9466::t_6b32f7df490c27 1-24
+funera_core_tune/src/main.rs
+  s_8ed6ea876f9466::t_10d2b7d9accb1c 1-3
+funera_core_tune/src/analysis.rs
+  s_8ed6ea876f9466::t_f8955af1aa5e88 1-2
+Cargo.toml
+  s_8ed6ea876f9466::t_10d2b7d9accb1c 8
+funera_core_tune/src/utils/mock_tool.rs
+  s_8ed6ea876f9466::t_59ca637e85c622 1-53,65-66
+  s_8ed6ea876f9466::t_91e473f9bfca73 54-64
+funera_core_tune/tests/react_loop_mock.rs
+  s_8ed6ea876f9466::t_17c6e4e09ae3bc 1,4,105
+  s_8ed6ea876f9466::t_72c52b035d2cc8 3,5-8,10-11,13-26,30,33,37-38,41-42,45-47,50-51,54-55,58-63,68-70,72-79,98,103-104,106-111,114,126
+  s_8ed6ea876f9466::t_19844f81d937f7 2,9,12,27-29,31-32,34-36,39-40,43-44,48-49,52-53,56-57,64-67,71,80-97,99-102,112-113,115-125
+Cargo.lock
+  s_8ed6ea876f9466::t_27aea16efa939d 5-13,23-28,31,33,173,175,297-302,363-371,404-424,905-910,951-959,999-1024,1035-1043,1118-1143,1278-1294,1548,1550,1571-1579,1683-1688,1709-1717,1881-1910,1967,1969,1977-1982
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "cc0a95ea746a6252d51b950bd01a740c9479af91",
+  "prompts": {},
+  "sessions": {
+    "s_8ed6ea876f9466": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c99a833dffetAIErcXyS7u7kN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
