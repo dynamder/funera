@@ -6,6 +6,7 @@ use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::re_act::tool::ToolRegistry;
 use funera_core::re_act::tool_executor::ToolExecutor;
 use funera_core::re_act::{ReActLoop, ReActLoopConfig};
+use funera_core_tune::utils::env_config::default_model;
 use funera_core_tune::utils::fixtures::{default_schema, text_message};
 use funera_core_tune::utils::mock_tool::MockTool;
 use serde_json::json;
@@ -16,7 +17,7 @@ fn setup_env() -> (FuneraEnv, funera_core::env::FuneraEnvWatcher) {
     let mut registry = ToolRegistry::new();
     registry.add_tool(Box::new(MockTool::new("echo", default_schema("echo"))));
     let client = async_openai::Client::new();
-    FuneraEnv::new(registry, client, "gpt-4o-mini")
+    FuneraEnv::new(registry, client, default_model())
 }
 
 #[tokio::test]

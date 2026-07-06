@@ -1,3 +1,4 @@
+pub mod env_config;
 pub mod fixtures;
 pub mod harness;
 pub mod mock_client;

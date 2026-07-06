@@ -1,12 +1,13 @@
 use funera_core::env::FuneraEnv;
 use funera_core::re_act::tool::ToolRegistry;
+use funera_core_tune::utils::env_config::default_model;
 use funera_core_tune::utils::fixtures::default_schema;
 use funera_core_tune::utils::mock_tool::MockTool;
 
 fn create_env() -> (FuneraEnv, funera_core::env::FuneraEnvWatcher) {
     let client = async_openai::Client::new();
     let registry = ToolRegistry::new();
-    FuneraEnv::new(registry, client, "gpt-4o-mini")
+    FuneraEnv::new(registry, client, default_model())
 }
 
 #[test]
@@ -48,7 +49,7 @@ fn watcher_watch_tool_returns_json() {
 #[test]
 fn env_set_model() {
     let (mut env, mut watcher) = create_env();
-    assert_eq!(watcher.watch_model(), "gpt-4o-mini");
+    assert_eq!(watcher.watch_model(), default_model());
     env.set_model("gpt-4");
     assert_eq!(watcher.watch_model(), "gpt-4");
 }

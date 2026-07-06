@@ -7,6 +7,8 @@ use funera_core::{
 };
 use tokio::sync::RwLock;
 
+use crate::utils::env_config::default_model;
+
 pub struct TestHarness {
     pub env: FuneraEnv,
     pub env_watcher: funera_core::env::FuneraEnvWatcher,
@@ -18,7 +20,7 @@ pub struct TestHarness {
 impl TestHarness {
     pub async fn new() -> Self {
         let client = async_openai::Client::new();
-        let model = "gpt-4o-mini";
+        let model = default_model();
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
 
         let tool_registry = ToolRegistry::new();

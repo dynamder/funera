@@ -4,6 +4,7 @@ use funera_core::event_bus::env_state_bus::EnvStateBus;
 use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::re_act::tool::ToolRegistry;
 use funera_core::re_act::ReActLoopConfig;
+use funera_core_tune::utils::env_config::default_model;
 use funera_core_tune::utils::fixtures::default_schema;
 use funera_core_tune::utils::mock_tool::MockTool;
 
@@ -41,7 +42,7 @@ async fn session_withenv_creates_react_loop_config() {
     let tool = MockTool::new("echo", default_schema("echo"));
     registry.add_tool(Box::new(tool));
     let client = async_openai::Client::new();
-    let (_env, env_watcher) = FuneraEnv::new(registry, client, "gpt-4o-mini");
+    let (_env, env_watcher) = FuneraEnv::new(registry, client, default_model());
 
     let (tool_bus, _exec_rx) = ToolBus::new();
     let (env_state_tx, _env_state_rx) = tokio::sync::broadcast::channel(20);
