@@ -185,6 +185,15 @@ dependencies = [
 [[package]]
 name = "builtin_tools"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "funera_core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "twox-hash",
+]
 
 [[package]]
 name = "bumpalo"
@@ -2889,6 +2898,15 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "tui"
 version = "0.1.0"
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
+dependencies = [
+ "rand 0.9.4",
+]
 
 [[package]]
 name = "typenum"
