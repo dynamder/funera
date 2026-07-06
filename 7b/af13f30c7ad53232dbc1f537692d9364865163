@@ -1,0 +1,45 @@
+builtin_tools/src/edit.rs
+  s_926476ae4a22f6::t_5ce346aa3128e5 1-3,6-88,90-368,370-374
+  s_926476ae4a22f6::t_e47f2ba999fee3 4-5
+  s_926476ae4a22f6::t_4b73aab8708479 369
+  s_926476ae4a22f6::t_c804f62cfcd1f0 89
+builtin_tools/src/lib.rs
+  s_926476ae4a22f6::t_faa49640e580fb 1-10,12,14-18
+builtin_tools/src/hashline.rs
+  s_926476ae4a22f6::t_96c90055c11d37 1,15-17
+  s_926476ae4a22f6::t_12e6cb5dec49d0 2-14,18-38
+builtin_tools/src/write.rs
+  s_926476ae4a22f6::t_acd41dc28ab9f6 4
+  s_926476ae4a22f6::t_92d32fe449c9a9 1-3,5-69
+builtin_tools/Cargo.toml
+  s_926476ae4a22f6::t_0eaa2e09a5ab52 8,10
+  s_926476ae4a22f6::t_0127e5c8cee408 7,12
+  s_926476ae4a22f6::t_01810db0bcebe5 9
+  s_926476ae4a22f6::t_2946ebb02effa5 11
+  s_926476ae4a22f6::t_1f199d8b5b4b1d 13
+builtin_tools/src/read.rs
+  s_926476ae4a22f6::t_55d2abc226fca6 1-3,5-120
+  s_926476ae4a22f6::t_e661b9c3454149 4
+builtin_tools/src/shell.rs
+  s_926476ae4a22f6::t_f5c7ab894bd428 75-88
+  s_926476ae4a22f6::t_b8109f36abfb83 1-3,5-74,89-118
+  s_926476ae4a22f6::t_10a1b7cef1c630 4
+Cargo.lock
+  s_926476ae4a22f6::t_6b07582df4c804 188-196,2902-2910
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7baf13f30c7ad53232dbc1f537692d9364865163",
+  "prompts": {},
+  "sessions": {
+    "s_926476ae4a22f6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c7d12eb5ffe5e7ZTDeRK7xWO7",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
