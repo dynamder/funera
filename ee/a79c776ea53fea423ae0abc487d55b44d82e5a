@@ -1,0 +1,25 @@
+funera_core/src/re_act.rs
+  s_e404d3d1b704c3::t_0bb14fd13aba58 172-174
+  s_e404d3d1b704c3::t_132824675f8ec1 373,381,384,386-390,392,394-396
+  s_e404d3d1b704c3::t_b39ab62cad794d 118-123,125-132
+  s_e404d3d1b704c3::t_6a24d2c125bb35 200-201,204-209,212-213
+  s_e404d3d1b704c3::t_720d7d63637355 22
+  s_e404d3d1b704c3::t_a0788122aa3219 145
+  s_e404d3d1b704c3::t_0a53f16ffb6bdc 391
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "eea79c776ea53fea423ae0abc487d55b44d82e5a",
+  "prompts": {},
+  "sessions": {
+    "s_e404d3d1b704c3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ca9fade5ffefROhJSmzmsTezO",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
