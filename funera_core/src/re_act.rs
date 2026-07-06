@@ -19,6 +19,7 @@ use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallRequest, ToolCallResponse};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 use crate::event_bus::tool_bus::ToolBus;
+use crate::re_act::tool::ToolCallError;
 
 pub mod skills;
 pub mod tool;
@@ -114,12 +115,21 @@ impl ReActLoop {
             let mut env_watcher = self.env_watcher;
 
             while iteration < self.max_iteration {
-                // 1. Receive next message
-                // ERROR: 用户可能会同时发送多个消息，意味着发送的用户消息会按顺序执行react loop，但这并不符合用户预期，而且会导致token被浪费。
-                let msg = match self.buf_msg_rx.recv().await {
-                    Some(msg) => msg,
+                // 1. Receive and batch pending messages
+                let mut msgs = Vec::new();
+
+                // TODO: 以下两次接受似乎显得多余
+                match self.buf_msg_rx.recv().await {
+                    Some(msg) => msgs.push(msg),
                     None => break,
-                };
+                }
+                while let Ok(msg) = self.buf_msg_rx.try_recv() {
+                    msgs.push(msg);
+                }
+
+                for msg in &msgs {
+                    self.history_msg.push(msg.format_json());
+                }
 
                 // 2. Check environment updates
                 check_env_updates(&mut env_watcher, &self.env_state_tx);
@@ -132,8 +142,7 @@ impl ReActLoop {
                 // 4. TurnHighWay handshake
                 let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
 
-                // 5. Add message to history and format for LLM
-                self.history_msg.push(msg.format_json());
+                // 5. Format messages for LLM
                 let llm_messages = build_llm_messages(&self.history_msg)?;
 
                 // 6. Build the API request
@@ -160,8 +169,9 @@ impl ReActLoop {
                 )
                 .await?;
 
-                react_bus.send(ReactEvent::TurnEnd).ok();
-                // ERROR: TurnEnd 发送失败时，Turn结束事件被遗漏，这会导致观察这个事件的插件无法工作，同时因为静默处理导致用户不知道原因。
+                if react_bus.send(ReactEvent::TurnEnd).is_err() {
+                    eprintln!("warn: TurnEnd broadcast failed — no subscribers");
+                }
 
                 if !should_continue {
                     break;
@@ -181,18 +191,26 @@ impl ReActLoop {
     }
 }
 
+//ERROR: env_state的event不应该有react loop发出，他是更上层的信息，生命周期应该由更上层的组件管理
 fn check_env_updates(
     env_watcher: &mut FuneraEnvWatcher,
     env_state_tx: &broadcast::Sender<EnvStateEvent>,
 ) {
     if env_watcher.has_client_changed() {
-        let _ = env_state_tx.send(EnvStateEvent::LlmChanged("unknown".into())); //TODO: 发送真实的改动信息
+        env_watcher.watch_client();
+        let _ = env_state_tx.send(EnvStateEvent::LlmChanged("(client updated)".into()));
     }
     if env_watcher.has_tool_changed() {
-        let _ = env_state_tx.send(EnvStateEvent::ToolAdded("unknown".into()));
+        let tools = env_watcher.watch_tool();
+        let count = tools.as_array().map(|a| a.len()).unwrap_or(0);
+        let _ = env_state_tx.send(EnvStateEvent::ToolAdded(format!(
+            "{} tools available",
+            count
+        )));
     }
     if env_watcher.has_model_changed() {
-        let _ = env_state_tx.send(EnvStateEvent::LlmChanged("unknown".into()));
+        let model = env_watcher.watch_model();
+        let _ = env_state_tx.send(EnvStateEvent::LlmChanged(model));
     }
 }
 
@@ -349,27 +367,33 @@ async fn handle_turn_finish(
         }
 
         Some(FinishReason::ToolCalls) | Some(FinishReason::Length) => {
-            //TODO: 允许并行的工具调用
             let mut accums: Vec<_> = tool_call_accums.values().collect();
             accums.sort_by_key(|a| a.index);
 
+            // Broadcast all requests
             for acc in &accums {
                 let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
-
                 react_bus
                     .send(ReactEvent::ToolExecRequest(ToolCallRequest {
                         index: acc.index,
                         call_id: acc.call_id.clone(),
                         name: acc.name.clone(),
-                        args: args.clone(),
+                        args,
                     }))
                     .ok();
+            }
 
-                let result = tool_bus
-                    .execute(acc.call_id.clone(), acc.name.clone(), args)
-                    .await;
+            // Execute all tools in parallel
+            use futures::future::join_all;
+            let results: Vec<Result<String, ToolCallError>> = join_all(accums.iter().map(|acc| {
+                let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
+                tool_bus.execute(acc.call_id.clone(), acc.name.clone(), args)
+            }))
+            .await;
 
-                match &result {
+            // Handle results in order
+            for (acc, result) in accums.iter().zip(results.iter()) {
+                match result {
                     Ok(response) => {
                         react_bus
                             .send(ReactEvent::ToolExecResponse(Ok(ToolCallResponse {
