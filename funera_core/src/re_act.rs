@@ -117,12 +117,10 @@ impl ReActLoop {
             while iteration < self.max_iteration {
                 // 1. Receive and batch pending messages
                 let mut msgs = Vec::new();
-
-                // TODO: 以下两次接受似乎显得多余
-                match self.buf_msg_rx.recv().await {
-                    Some(msg) => msgs.push(msg),
+                msgs.push(match self.buf_msg_rx.recv().await {
+                    Some(msg) => msg,
                     None => break,
-                }
+                });
                 while let Ok(msg) = self.buf_msg_rx.try_recv() {
                     msgs.push(msg);
                 }
@@ -131,10 +129,7 @@ impl ReActLoop {
                     self.history_msg.push(msg.format_json());
                 }
 
-                // 2. Check environment updates
-                check_env_updates(&mut env_watcher, &self.env_state_tx);
-
-                // 3. Get current env state (client, tools, model)
+                // 2. Get current env state (client, tools, model)
                 let client = env_watcher.watch_client();
                 let tools_json = env_watcher.watch_tool();
                 let model = env_watcher.watch_model();
@@ -188,29 +183,6 @@ impl ReActLoop {
             task,
             sender,
         }
-    }
-}
-
-//ERROR: env_state的event不应该有react loop发出，他是更上层的信息，生命周期应该由更上层的组件管理
-fn check_env_updates(
-    env_watcher: &mut FuneraEnvWatcher,
-    env_state_tx: &broadcast::Sender<EnvStateEvent>,
-) {
-    if env_watcher.has_client_changed() {
-        env_watcher.watch_client();
-        let _ = env_state_tx.send(EnvStateEvent::LlmChanged("(client updated)".into()));
-    }
-    if env_watcher.has_tool_changed() {
-        let tools = env_watcher.watch_tool();
-        let count = tools.as_array().map(|a| a.len()).unwrap_or(0);
-        let _ = env_state_tx.send(EnvStateEvent::ToolAdded(format!(
-            "{} tools available",
-            count
-        )));
-    }
-    if env_watcher.has_model_changed() {
-        let model = env_watcher.watch_model();
-        let _ = env_state_tx.send(EnvStateEvent::LlmChanged(model));
     }
 }
 
