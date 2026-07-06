@@ -1,19 +1,19 @@
-use crate::{chat::message::FuneraMessage, re_act::tool::ToolCallError};
+use crate::chat::message::FuneraMessage;
 use serde_json::Value as JsonValue;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone)]
 pub struct ToolCallRequest {
-    index: usize,
-    call_id: String,
-    name: String,
-    args: JsonValue,
+    pub index: usize,
+    pub call_id: String,
+    pub name: String,
+    pub args: JsonValue,
 }
 
 #[derive(Debug, Clone)]
 pub struct ToolCallResponse {
-    call_id: String,
-    result: String,
+    pub call_id: String,
+    pub result: String,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub enum ReactEvent {
     ToolExecResponse(Result<ToolCallResponse, String>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReactBus {
     react_tx: broadcast::Sender<ReactEvent>,
 }

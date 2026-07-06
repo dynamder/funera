@@ -3,19 +3,19 @@ use std::{marker::PhantomData, sync::Arc};
 use anyhow::Result;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::mpsc, task::Id};
+use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::{
     chat::message::FuneraMessage,
+    event_bus::env_state_bus::EnvStateEvent,
     re_act::{ReActLoop, ReActLoopConfig, ReActLoopHandle},
 };
-use serde_json::{Value as JsonValue, json};
+use tokio::sync::broadcast;
 
-//States
-trait State {}
-struct Idle; //no user prompt action happens.
-struct Running; //user prompted something that need call llms.
+pub trait State {}
+pub struct Idle;
+pub struct Running;
 impl State for Idle {}
 impl State for Running {}
 
@@ -39,6 +39,7 @@ impl<SessionState: State> FuneraSession<SessionState> {
             .map(|msg| msg.format_json())
             .collect::<Vec<_>>()
     }
+
     pub fn id(&self) -> Uuid {
         self.id
     }
@@ -70,15 +71,35 @@ impl FuneraSession<Running> {
     pub async fn react_loop(
         &mut self,
         init_msg: FuneraMessage,
-        react_config: ReActLoopConfig,
+        config: ReActLoopConfig,
+        env_state_tx: broadcast::Sender<EnvStateEvent>,
     ) -> Result<()> {
-        let react_loop = ReActLoop::from_config(react_config, self.session_context());
-        let queued_msg_sender = react_loop.sender();
+        let _ = env_state_tx.send(EnvStateEvent::SessionStart);
+
+        {
+            let mut msgs = self.msgs.write();
+            msgs.push(init_msg.clone());
+        }
+
+        let react_loop = ReActLoop::from_config(config, self.session_context());
+        let sender = react_loop.sender();
+        sender.send(init_msg).await?;
+
         let loop_handle = react_loop.run();
         self.current_loop = Some(loop_handle);
-        todo!()
+
+        if let Some(handle) = self.current_loop.take() {
+            handle.task.await??;
+        }
+
+        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
+        Ok(())
     }
+
     pub fn idle(self) -> FuneraSession<Idle> {
+        if let Some(handle) = &self.current_loop {
+            handle.cancel_token.cancel();
+        }
         FuneraSession::<Idle> {
             id: self.id,
             msgs: self.msgs,
@@ -88,4 +109,3 @@ impl FuneraSession<Running> {
         }
     }
 }
-//TODO: Session need an event loop to handle user commands(interactions)

@@ -9,4 +9,5 @@ members = ["builtin_tools","funera_core", "tui"]
 
 
 [dependencies]
+parking_lot = { version = "0.12.5", features = ["send_guard", "serde"] }
 

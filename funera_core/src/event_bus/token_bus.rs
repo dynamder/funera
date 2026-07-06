@@ -1,18 +1,11 @@
-use std::{marker::PhantomData, result};
-
 use async_openai::{
-    Client,
-    config::OpenAIConfig,
     error::OpenAIError,
     types::chat::{
-        ChatCompletionMessageToolCallChunk, ChatCompletionResponseStream,
-        CreateChatCompletionStreamResponse, FinishReason,
+        ChatCompletionMessageToolCallChunk, ChatCompletionResponseStream, FinishReason,
     },
 };
-use chrono::format::Item;
 use futures::StreamExt;
-use tokio::sync::{broadcast, mpsc};
-use uuid::Uuid;
+use tokio::sync::broadcast;
 
 #[derive(Debug, Clone)]
 pub enum TokenEvent {
@@ -37,6 +30,16 @@ impl TokenBus {
         Self {
             token_tx,
             raw_response_stream: token_receiver,
+        }
+    }
+
+    pub fn with_sender(
+        token_tx: broadcast::Sender<TokenEvent>,
+        stream: ChatCompletionResponseStream,
+    ) -> Self {
+        Self {
+            token_tx,
+            raw_response_stream: stream,
         }
     }
     pub fn subscribe(&self) -> broadcast::Receiver<TokenEvent> {

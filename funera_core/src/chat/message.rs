@@ -2,7 +2,7 @@ use std::{fmt, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as JsonValue, json};
+use serde_json::{json, Value as JsonValue};
 use uuid::Uuid;
 
 use crate::re_act::tool::ToolType;
@@ -46,7 +46,7 @@ pub struct FuneraMessage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextMessage {
-    text: Arc<str>,
+    pub text: Arc<str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,8 +59,8 @@ pub struct ToolRequestMessage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolResponseMessage {
-    tool_call_id: Uuid,
-    result: Arc<str>,
+    pub tool_call_id: Uuid,
+    pub result: Arc<str>,
 }
 
 impl Message for TextMessage {
@@ -98,6 +98,31 @@ impl Message for FuneraMessage {
 }
 
 impl FuneraMessage {
+    pub fn new(role: Role, msg_variant: MsgVariant) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            role,
+            timestamp: Utc::now(),
+            msg_variant,
+        }
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn role(&self) -> &Role {
+        &self.role
+    }
+
+    pub fn timestamp(&self) -> &DateTime<Utc> {
+        &self.timestamp
+    }
+
+    pub fn msg_variant(&self) -> &MsgVariant {
+        &self.msg_variant
+    }
+
     pub fn format_json(&self) -> JsonValue {
         match &self.msg_variant {
             MsgVariant::Text(text_msg) => {

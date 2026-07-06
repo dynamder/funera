@@ -1,22 +1,56 @@
-use tokio::{sync::mpsc, task::JoinHandle};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use anyhow::Result;
+use async_openai::config::OpenAIConfig;
+use async_openai::types::chat::{
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
+    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs,
+    ChatCompletionRequestUserMessageArgs, ChatCompletionTools, CreateChatCompletionRequestArgs,
+    FinishReason,
+};
+use serde_json::Value as JsonValue;
+use tokio::sync::{RwLock, broadcast, mpsc};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::chat::message::FuneraMessage;
-use anyhow::Result;
-use serde_json::Value as JsonValue;
+use crate::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
+use crate::env::FuneraEnvWatcher;
+use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
+use crate::event_bus::react_bus::{ReactBus, ReactEvent};
+use crate::event_bus::token_bus::{TokenBus, TokenEvent};
+use crate::re_act::tool::ToolRegistry;
+use crate::re_act::tool_executor::ToolExecutor;
 
 pub mod skills;
 pub mod tool;
+pub mod tool_executor;
 
 pub struct ReActLoopConfig {
     pub buffer: usize,
     pub max_iteration: usize,
+    pub env_watcher: FuneraEnvWatcher,
+    pub tool_registry: Arc<RwLock<ToolRegistry>>,
+    pub env_state_tx: broadcast::Sender<EnvStateEvent>,
+    pub turn_highway_handle: TurnHighWayHandle,
 }
+
 impl ReActLoopConfig {
-    pub fn new(buffer: usize, max_iteration: usize) -> Self {
+    pub fn new(
+        buffer: usize,
+        max_iteration: usize,
+        env_watcher: FuneraEnvWatcher,
+        tool_registry: Arc<RwLock<ToolRegistry>>,
+        env_state_tx: broadcast::Sender<EnvStateEvent>,
+        turn_highway_handle: TurnHighWayHandle,
+    ) -> Self {
         Self {
             buffer,
             max_iteration,
+            env_watcher,
+            tool_registry,
+            env_state_tx,
+            turn_highway_handle,
         }
     }
 }
@@ -26,52 +60,300 @@ pub struct ReActLoop {
     buf_msg_tx: mpsc::Sender<FuneraMessage>,
     history_msg: Vec<JsonValue>,
     max_iteration: usize,
+    env_watcher: FuneraEnvWatcher,
+    tool_registry: Arc<RwLock<ToolRegistry>>,
+    env_state_tx: broadcast::Sender<EnvStateEvent>,
+    turn_highway_handle: TurnHighWayHandle,
 }
+
 impl ReActLoop {
-    pub fn new(buffer: usize, max_iteration: usize, history_msg: Vec<JsonValue>) -> Self {
+    pub fn new(
+        buffer: usize,
+        max_iteration: usize,
+        history_msg: Vec<JsonValue>,
+        env_watcher: FuneraEnvWatcher,
+        tool_registry: Arc<RwLock<ToolRegistry>>,
+        env_state_tx: broadcast::Sender<EnvStateEvent>,
+        turn_highway_handle: TurnHighWayHandle,
+    ) -> Self {
         let (tx, rx) = mpsc::channel(buffer);
         Self {
             buf_msg_rx: rx,
             buf_msg_tx: tx,
             history_msg,
             max_iteration,
+            env_watcher,
+            tool_registry,
+            env_state_tx,
+            turn_highway_handle,
         }
     }
+
     pub fn from_config(config: ReActLoopConfig, history_msg: Vec<JsonValue>) -> Self {
-        Self::new(config.buffer, config.max_iteration, history_msg)
+        Self::new(
+            config.buffer,
+            config.max_iteration,
+            history_msg,
+            config.env_watcher,
+            config.tool_registry,
+            config.env_state_tx,
+            config.turn_highway_handle,
+        )
     }
+
     pub fn sender(&self) -> mpsc::Sender<FuneraMessage> {
         self.buf_msg_tx.clone()
     }
+
+    //WARN: 函数过长，考虑拆分成多个小函数
     pub fn run(mut self) -> ReActLoopHandle {
         let token = CancellationToken::new();
         let token_clone = token.clone();
 
         let sender = self.sender();
-        let self_tx = sender.clone();
 
         let task = tokio::spawn(async move {
-            let loop_self_tx = self_tx;
-            while let Some(msg) = self.buf_msg_rx.recv().await {
-                // TODO: 1. format msg and session context, FuneraEnv
-                // TODO: 2. send formatted msg to llm api
-                // TODO: 3. receive response from llm api, execute tools(optional)
-                // TODO: 4. add tool reponse to buffered message channel
-                // TODO: 5. exit if channel is empty
-                // the message channel sender can be self_tx, or user queued message.
+            let mut iteration = 0;
+            let mut env_watcher = self.env_watcher;
 
-                if self.buf_msg_rx.is_empty() {
+            while iteration < self.max_iteration {
+                // 1. Receive next message (text, tool response, etc.)
+                let msg = match self.buf_msg_rx.recv().await {
+                    Some(msg) => msg,
+                    None => break,
+                }; //WARN: 用户可能会同时发送多个消息
+
+                // 2. Check environment updates
+                check_env_updates(&mut env_watcher, &self.env_state_tx);
+
+                // 3. Get current client and tools
+                let client: async_openai::Client<OpenAIConfig> = env_watcher.watch_client();
+                let tools_json: JsonValue = env_watcher.watch_tool();
+
+                // 4. TurnHighWay handshake — get fresh buses for this turn
+                let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
+
+                // 5. Add message to history and format for LLM
+                self.history_msg.push(msg.format_json());
+
+                let llm_messages = build_llm_messages(&self.history_msg)?;
+
+                // 6. Build the API request with tools
+                let mut request_builder = CreateChatCompletionRequestArgs::default();
+                request_builder.model("gpt-4o"); //TODO: 在env中加入model字段来获取模型
+                request_builder.messages(llm_messages);
+                request_builder.stream(true);
+
+                if let Some(tools_array) = tools_json.as_array() {
+                    if !tools_array.is_empty() {
+                        let chat_tools: Vec<ChatCompletionTools> =
+                            serde_json::from_value(tools_json.clone()).unwrap_or_default();
+                        if !chat_tools.is_empty() {
+                            request_builder.tools(chat_tools);
+                        }
+                    }
+                }
+
+                let request = request_builder.build()?;
+
+                // 7. Call LLM and get stream
+                let stream = client.chat().create_stream(request).await?;
+
+                // 8. Create TokenBus with pre-made sender and process stream
+                let mut token_bus = TokenBus::with_sender(token_tx, stream);
+
+                let mut assistant_content = String::new();
+                let mut tool_call_accums: HashMap<usize, ToolCallAccumulator> = HashMap::new();
+                let mut turn_finish_reason: Option<FinishReason> = None;
+
+                react_bus.send(ReactEvent::TurnStart).ok(); //WARN: 可能的错误被静默
+
+                // 9. Process streaming tokens
+                while let Some(result) = token_bus.recv().await {
+                    let events = result?;
+                    for event in events {
+                        match event {
+                            TokenEvent::Text(t) => {
+                                assistant_content.push_str(&t);
+                                let text_msg = FuneraMessage::new(
+                                    Role::Assistant,
+                                    MsgVariant::Text(TextMessage {
+                                        text: t.clone().into(),
+                                    }),
+                                );
+                                react_bus.send(ReactEvent::MessageQueued(text_msg)).ok();
+                            }
+                            TokenEvent::ToolDelta {
+                                index,
+                                call_id,
+                                name,
+                                args_chunk,
+                            } => {
+                                let acc = tool_call_accums.entry(index).or_insert_with(|| {
+                                    ToolCallAccumulator {
+                                        index,
+                                        call_id: String::new(),
+                                        name: String::new(),
+                                        args: String::new(),
+                                    }
+                                });
+                                if let Some(id) = call_id {
+                                    acc.call_id = id;
+                                }
+                                if let Some(n) = name {
+                                    acc.name = n;
+                                }
+                                if let Some(chunk) = args_chunk {
+                                    acc.args.push_str(&chunk);
+                                }
+                            }
+                            TokenEvent::Finish(reason) => {
+                                turn_finish_reason = Some(reason);
+                            }
+                        }
+                    }
+                }
+
+                // 10. Handle LLM finish reason
+                let should_continue = handle_turn_finish(
+                    turn_finish_reason.as_ref(),
+                    &assistant_content,
+                    &tool_call_accums,
+                    &react_bus,
+                    &self.tool_registry,
+                    &self.buf_msg_tx,
+                    &mut self.history_msg,
+                )
+                .await?;
+
+                react_bus.send(ReactEvent::TurnEnd).ok();
+
+                if !should_continue {
                     break;
                 }
+
+                iteration += 1;
             }
+
             Ok(())
         });
+
         ReActLoopHandle {
             cancel_token: token_clone,
             task,
             sender,
         }
     }
+}
+
+fn check_env_updates(
+    env_watcher: &mut FuneraEnvWatcher,
+    env_state_tx: &broadcast::Sender<EnvStateEvent>,
+) {
+    if env_watcher.has_client_changed() {
+        let _ = env_state_tx.send(EnvStateEvent::LlmChanged("unknown".into()));
+    }
+    if env_watcher.has_tool_changed() {
+        let _ = env_state_tx.send(EnvStateEvent::ToolAdded("unknown".into()));
+    }
+}
+
+fn build_llm_messages(history: &[JsonValue]) -> Result<Vec<ChatCompletionRequestMessage>> {
+    let mut messages = Vec::new();
+    for entry in history {
+        let role = entry["role"].as_str().unwrap_or("user");
+        match role {
+            "user" => {
+                let content = entry["content"].as_str().unwrap_or("");
+                let msg = ChatCompletionRequestMessage::User(
+                    ChatCompletionRequestUserMessageArgs::default()
+                        .content(content)
+                        .build()?,
+                );
+                messages.push(msg);
+            }
+            "assistant" => {
+                let content = entry["content"].as_str().unwrap_or("");
+                messages.push(ChatCompletionRequestMessage::Assistant(
+                    ChatCompletionRequestAssistantMessageArgs::default()
+                        .content(content)
+                        .build()?,
+                ));
+            }
+            "tool" => {
+                let tool_call_id = entry["tool_call_id"].as_str().unwrap_or("");
+                let content = entry["content"].as_str().unwrap_or("");
+                let msg = ChatCompletionRequestMessage::Tool(
+                    ChatCompletionRequestToolMessageArgs::default()
+                        .tool_call_id(tool_call_id)
+                        .content(content)
+                        .build()?,
+                );
+                messages.push(msg);
+            }
+            "system" => {
+                let content = entry["content"].as_str().unwrap_or("");
+                messages.push(ChatCompletionRequestMessage::System(
+                    ChatCompletionRequestSystemMessageArgs::default()
+                        .content(content)
+                        .build()?,
+                ));
+            }
+            _ => {}
+        }
+    }
+    Ok(messages)
+}
+
+async fn handle_turn_finish(
+    finish_reason: Option<&FinishReason>,
+    assistant_content: &str,
+    tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
+    react_bus: &ReactBus,
+    tool_registry: &Arc<RwLock<ToolRegistry>>,
+    buf_msg_tx: &mpsc::Sender<FuneraMessage>,
+    history_msg: &mut Vec<JsonValue>,
+) -> Result<bool> {
+    match finish_reason {
+        None | Some(FinishReason::Stop) => {
+            if !assistant_content.is_empty() {
+                let assistant_json = serde_json::json!({
+                    "role": "assistant",
+                    "content": assistant_content,
+                });
+                history_msg.push(assistant_json);
+            }
+            Ok(false)
+        }
+
+        Some(FinishReason::ToolCalls) | Some(FinishReason::Length) => {
+            let tool_executor =
+                ToolExecutor::new(tool_registry.clone(), react_bus.clone(), buf_msg_tx.clone());
+
+            let mut accums: Vec<_> = tool_call_accums.values().collect();
+            accums.sort_by_key(|a| a.index);
+
+            for acc in &accums {
+                let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
+                tool_executor
+                    .execute(acc.call_id.clone(), acc.name.clone(), args)
+                    .await
+                    .ok();
+            }
+
+            Ok(true)
+        }
+
+        _ => Ok(false),
+    }
+}
+
+#[derive(Debug)]
+struct ToolCallAccumulator {
+    index: usize,
+    call_id: String,
+    name: String,
+    args: String,
 }
 
 #[derive(Debug)]
