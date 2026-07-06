@@ -1,0 +1,49 @@
+funera_core/src/re_act/tool_executor.rs
+  s_e404d3d1b704c3::t_125ca9ffaa2e6a 24-30
+  s_e404d3d1b704c3::t_393b23171b00bf 6,20
+  s_e404d3d1b704c3::t_8cee438b02d324 5
+funera_core/src/re_act.rs
+  s_e404d3d1b704c3::t_b0104d533167c5 73,84,96
+  s_e404d3d1b704c3::t_a6aa6c1fa19153 7-8
+  s_e404d3d1b704c3::t_9942beebe83423 368-370
+  s_e404d3d1b704c3::t_7099ea95045f38 335
+  s_e404d3d1b704c3::t_c20b1d21a8cc22 157
+  s_e404d3d1b704c3::t_29e9e77598e90f 62
+  s_e404d3d1b704c3::t_4134b5daf8e6e9 21
+  s_e404d3d1b704c3::t_7b7e73bb967ca6 31,41,49
+  s_e404d3d1b704c3::t_6f1708f5c3c5a4 250
+  s_e404d3d1b704c3::t_250dc978548471 11
+  s_e404d3d1b704c3::t_55454153e315e0 14,16,19,117,122,127-130,132,139,142-143,146,148-149,151,194-196,246-249,251-303,305-307,309-328,358-365,367,371-395
+  s_e404d3d1b704c3::t_ab09a762daea47 118
+  s_e404d3d1b704c3::t_0e975f83ee0cb7 140
+  s_e404d3d1b704c3::t_4171dd90be27d4 304
+  s_e404d3d1b704c3::t_74df56d2937d80 308
+  s_e404d3d1b704c3::t_20ae8da41157a3 329
+funera_core/src/env.rs
+  s_e404d3d1b704c3::t_d481f4f23da4ed 15,18,25,31-32,37,40-45,71-76,83,95-98,107-110,122-124
+  s_e404d3d1b704c3::t_5ecc52618d47e8 125
+funera_core/src/event_bus/tool_bus.rs
+  s_e404d3d1b704c3::t_24d14c8e6e8217 1-5,7-14,16-18,20-31,33-38,40-43,45-46
+  s_e404d3d1b704c3::t_32758bcd0880a6 6
+  s_e404d3d1b704c3::t_8fbf3a5bfe2557 15
+  s_e404d3d1b704c3::t_c8827b872eaa1c 19
+  s_e404d3d1b704c3::t_01f6907785c6fa 32
+  s_e404d3d1b704c3::t_13ccbe8439f464 39
+  s_e404d3d1b704c3::t_1172b8d9d403f7 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f7fa76a7f2fffb72ea18c3f4d4204d94c244bea9",
+  "prompts": {},
+  "sessions": {
+    "s_e404d3d1b704c3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ca9fade5ffefROhJSmzmsTezO",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
