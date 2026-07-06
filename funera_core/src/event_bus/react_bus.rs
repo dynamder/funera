@@ -25,6 +25,7 @@ pub enum ReactEvent {
     ToolExecResponse(Result<ToolCallResponse, String>),
 }
 
+#[derive(Debug)]
 pub struct ReactBus {
     react_tx: broadcast::Sender<ReactEvent>,
 }

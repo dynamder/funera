@@ -25,6 +25,7 @@ pub enum TokenEvent {
     },
     Finish(FinishReason),
 }
+
 pub struct TokenBus {
     token_tx: broadcast::Sender<TokenEvent>,
     raw_response_stream: ChatCompletionResponseStream,
