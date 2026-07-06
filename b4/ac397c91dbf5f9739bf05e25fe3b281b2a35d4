@@ -1,0 +1,20 @@
+funera_core/src/re_act.rs
+  s_e404d3d1b704c3::t_3bc3ae4d227dfd 120-121,123
+  s_e404d3d1b704c3::t_e3c58ac0ae125b 132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b4ac397c91dbf5f9739bf05e25fe3b281b2a35d4",
+  "prompts": {},
+  "sessions": {
+    "s_e404d3d1b704c3": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ca9fade5ffefROhJSmzmsTezO",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
