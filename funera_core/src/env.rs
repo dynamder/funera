@@ -12,27 +12,38 @@ use tokio::sync::{
 pub struct FuneraEnv {
     pub tool_registry: Arc<RwLock<ToolRegistry>>,
     llm_client: async_openai::Client<OpenAIConfig>,
+    model: String,
     tool_tx: watch::Sender<JsonValue>,
     client_tx: watch::Sender<async_openai::Client<OpenAIConfig>>,
+    model_tx: watch::Sender<String>,
 }
 
 impl FuneraEnv {
     pub fn new(
         tool_registry: ToolRegistry,
         llm_client: async_openai::Client<OpenAIConfig>,
+        model: impl Into<String>,
     ) -> (Self, FuneraEnvWatcher) {
         let tool_snapshot = tool_registry.available_tools_json();
         let tool_registry = Arc::new(RwLock::new(tool_registry));
         let (tool_tx, tool_rx) = watch::channel(tool_snapshot);
         let (client_tx, client_rx) = watch::channel(llm_client.clone());
+        let model = model.into();
+        let (model_tx, model_rx) = watch::channel(model.clone());
         (
             Self {
                 tool_registry,
                 llm_client,
+                model,
                 tool_tx,
                 client_tx,
+                model_tx,
             },
-            FuneraEnvWatcher { tool_rx, client_rx },
+            FuneraEnvWatcher {
+                tool_rx,
+                client_rx,
+                model_rx,
+            },
         )
     }
 
@@ -57,12 +68,19 @@ impl FuneraEnv {
         self.llm_client = client.clone();
         let _ = self.client_tx.send(client);
     }
+
+    pub fn set_model(&mut self, model: impl Into<String>) {
+        let model = model.into();
+        self.model = model.clone();
+        let _ = self.model_tx.send(model);
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct FuneraEnvWatcher {
     tool_rx: watch::Receiver<JsonValue>,
     client_rx: watch::Receiver<async_openai::Client<OpenAIConfig>>,
+    model_rx: watch::Receiver<String>,
 }
 
 impl FuneraEnvWatcher {
@@ -74,12 +92,20 @@ impl FuneraEnvWatcher {
         self.client_rx.borrow_and_update().clone()
     }
 
+    pub fn watch_model(&mut self) -> String {
+        self.model_rx.borrow_and_update().clone()
+    }
+
     pub fn has_tool_changed(&self) -> bool {
         self.tool_rx.has_changed().unwrap_or(false)
     }
 
     pub fn has_client_changed(&self) -> bool {
         self.client_rx.has_changed().unwrap_or(false)
+    }
+
+    pub fn has_model_changed(&self) -> bool {
+        self.model_rx.has_changed().unwrap_or(false)
     }
 
     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {
@@ -92,5 +118,9 @@ impl FuneraEnvWatcher {
 
     pub async fn client_changed(&mut self) -> Result<(), RecvError> {
         self.client_rx.changed().await
+    }
+
+    pub async fn model_changed(&mut self) -> Result<(), RecvError> {
+        self.model_rx.changed().await
     }
 }
