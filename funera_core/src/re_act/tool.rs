@@ -58,11 +58,12 @@ impl ToolRegistryEntry {
     }
 }
 
-pub struct ToolRegistry {
+#[doc(hidden)]
+pub struct RawToolRegistry {
     tools: HashMap<String, ToolRegistryEntry>,
 }
 
-impl ToolRegistry {
+impl RawToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
@@ -114,3 +115,9 @@ impl ToolRegistry {
         }
     }
 }
+
+#[cfg(feature = "security")]
+pub use crate::security::registry::GuardedToolRegistry as ToolRegistry;
+
+#[cfg(not(feature = "security"))]
+pub use RawToolRegistry as ToolRegistry;
