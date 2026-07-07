@@ -1,0 +1,44 @@
+funera_core/src/security.rs
+  s_3c7aa5596bf4ba::t_8dcdc233d45e6f 1,3-5,7-9
+  s_3c7aa5596bf4ba::t_adf1a18ba63b4d 2
+  s_3c7aa5596bf4ba::t_972135860c6df4 6
+  s_3c7aa5596bf4ba::t_0121cf486a9a07 10
+funera_core/Cargo.toml
+  s_3c7aa5596bf4ba::t_bef74bba6317a9 22-26
+  s_3c7aa5596bf4ba::t_fd7619889118be 17-18
+funera_core/src/security/path_guard.rs
+  s_3c7aa5596bf4ba::t_09da6de6db949c 30-36,38
+  s_3c7aa5596bf4ba::t_1cb40b330a37fc 1-16,18-24,27-29,37,39-114
+  s_3c7aa5596bf4ba::t_9f72dc3f991ff4 25-26
+  s_3c7aa5596bf4ba::t_baeeaab91a2db0 17
+funera_core/src/security/audit.rs
+  s_3c7aa5596bf4ba::t_b32d8452ab6e88 1-85
+funera_core/src/security/policy.rs
+  s_3c7aa5596bf4ba::t_9282b77e76b382 2
+  s_3c7aa5596bf4ba::t_1f209a2c68da2f 1,3-173,175-392
+  s_3c7aa5596bf4ba::t_f4c7d2c7490417 174
+funera_core/src/security/secret.rs
+  s_3c7aa5596bf4ba::t_e3a2d596a64609 10-11
+  s_3c7aa5596bf4ba::t_b51b3e8c7f01f8 1-9,12-72
+funera_core/src/security/registry.rs
+  s_3c7aa5596bf4ba::t_a9b95423ac88fe 112
+  s_3c7aa5596bf4ba::t_9a8ecb0cdc328e 19-28
+  s_3c7aa5596bf4ba::t_c43675217ff700 8-9,98,108,110-111,113-115,117-118,128,139-144,159,185,196,206,228
+  s_3c7aa5596bf4ba::t_9a92154ecdacdf 1-7,10-18,29-97,99-107,109,116,119-127,129-138,145-158,160-184,186-195,197-205,207-227,229-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d0aac1fc6390239a0d2f87fd160a30d6c18e6a3f",
+  "prompts": {},
+  "sessions": {
+    "s_3c7aa5596bf4ba": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c2b641d7ffeNa3cHP4qHXnhA6",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
