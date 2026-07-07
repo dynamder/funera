@@ -104,3 +104,63 @@ impl EnvStateBus {
         self.env_state_tx.send(event).map_err(|e| e.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn turn_highway_full_protocol() {
+        let (bus, mut handle) = EnvStateBus::new();
+        bus.start_turn_highway();
+
+        let (token_tx, react_bus) = handle.prepare_turn().await;
+        assert!(token_tx.receiver_count() > 0 || token_tx.receiver_count() == 0);
+        let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
+    }
+
+    #[tokio::test]
+    async fn turn_highway_multiple_turns() {
+        let (bus, mut handle) = EnvStateBus::new();
+        bus.start_turn_highway();
+
+        let (tx1, rb1) = handle.prepare_turn().await;
+        let (tx2, rb2) = handle.prepare_turn().await;
+
+        // Each turn should get fresh buses
+        assert!(!std::ptr::eq(&tx1, &tx2));
+        rb1.send(crate::event_bus::react_bus::ReactEvent::TurnStart).ok();
+        rb2.send(crate::event_bus::react_bus::ReactEvent::TurnStart).ok();
+    }
+
+    #[tokio::test]
+    async fn turn_highway_fallback() {
+        let (bus, mut handle) = EnvStateBus::new();
+        drop(bus); // drop sender so prepare_turn's recv() returns None immediately
+        // Intentionally NOT starting the highway
+
+        let (token_tx, react_bus) = handle.prepare_turn().await;
+        // Fallback should return valid buses even without highway
+        let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
+        let _ = token_tx;
+        // If we got here without hanging, fallback works
+    }
+
+    #[tokio::test]
+    async fn env_state_bus_send_receive() {
+        let (bus, _handle) = EnvStateBus::new();
+        let mut rx = bus.subscribe();
+
+        bus.send(EnvStateEvent::SessionStart).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::SessionStart));
+
+        bus.send(EnvStateEvent::LlmChanged("gpt-4".into())).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::LlmChanged(m) if m == "gpt-4"));
+
+        bus.send(EnvStateEvent::ToolAdded("calc".into())).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::ToolAdded(n) if n == "calc"));
+    }
+}

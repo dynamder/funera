@@ -412,3 +412,333 @@ pub struct ReActLoopHandle {
     pub task: JoinHandle<Result<()>>,
     pub sender: mpsc::Sender<FuneraMessage>,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use async_openai::types::chat::FinishReason;
+    use serde_json::json;
+    use tokio::sync::mpsc;
+
+    use crate::event_bus::react_bus::ReactBus;
+    use crate::event_bus::tool_bus::ToolBus;
+    use crate::test_helpers;
+
+    use super::*;
+
+    // ── build_llm_messages ───────────────────────────────────────
+
+    #[test]
+    fn build_msgs_all_roles() {
+        let history = vec![
+            json!({"role": "system", "content": "You are a bot"}),
+            json!({"role": "user", "content": "hello"}),
+            json!({"role": "assistant", "content": "hi"}),
+            json!({"role": "tool", "tool_call_id": "call_1", "content": "result"}),
+        ];
+        let msgs = build_llm_messages(&history).unwrap();
+        assert_eq!(msgs.len(), 4);
+        let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
+        assert!(debug_strs[0].starts_with("System"), "got: {}", debug_strs[0]);
+        assert!(debug_strs[1].starts_with("User"), "got: {}", debug_strs[1]);
+        assert!(debug_strs[2].starts_with("Assistant"), "got: {}", debug_strs[2]);
+        assert!(debug_strs[3].starts_with("Tool"), "got: {}", debug_strs[3]);
+    }
+
+    #[test]
+    fn build_msgs_empty() {
+        let msgs = build_llm_messages(&[]).unwrap();
+        assert!(msgs.is_empty());
+    }
+
+    #[test]
+    fn build_msgs_unknown_role_skipped() {
+        let history = vec![
+            json!({"role": "user", "content": "hi"}),
+            json!({"role": "unknown_role", "content": "whatever"}),
+            json!({"role": "assistant", "content": "hello"}),
+        ];
+        let msgs = build_llm_messages(&history).unwrap();
+        assert_eq!(msgs.len(), 2);
+    }
+
+    // ── build_chat_request ──────────────────────────────────────
+
+    #[test]
+    fn build_request_no_tools() {
+        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})]).unwrap();
+        let req = build_chat_request("gpt-4o", msgs, &json!([])).unwrap();
+        assert_eq!(req.model, "gpt-4o");
+        assert!(req.stream.unwrap_or(false));
+        assert!(req.tools.is_none());
+    }
+
+    #[test]
+    fn build_request_with_tools() {
+        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})]).unwrap();
+        let tools_json = json!([{
+            "type": "function",
+            "function": {
+                "name": "test_tool",
+                "description": "A test",
+                "parameters": {"type": "object", "properties": {}, "required": []}
+            }
+        }]);
+        let req = build_chat_request("gpt-4o", msgs, &tools_json).unwrap();
+        assert!(req.tools.is_some());
+        assert!(req.tools.unwrap().len() > 0);
+    }
+
+    #[test]
+    fn build_request_tools_not_array() {
+        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})]).unwrap();
+        let req = build_chat_request("gpt-4o", msgs, &json!("not_array")).unwrap();
+        assert!(req.tools.is_none());
+    }
+
+    // ── process_token_stream ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn process_stream_text_only() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_text_stream(vec!["Hello", " world"]);
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        assert_eq!(content, "Hello world");
+        assert!(accums.is_empty());
+        assert!(matches!(reason, Some(FinishReason::Stop)));
+    }
+
+    #[tokio::test]
+    async fn process_stream_tool_call() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_tool_stream("get_weather", r#"{"city":"NYC"}"#, "call_1");
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        assert!(content.is_empty());
+        assert_eq!(accums.len(), 1);
+        assert!(accums.contains_key(&0));
+        assert_eq!(accums[&0].name, "get_weather");
+        assert!(matches!(reason, Some(FinishReason::ToolCalls)));
+    }
+
+    #[tokio::test]
+    async fn process_stream_multiple_tools() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_multi_tool_stream(vec![
+            (0, "call_1", "tool_a", r#"{"x":1}"#),
+            (1, "call_2", "tool_b", r#"{"y":2}"#),
+        ]);
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+
+        let (_content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        assert_eq!(accums.len(), 2);
+        assert!(accums.contains_key(&0));
+        assert!(accums.contains_key(&1));
+        assert_eq!(accums[&0].name, "tool_a");
+        assert_eq!(accums[&1].name, "tool_b");
+        assert!(matches!(reason, Some(FinishReason::ToolCalls)));
+    }
+
+    #[tokio::test]
+    async fn process_stream_empty() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_empty_stream();
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        assert!(content.is_empty());
+        assert!(accums.is_empty());
+        assert!(reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn process_stream_error() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_error_stream();
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+
+        let result = process_token_stream(&mut token_bus, &react_bus).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn process_stream_text_and_tool() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_text_plus_tool_stream("Thinking...", "calc", r#"{"n":42}"#, "call_1");
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        assert_eq!(content, "Thinking...");
+        assert_eq!(accums.len(), 1);
+        assert!(matches!(reason, Some(FinishReason::ToolCalls)));
+    }
+
+    // ── handle_turn_finish ───────────────────────────────────────
+
+    #[tokio::test]
+    async fn handle_finish_stop_with_content() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, _rx) = ToolBus::new();
+        let (tx, _rx) = mpsc::channel(10);
+        let mut history: Vec<JsonValue> = vec![];
+
+        let should_continue = handle_turn_finish(
+            Some(&FinishReason::Stop),
+            "Hello!",
+            &HashMap::new(),
+            &react_bus,
+            &tool_bus,
+            &tx,
+            &mut history,
+        )
+        .await
+        .unwrap();
+
+        assert!(!should_continue);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0]["role"], "assistant");
+        assert_eq!(history[0]["content"], "Hello!");
+    }
+
+    #[tokio::test]
+    async fn handle_finish_stop_empty_content() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, _rx) = ToolBus::new();
+        let (tx, _rx) = mpsc::channel(10);
+        let mut history: Vec<JsonValue> = vec![json!({"role": "user", "content": "hi"})];
+
+        let should_continue = handle_turn_finish(
+            Some(&FinishReason::Stop),
+            "",
+            &HashMap::new(),
+            &react_bus,
+            &tool_bus,
+            &tx,
+            &mut history,
+        )
+        .await
+        .unwrap();
+
+        assert!(!should_continue);
+        assert_eq!(history.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn handle_finish_none() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, _rx) = ToolBus::new();
+        let (tx, _rx) = mpsc::channel(10);
+        let mut history: Vec<JsonValue> = vec![];
+
+        let should_continue = handle_turn_finish(
+            None,
+            "Hello!",
+            &HashMap::new(),
+            &react_bus,
+            &tool_bus,
+            &tx,
+            &mut history,
+        )
+        .await
+        .unwrap();
+
+        assert!(!should_continue);
+        assert_eq!(history.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn handle_finish_tool_calls_with_executor() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, mut exec_rx) = ToolBus::new();
+        let (buf_tx, mut buf_rx) = mpsc::channel(10);
+        let mut history: Vec<JsonValue> = vec![];
+
+        let mut accums = HashMap::new();
+        let accum = ToolCallAccumulator {
+            index: 0,
+            call_id: "call_abc".into(),
+            name: "mock_tool".into(),
+            args: r#"{"x":1}"#.into(),
+        };
+        accums.insert(0, accum);
+
+        tokio::spawn(async move {
+            if let Some(cmd) = exec_rx.recv().await {
+                let _ = cmd.resp_tx.send(Ok("tool_result_ok".into()));
+            }
+        });
+
+        let should_continue = handle_turn_finish(
+            Some(&FinishReason::ToolCalls),
+            "",
+            &accums,
+            &react_bus,
+            &tool_bus,
+            &buf_tx,
+            &mut history,
+        )
+        .await
+        .unwrap();
+
+        assert!(should_continue);
+        let received = buf_rx.try_recv().unwrap();
+        assert!(matches!(received.msg_variant(), MsgVariant::ToolResponse(_)));
+    }
+
+    #[tokio::test]
+    async fn handle_finish_length() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, exec_rx) = ToolBus::new();
+        let (tx, _) = mpsc::channel(10);
+        let mut history: Vec<JsonValue> = vec![];
+
+        drop(exec_rx); // close receiver so ToolBus::execute fails immediately
+
+        let mut accums = HashMap::new();
+        let accum = ToolCallAccumulator {
+            index: 0,
+            call_id: "call_1".into(),
+            name: "t".into(),
+            args: "{}".into(),
+        };
+        accums.insert(0, accum);
+
+        let should_continue = handle_turn_finish(
+            Some(&FinishReason::Length),
+            "",
+            &accums,
+            &react_bus,
+            &tool_bus,
+            &tx,
+            &mut history,
+        )
+        .await;
+
+        assert!(should_continue.is_ok());
+    }
+
+    // ── ToolCallAccumulator behavior ────────────────────────────
+
+    #[test]
+    fn tool_call_accumulator_fields() {
+        let mut acc = ToolCallAccumulator {
+            index: 1,
+            call_id: "call_1".into(),
+            name: "test".into(),
+            args: r#"{"key":"val"}"#.into(),
+        };
+        assert_eq!(acc.index, 1);
+        acc.args.push_str("_extra");
+        assert_eq!(acc.args, r#"{"key":"val"}_extra"#);
+    }
+}

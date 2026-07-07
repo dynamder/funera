@@ -51,10 +51,10 @@ pub struct TextMessage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolRequestMessage {
-    tool_call_id: Uuid,
-    tool_type: ToolType,
-    function_name: Arc<str>,
-    function_args: JsonValue,
+    pub tool_call_id: Uuid,
+    pub tool_type: ToolType,
+    pub function_name: Arc<str>,
+    pub function_args: JsonValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

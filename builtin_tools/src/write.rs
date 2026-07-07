@@ -2,7 +2,7 @@ use std::path::Path;
 
 use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 
 pub struct WriteTool;
 
@@ -41,13 +41,17 @@ impl Tool for WriteTool {
     }
 
     async fn execute(&self, args: JsonValue) -> Result<String, ToolCallError> {
-        let file_path = args.get("filePath").and_then(|v| v.as_str()).ok_or_else(|| {
-            ToolCallError::ParameterMismatch(json!({"error": "missing filePath"}))
-        })?;
+        let file_path = args
+            .get("filePath")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                ToolCallError::ParameterMismatch(json!({"error": "missing filePath"}))
+            })?;
 
-        let content = args.get("content").and_then(|v| v.as_str()).ok_or_else(|| {
-            ToolCallError::ParameterMismatch(json!({"error": "missing content"}))
-        })?;
+        let content = args
+            .get("content")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolCallError::ParameterMismatch(json!({"error": "missing content"})))?;
 
         let path = Path::new(file_path);
 
@@ -64,7 +68,11 @@ impl Tool for WriteTool {
             ToolCallError::ToolExecutionError(anyhow::anyhow!("cannot write file: {}", e))
         })?;
 
-        Ok(format!("Successfully wrote {} bytes to {}", content.len(), file_path))
+        Ok(format!(
+            "Successfully wrote {} bytes to {}",
+            content.len(),
+            file_path
+        ))
     }
 }
 
@@ -74,7 +82,11 @@ mod tests {
     use std::path::PathBuf;
 
     fn test_dir(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("funera_write_test_{}_{}", std::process::id(), label))
+        std::env::temp_dir().join(format!(
+            "funera_write_test_{}_{}",
+            std::process::id(),
+            label
+        ))
     }
 
     async fn cleanup(label: &str) {
@@ -108,10 +120,12 @@ mod tests {
         let dir = test_dir("creates");
         let path = dir.join("new_file.txt");
         let tool = WriteTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "content": "hello world"
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "content": "hello world"
+            }))
+            .await;
         assert!(result.is_ok());
         let content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(content, "hello world");
@@ -123,10 +137,12 @@ mod tests {
         let dir = test_dir("nested");
         let path = dir.join("sub").join("deep").join("nested.txt");
         let tool = WriteTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "content": "nested content"
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "content": "nested content"
+            }))
+            .await;
         assert!(result.is_ok());
         assert!(path.exists());
         let content = tokio::fs::read_to_string(&path).await.unwrap();
@@ -141,10 +157,12 @@ mod tests {
         let path = dir.join("overwrite.txt");
         tokio::fs::write(&path, "old content").await.unwrap();
         let tool = WriteTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "content": "new content"
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "content": "new content"
+            }))
+            .await;
         assert!(result.is_ok());
         let content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(content, "new content");

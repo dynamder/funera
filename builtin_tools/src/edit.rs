@@ -390,20 +390,20 @@ mod tests {
         }
     }
 
-    fn test_dir() -> PathBuf {
-        std::env::temp_dir().join(format!("funera_edit_test_{}", std::process::id()))
+    fn test_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("funera_edit_test_{}_{}", std::process::id(), label))
     }
 
-    async fn write_test_file(name: &str, content: &str) -> PathBuf {
-        let dir = test_dir();
+    async fn write_test_file(label: &str, name: &str, content: &str) -> PathBuf {
+        let dir = test_dir(label);
         tokio::fs::create_dir_all(&dir).await.unwrap();
         let path = dir.join(name);
         tokio::fs::write(&path, content).await.unwrap();
         path
     }
 
-    async fn cleanup() {
-        let _ = tokio::fs::remove_dir_all(test_dir()).await;
+    async fn cleanup(label: &str) {
+        let _ = tokio::fs::remove_dir_all(test_dir(label)).await;
     }
 
     fn compute_line_anchor(lines: &[String], line_num: usize) -> String {
@@ -558,7 +558,7 @@ mod tests {
 
     #[tokio::test]
     async fn edit_execute_replace() {
-        let path = write_test_file("exec_replace.txt", "line1\nline2\nline3\n").await;
+        let path = write_test_file("replace", "exec_replace.txt", "line1\nline2\nline3\n").await;
         let content = tokio::fs::read_to_string(&path).await.unwrap();
         let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
         let hash = compute_line_anchor(&lines, 2);
@@ -575,12 +575,12 @@ mod tests {
         assert!(result.is_ok(), "replace failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "line1\nmodified!\nline3\n");
-        cleanup().await;
+        cleanup("replace").await;
     }
 
     #[tokio::test]
     async fn edit_execute_replace_text() {
-        let path = write_test_file("exec_replacetext.txt", "hello world\n").await;
+        let path = write_test_file("replacetext", "exec_replacetext.txt", "hello world\n").await;
         let tool = EditTool;
         let result = tool.execute(json!({
             "filePath": path.to_string_lossy(),
@@ -593,7 +593,7 @@ mod tests {
         assert!(result.is_ok(), "replace_text failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "hi world\n");
-        cleanup().await;
+        cleanup("replacetext").await;
     }
 
     #[tokio::test]
@@ -619,7 +619,7 @@ mod tests {
 
     #[tokio::test]
     async fn edit_execute_noop_loop() {
-        let path = write_test_file("noop.txt", "hello\n").await;
+        let path = write_test_file("noop", "noop.txt", "hello\n").await;
         let tool = EditTool;
         let result = tool.execute(json!({
             "filePath": path.to_string_lossy(),
@@ -627,12 +627,12 @@ mod tests {
         })).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("NOOP_LOOP"));
-        cleanup().await;
+        cleanup("noop").await;
     }
 
     #[tokio::test]
     async fn edit_execute_append() {
-        let path = write_test_file("append.txt", "a\nb\n").await;
+        let path = write_test_file("append", "append.txt", "a\nb\n").await;
         let content = tokio::fs::read_to_string(&path).await.unwrap();
         let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
         let hash = compute_line_anchor(&lines, 2);
@@ -645,12 +645,12 @@ mod tests {
         assert!(result.is_ok(), "append failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "a\nb\nc\n");
-        cleanup().await;
+        cleanup("append").await;
     }
 
     #[tokio::test]
     async fn edit_execute_prepend() {
-        let path = write_test_file("prepend.txt", "b\nc\n").await;
+        let path = write_test_file("prepend", "prepend.txt", "b\nc\n").await;
         let content = tokio::fs::read_to_string(&path).await.unwrap();
         let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
         let hash = compute_line_anchor(&lines, 1);
@@ -663,6 +663,6 @@ mod tests {
         assert!(result.is_ok(), "prepend failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "a\nb\nc\n");
-        cleanup().await;
+        cleanup("prepend").await;
     }
 }
