@@ -1,0 +1,61 @@
+funera_core_tune/tests/message_pipeline.rs
+  s_926476ae4a22f6::t_3f8ee29621d9ee 1-254
+funera_core/src/event_bus/env_state_bus.rs
+  s_926476ae4a22f6::t_82e00dccde8c28 138-139
+  s_926476ae4a22f6::t_161473a188262d 107-137,140-166
+funera_core_tune/tests/env_integration.rs
+  s_926476ae4a22f6::t_e5552136426d9d 61-62,82
+  s_926476ae4a22f6::t_b5f88c22343969 1-60,63-81,83-183
+funera_core/src/event_bus/token_bus.rs
+  s_926476ae4a22f6::t_0186124ac6fe18 199-206
+  s_926476ae4a22f6::t_b3ad1e065a9150 166-167
+  s_926476ae4a22f6::t_cbbe9cabeaf366 112-130,132-147,158-161,163,165,168,171,173,176,180,182,196,198,207,233,256
+  s_926476ae4a22f6::t_661d3b1bbaac63 148-157
+  s_926476ae4a22f6::t_a9275af26490e0 164
+  s_926476ae4a22f6::t_c622003277311e 169-170
+  s_926476ae4a22f6::t_e85297b79ec75f 181
+  s_926476ae4a22f6::t_d235ab17c613e1 208-232
+  s_926476ae4a22f6::t_f1ef43fdf1fa72 172
+  s_926476ae4a22f6::t_7f4b4311090617 131
+  s_926476ae4a22f6::t_699ced38b86f6a 257
+  s_926476ae4a22f6::t_7d74e53c6ab076 197
+  s_926476ae4a22f6::t_0969a2d1e2696a 177-179
+  s_926476ae4a22f6::t_e22b439a1ade16 183-195
+  s_926476ae4a22f6::t_c2376530a0e70f 162
+  s_926476ae4a22f6::t_9fc5bbbffe2715 174-175
+  s_926476ae4a22f6::t_6a80ca1accbd86 234-255
+funera_core/src/chat/message.rs
+  s_926476ae4a22f6::t_30970eef53b720 54-57
+funera_core/src/lib.rs
+  s_926476ae4a22f6::t_44f4891c48a040 6-8
+funera_core/src/re_act.rs
+  s_926476ae4a22f6::t_3fe053269b0dd1 662,667
+  s_926476ae4a22f6::t_86f8627ce64192 415-441,447-661,663-666,668-700,703,706-744
+  s_926476ae4a22f6::t_44aa2346e0744b 442-446
+  s_926476ae4a22f6::t_9c99e8106e68c5 701,704-705
+  s_926476ae4a22f6::t_9c02975a434e57 702
+builtin_tools/src/edit.rs
+  s_926476ae4a22f6::t_4fc0ef83d5b0ba 561,578,583,596,622,630,635,648,653,666
+  s_926476ae4a22f6::t_0402aecc0cfc21 393-394,397-398,405-406
+funera_core/src/test_helpers.rs
+  s_926476ae4a22f6::t_333afc87cca284 1-2,4,6,8-39,41-58,61-69,72-100,102-125,127-132
+  s_926476ae4a22f6::t_928584c7b2ad60 3,5,7,40,59-60,70-71,101,126
+funera_core_tune/src/utils/mock_client.rs
+  s_926476ae4a22f6::t_ea0871324ec738 3,12,41-274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5f43bc73176ba4693c451855d529d080365da585",
+  "prompts": {},
+  "sessions": {
+    "s_926476ae4a22f6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c7d12eb5ffe5e7ZTDeRK7xWO7",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
