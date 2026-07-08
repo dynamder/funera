@@ -28,3 +28,7 @@ security = ["funera_core/security"]
 [lib]
 name = "funera_orchestrate"
 path = "src/lib.rs"
+
+[[example]]
+name = "06_builtin_tools"
+required-features = ["builtin-tools"]

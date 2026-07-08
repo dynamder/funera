@@ -242,7 +242,9 @@ impl Agent {
         if let Some(ref sys) = self.system_prompt {
             let sys_msg = FuneraMessage::new(
                 Role::System,
-                MsgVariant::Text(TextMessage { text: sys.clone().into() }),
+                MsgVariant::Text(TextMessage {
+                    text: sys.clone().into(),
+                }),
             );
             session.push_message(sys_msg);
         }
@@ -265,7 +267,9 @@ impl Agent {
             turn_highway_handle,
         );
 
-        let result = running.react_loop(init_msg, config, env_state_tx.clone()).await;
+        let result = running
+            .react_loop(init_msg, config, env_state_tx.clone())
+            .await;
         let idle_session = running.idle();
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
 
@@ -339,14 +343,22 @@ impl Agent {
         if let Some(ref sys) = self.system_prompt {
             let msgs = session.session_context();
             if msgs.is_empty() {
-                let sys_msg = FuneraMessage::new(Role::System, MsgVariant::Text(TextMessage { text: sys.clone().into() }));
+                let sys_msg = FuneraMessage::new(
+                    Role::System,
+                    MsgVariant::Text(TextMessage {
+                        text: sys.clone().into(),
+                    }),
+                );
                 session.push_message(sys_msg);
             }
         }
 
         let mut running = session.run();
 
-        let init_msg = FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: text.into() }));
+        let init_msg = FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage { text: text.into() }),
+        );
 
         let config = ReActLoopConfig::new(
             runtime.channel_buffer(),
@@ -357,7 +369,9 @@ impl Agent {
             turn_highway_handle,
         );
 
-        let result = running.react_loop(init_msg, config, env_state_tx.clone()).await;
+        let result = running
+            .react_loop(init_msg, config, env_state_tx.clone())
+            .await;
         let idle_session = running.idle();
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
 
