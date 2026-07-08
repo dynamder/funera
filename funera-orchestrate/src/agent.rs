@@ -490,3 +490,194 @@ impl Agent {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // ── builder ────────────────────────────────────────────────────
+
+    #[test]
+    fn builder_minimal_build_succeeds() {
+        let agent = AgentBuilder::new().build();
+        assert!(agent.system_prompt.is_none());
+        assert!(agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_system_prompt() {
+        let agent = AgentBuilder::new()
+            .system_prompt("You are helpful.")
+            .build();
+        assert_eq!(agent.system_prompt, Some("You are helpful.".into()));
+    }
+
+    #[test]
+    fn builder_multiple_builds_independent() {
+        let a1 = AgentBuilder::new().system_prompt("P1").build();
+        let a2 = AgentBuilder::new().system_prompt("P2").build();
+        assert_eq!(a1.system_prompt, Some("P1".into()));
+        assert_eq!(a2.system_prompt, Some("P2".into()));
+    }
+
+    // ── callback registration ──────────────────────────────────────
+
+    #[test]
+    fn builder_on_token_registers() {
+        let agent = AgentBuilder::new()
+            .on_token(|_| {})
+            .build();
+        assert!(!agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_on_tool_call_registers() {
+        let agent = AgentBuilder::new()
+            .on_tool_call(|_, _| {})
+            .build();
+        assert!(!agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_on_tool_result_registers() {
+        let agent = AgentBuilder::new()
+            .on_tool_result(|_, _| {})
+            .build();
+        assert!(!agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_on_turn_start_registers() {
+        let agent = AgentBuilder::new()
+            .on_turn_start(|| {})
+            .build();
+        assert!(!agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_on_turn_end_registers() {
+        let agent = AgentBuilder::new()
+            .on_turn_end(|| {})
+            .build();
+        assert!(!agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_on_event_registers() {
+        let agent = AgentBuilder::new()
+            .on_event(|_| {})
+            .build();
+        assert!(!agent.callbacks.is_empty());
+    }
+
+    #[test]
+    fn builder_all_callbacks_stacked() {
+        let agent = AgentBuilder::new()
+            .on_token(|_| {})
+            .on_tool_call(|_, _| {})
+            .on_event(|_| {})
+            .build();
+        // Each registered callback is one call to add()
+        assert!(agent.callbacks.len() >= 3);
+    }
+
+    // ── subscribe_events ──────────────────────────────────────────
+
+    #[tokio::test]
+    async fn subscribe_events_receives_token() {
+        let agent = AgentBuilder::new().build();
+        let mut rx = agent.subscribe_events();
+        agent
+            .event_tx
+            .send(AgentEvent::Token("hello".into()))
+            .unwrap();
+        let got = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            rx.recv(),
+        )
+        .await;
+        assert!(matches!(got, Ok(Ok(AgentEvent::Token(t))) if t == "hello"));
+    }
+
+    #[tokio::test]
+    async fn subscribe_events_receives_tool_call() {
+        let agent = AgentBuilder::new().build();
+        let mut rx = agent.subscribe_events();
+        agent
+            .event_tx
+            .send(AgentEvent::ToolCallStart {
+                index: 0,
+                call_id: uuid::Uuid::new_v4(),
+                name: "test".into(),
+                args: serde_json::json!({}),
+            })
+            .unwrap();
+        let got = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            rx.recv(),
+        )
+        .await;
+        assert!(matches!(got, Ok(Ok(AgentEvent::ToolCallStart { .. }))));
+    }
+
+    #[tokio::test]
+    async fn subscribe_events_multiple_receivers() {
+        let agent = AgentBuilder::new().build();
+        let mut rx1 = agent.subscribe_events();
+        let mut rx2 = agent.subscribe_events();
+        agent
+            .event_tx
+            .send(AgentEvent::Done)
+            .unwrap();
+
+        let r1 = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            rx1.recv(),
+        )
+        .await;
+        let r2 = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            rx2.recv(),
+        )
+        .await;
+        assert!(r1.is_ok());
+        assert!(r2.is_ok());
+    }
+
+    // ── callback firing via dispatch ───────────────────────────────
+
+    #[test]
+    fn callbacks_fire_on_dispatch() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let agent = AgentBuilder::new()
+            .on_event({
+                let c = counter.clone();
+                move |_| { c.fetch_add(1, Ordering::SeqCst); }
+            })
+            .build();
+        agent.callbacks.dispatch(AgentEvent::Done);
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn callbacks_only_fire_matching_event() {
+        let token_hits = Arc::new(AtomicUsize::new(0));
+        let tool_hits = Arc::new(AtomicUsize::new(0));
+
+        let agent = AgentBuilder::new()
+            .on_token({
+                let c = token_hits.clone();
+                move |_| { c.fetch_add(1, Ordering::SeqCst); }
+            })
+            .on_tool_call({
+                let c = tool_hits.clone();
+                move |_, _| { c.fetch_add(1, Ordering::SeqCst); }
+            })
+            .build();
+
+        agent.callbacks.dispatch(AgentEvent::Token("x".into()));
+        assert_eq!(token_hits.load(Ordering::SeqCst), 1);
+        assert_eq!(tool_hits.load(Ordering::SeqCst), 0);
+    }
+}

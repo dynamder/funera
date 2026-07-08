@@ -237,3 +237,240 @@ impl AgentRuntime {
         self.env_watcher.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use funera_core::re_act::tool::ToolCallError;
+
+    // ── inline mock tool ───────────────────────────────────────────
+
+    #[derive(Default)]
+    struct MockTool;
+
+    #[async_trait::async_trait]
+    impl Tool for MockTool {
+        fn name(&self) -> &str {
+            "mock_tool"
+        }
+        fn description(&self) -> &str {
+            "A mock tool for testing"
+        }
+        fn schema(&self) -> serde_json::Value {
+            serde_json::json!({})
+        }
+        async fn execute(&self, _args: serde_json::Value) -> Result<String, ToolCallError> {
+            Ok("ok".into())
+        }
+    }
+
+    // ── builder defaults ───────────────────────────────────────────
+
+    #[test]
+    fn builder_defaults() {
+        let b = AgentRuntimeBuilder::new();
+        assert_eq!(b.max_iterations, 10);
+        assert_eq!(b.channel_buffer, 32);
+        assert!(b.api_key.is_none());
+        assert!(b.model.is_none());
+        assert!(b.tools.is_empty());
+    }
+
+    #[test]
+    fn builder_set_max_iterations() {
+        let b = AgentRuntimeBuilder::new().max_iterations(20);
+        assert_eq!(b.max_iterations, 20);
+    }
+
+    #[test]
+    fn builder_set_channel_buffer() {
+        let b = AgentRuntimeBuilder::new().channel_buffer(64);
+        assert_eq!(b.channel_buffer, 64);
+    }
+
+    #[test]
+    fn builder_set_model() {
+        let b = AgentRuntimeBuilder::new().model("test-model");
+        assert_eq!(b.model, Some("test-model".into()));
+    }
+
+    #[test]
+    fn builder_set_api_key() {
+        let b = AgentRuntimeBuilder::new().api_key("sk-test");
+        assert_eq!(b.api_key, Some("sk-test".into()));
+    }
+
+    #[test]
+    fn builder_set_base_url() {
+        let b = AgentRuntimeBuilder::new().base_url(Some("https://example.com".into()));
+        assert_eq!(b.base_url, Some("https://example.com".into()));
+    }
+
+    #[test]
+    fn builder_set_base_url_none_noop() {
+        let b = AgentRuntimeBuilder::new().base_url(None);
+        assert!(b.base_url.is_none());
+    }
+
+    #[test]
+    fn builder_set_client() {
+        let cfg = async_openai::config::OpenAIConfig::default();
+        let client = async_openai::Client::with_config(cfg);
+        let b = AgentRuntimeBuilder::new().client(client);
+        assert!(b.client.is_some());
+    }
+
+    #[test]
+    fn builder_with_tool_instance() {
+        let b = AgentRuntimeBuilder::new()
+            .with_tool_instance(Box::new(MockTool));
+        assert_eq!(b.tools.len(), 1);
+    }
+
+    // ── build ──────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn build_with_explicit_key() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("test-model")
+            .build()
+            .expect("build should succeed with api_key");
+        assert_eq!(rt.model(), "test-model");
+        assert_eq!(rt.max_iterations(), 10);
+        assert_eq!(rt.channel_buffer(), 32);
+    }
+
+    #[tokio::test]
+    async fn build_custom_params() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("my-model")
+            .max_iterations(15)
+            .channel_buffer(8)
+            .build()
+            .unwrap();
+        assert_eq!(rt.model(), "my-model");
+        assert_eq!(rt.max_iterations(), 15);
+        assert_eq!(rt.channel_buffer(), 8);
+    }
+
+    #[tokio::test]
+    async fn build_fails_without_key() {
+        let has_key = std::env::var("OPENAI_API_KEY").is_ok();
+        if has_key {
+            // Can't test failure when key is present in env
+            return;
+        }
+        let result = AgentRuntimeBuilder::new().model("x").build();
+        assert!(matches!(result, Err(OrchestrateError::Config(_))));
+    }
+
+    #[tokio::test]
+    async fn build_with_tool_adds_to_registry() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .with_tool::<MockTool>()
+            .build()
+            .unwrap();
+        let registry = rt.tool_registry();
+        let guard = registry.read().await;
+        let tools = guard.get_all_tools();
+        assert!(tools.contains_key("mock_tool"));
+    }
+
+    #[tokio::test]
+    async fn build_model_fallback_default() {
+        let has_model = std::env::var("OPENAI_MODEL").is_ok();
+        if has_model {
+            return;
+        }
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .build()
+            .unwrap();
+        assert_eq!(rt.model(), "gpt-4o");
+    }
+
+    // ── session management ─────────────────────────────────────────
+
+    #[tokio::test]
+    async fn session_take_empty_creates_new() {
+        let mut rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let s1 = rt.take_session();
+        let s2 = rt.take_session();
+        // Two different sessions
+        assert_ne!(s1.id(), s2.id());
+    }
+
+    #[tokio::test]
+    async fn session_store_and_retrieve() {
+        let mut rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let s = rt.take_session();
+        let id = s.id();
+        rt.store_session(s);
+        let s2 = rt.take_session();
+        assert_eq!(s2.id(), id, "should retrieve the same session");
+    }
+
+    #[tokio::test]
+    async fn session_reset_clears() {
+        let mut rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let s = rt.take_session();
+        let id = s.id();
+        rt.store_session(s);
+        rt.reset();
+        let s2 = rt.take_session();
+        assert_ne!(s2.id(), id, "reset should create a new session");
+    }
+
+    #[tokio::test]
+    async fn session_multiple_store_take() {
+        let mut rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let s1 = rt.take_session();
+        let id1 = s1.id();
+        rt.store_session(s1);
+
+        let s2 = rt.take_session();
+        assert_eq!(s2.id(), id1);
+
+        let id2 = s2.id();
+        rt.store_session(s2);
+        rt.reset();
+
+        let s3 = rt.take_session();
+        assert_ne!(s3.id(), id2);
+    }
+
+    // ── accessors ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn tool_registry_accessor() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let reg = rt.tool_registry();
+        let guard = reg.read().await;
+        let tools = guard.get_all_tools();
+        assert!(tools.is_empty());
+    }
+}

@@ -24,6 +24,10 @@ tracing = "0.1"
 default = []
 builtin-tools = ["dep:builtin_tools"]
 security = ["funera_core/security"]
+real-llm = []
+
+[dev-dependencies]
+tokio = { version = "1.52.3", features = ["full", "test-util"] }
 
 [lib]
 name = "funera_orchestrate"
