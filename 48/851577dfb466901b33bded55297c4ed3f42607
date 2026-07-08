@@ -1,0 +1,33 @@
+funera-orchestrate/examples/07_reset_session.rs
+  s_08451d81e49517::t_0b305b8f910952 16
+funera-orchestrate/examples/05_switch_runtime.rs
+  s_08451d81e49517::t_b29cdcf16a8a84 17
+funera-orchestrate/examples/01_fire_basic.rs
+  s_08451d81e49517::t_c154c2c53afc01 19
+funera-orchestrate/examples/04_custom_tool.rs
+  s_08451d81e49517::t_192b517ad69e75 65
+funera-orchestrate/examples/03_streaming.rs
+  s_08451d81e49517::t_ce2b1fc5673bce 17
+funera-orchestrate/examples/06_builtin_tools.rs
+  s_08451d81e49517::t_314fe8aeb3686c 16
+funera-orchestrate/examples/02_send_multi_turn.rs
+  s_08451d81e49517::t_00cd4ed5a2c480 16
+funera-orchestrate/src/runtime.rs
+  s_08451d81e49517::t_39d3d0a3c1b7a7 63-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "48851577dfb466901b33bded55297c4ed3f42607",
+  "prompts": {},
+  "sessions": {
+    "s_08451d81e49517": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bfd76906ffeblFmzC4iJWh84Q",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
