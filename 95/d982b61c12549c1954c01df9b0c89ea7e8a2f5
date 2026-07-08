@@ -1,0 +1,54 @@
+funera-orchestrate/Cargo.toml
+  s_08451d81e49517::t_c9632df6995c62 1-30
+funera-orchestrate/src/event.rs
+  s_08451d81e49517::t_1afd1e6316781d 1-22
+funera-orchestrate/src/orchestrator.rs
+  s_08451d81e49517::t_2dbab2df14991f 6-7,11,15-17,44-45,51-52,54,70,80-81,86-90,96-99,101-141,143-148,151,153,155,162,164
+  s_08451d81e49517::t_773d5a2b02aa47 1-5,8-10,12-14,18-28,30-43,46-50,53,55-59,61-62,64-69,71-79,82-85,91-95,100,142,149-150,152,154,156-161,165,167-169,171-172
+  s_08451d81e49517::t_01efb5f287097a 29,163,166,170
+  s_08451d81e49517::t_645c9d0f458547 60,63
+funera-orchestrate/src/lib.rs
+  s_08451d81e49517::t_1683e69de42ac8 1-40,42-133
+  s_08451d81e49517::t_2f3322dbdcd3e7 41
+funera-orchestrate/src/agent.rs
+  s_08451d81e49517::t_19858503e37852 18
+  s_08451d81e49517::t_bd8ce178c6b4e7 208
+  s_08451d81e49517::t_b1f0baab585706 366,368
+  s_08451d81e49517::t_5f5f11d7269262 323
+  s_08451d81e49517::t_e3492442b4f686 109-110
+  s_08451d81e49517::t_108d99b88406f5 395
+  s_08451d81e49517::t_9a2dbf28977c02 447
+  s_08451d81e49517::t_5578614a0136ed 1-17,19-103,111-207,209-302,304-310,312-322,324-365,367,369-394,396-446,448-455
+  s_08451d81e49517::t_cf2acf6fbd1a32 104-108
+  s_08451d81e49517::t_0d5b368bfe6f68 303
+  s_08451d81e49517::t_5b8832d2f2c4d5 311
+Cargo.toml
+  s_08451d81e49517::t_bdf18ba4873ec6 8
+funera_core/src/event_bus/env_state_bus.rs
+  s_08451d81e49517::t_0c262fd54031b5 90-96
+funera-orchestrate/src/error.rs
+  s_08451d81e49517::t_85d2897c2a3ebc 1-16
+funera-orchestrate/src/response.rs
+  s_08451d81e49517::t_ee603f0f51eb12 1-16
+funera-orchestrate/src/dispatcher.rs
+  s_08451d81e49517::t_2a3133faa83c0f 1-44,46-64,66-205,207-208
+  s_08451d81e49517::t_1b8d1a0ae3b586 65
+  s_08451d81e49517::t_5ebdf69844d532 45
+  s_08451d81e49517::t_7bc42ec75fd5a8 206
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95d982b61c12549c1954c01df9b0c89ea7e8a2f5",
+  "prompts": {},
+  "sessions": {
+    "s_08451d81e49517": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bfd76906ffeblFmzC4iJWh84Q",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
