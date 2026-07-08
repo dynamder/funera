@@ -5,7 +5,7 @@ edition = "2024"
 
 [workspace]
 resolver = "3"
-members = ["builtin_tools","funera_core", "funera_core_tune", "tui"]
+members = ["builtin_tools","funera_core", "funera_core_tune", "tui", "funera-orchestrate"]
 
 
 [dependencies]

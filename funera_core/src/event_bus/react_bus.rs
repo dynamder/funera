@@ -38,6 +38,9 @@ impl ReactBus {
     pub fn subscribe(&self) -> broadcast::Receiver<ReactEvent> {
         self.react_tx.subscribe()
     }
+    pub fn sender(&self) -> broadcast::Sender<ReactEvent> {
+        self.react_tx.clone()
+    }
     pub fn send(&self, event: ReactEvent) -> anyhow::Result<usize> {
         self.react_tx.send(event).map_err(|e| e.into())
     }

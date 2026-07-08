@@ -1,7 +1,7 @@
 use tokio::sync::{broadcast, mpsc};
 
 use crate::event_bus::{
-    react_bus::ReactBus,
+    react_bus::{ReactBus, ReactEvent},
     token_bus::TokenEvent,
 };
 
@@ -13,6 +13,10 @@ pub enum EnvStateEvent {
     ToolAdded(String),
     ToolRemoved(String),
     ToolAvailability(String, bool),
+    PerTurnBusReady {
+        token_tx: broadcast::Sender<TokenEvent>,
+        react_tx: broadcast::Sender<ReactEvent>,
+    },
 }
 
 pub enum TurnHighWayEvent {
@@ -83,6 +87,13 @@ impl EnvStateBus {
                     TurnHighWayEvent::TurnPrepareRequest => {
                         let (token_tx, _) = broadcast::channel(50);
                         let react_bus = ReactBus::new();
+                        let react_tx = react_bus.sender();
+                        let _ = self
+                            .env_state_tx
+                            .send(EnvStateEvent::PerTurnBusReady {
+                                token_tx: token_tx.clone(),
+                                react_tx,
+                            });
                         let _ = tx
                             .send(TurnHighWayEvent::TurnPrepareResponse {
                                 token_tx,

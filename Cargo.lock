@@ -705,6 +705,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "funera-orchestrate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
+ "async-trait",
+ "builtin_tools",
+ "funera_core",
+ "futures",
+ "parking_lot",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "funera_core"
 version = "0.1.0"
 dependencies = [
