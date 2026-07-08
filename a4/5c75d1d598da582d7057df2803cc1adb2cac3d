@@ -1,0 +1,45 @@
+funera-orchestrate/src/error.rs
+  s_08451d81e49517::t_668ddd0bdc20e9 17-53
+funera-orchestrate/tests/integration.rs
+  s_08451d81e49517::t_6f13fb038e8710 1-178
+funera-orchestrate/src/dispatcher.rs
+  s_08451d81e49517::t_9357f8d10c46c1 374-375,382
+  s_08451d81e49517::t_8d08fcea8c0f58 33-37
+  s_08451d81e49517::t_384c8a5eb26888 390
+  s_08451d81e49517::t_24932d07def2d4 398
+  s_08451d81e49517::t_96e26c0453c266 214-319,321-326,328-349,351-373,376-381,383-389,391-397,399-415
+  s_08451d81e49517::t_6d62d118647cdb 320
+  s_08451d81e49517::t_83f8ba37c49b8f 327
+  s_08451d81e49517::t_5c361456b27131 350
+funera-orchestrate/src/response.rs
+  s_08451d81e49517::t_eaf0fdab18913d 17-55
+funera-orchestrate/src/agent.rs
+  s_08451d81e49517::t_6b786e16db5a61 493-581,583-683
+  s_08451d81e49517::t_95d802f913b3f4 582
+funera-orchestrate/Cargo.toml
+  s_08451d81e49517::t_9e11092acc8de8 27-30
+funera-orchestrate/src/runtime.rs
+  s_08451d81e49517::t_883b1e8a17d77a 240-359,364,366-377,380-384,388-471,474-476
+  s_08451d81e49517::t_3cfc001c4643b8 360-363,365
+  s_08451d81e49517::t_c4d069d5e8e373 472-473
+  s_08451d81e49517::t_e60fc502227951 378-379
+  s_08451d81e49517::t_cc491f320142fa 385-387
+funera-orchestrate/src/event.rs
+  s_08451d81e49517::t_d9fb38949d4957 23-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a45c75d1d598da582d7057df2803cc1adb2cac3d",
+  "prompts": {},
+  "sessions": {
+    "s_08451d81e49517": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bfd76906ffeblFmzC4iJWh84Q",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
