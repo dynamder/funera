@@ -60,8 +60,11 @@ impl AgentRuntimeBuilder {
     }
 
     /// Custom base URL (proxy, compatible API, etc.).
-    pub fn base_url(mut self, url: impl Into<String>) -> Self {
-        self.base_url = Some(url.into());
+    /// Pass e.g. `std::env::var("OPENAI_BASE_URL").ok()`.
+    pub fn base_url(mut self, url: Option<String>) -> Self {
+        if let Some(u) = url {
+            self.base_url = Some(u);
+        }
         self
     }
 

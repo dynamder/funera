@@ -14,6 +14,7 @@ use funera_orchestrate::{Agent, AgentRuntime};
 fn make_runtime(model: &str) -> Result<AgentRuntime, Box<dyn std::error::Error>> {
     Ok(AgentRuntime::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
+        .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(model)
         .build()?)
 }
