@@ -56,6 +56,12 @@ impl FuneraSession<Idle> {
         }
     }
 
+    /// Push a message into the session's message history before it runs.
+    /// Useful for injecting system prompts or pre-seeding the conversation.
+    pub fn push_message(&self, msg: FuneraMessage) {
+        self.msgs.write().push(msg);
+    }
+
     pub fn run(self) -> FuneraSession<Running> {
         FuneraSession::<Running> {
             id: self.id,

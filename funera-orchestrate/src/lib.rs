@@ -2,30 +2,43 @@
 //!
 //! **Easy-to-use orchestration layer for [funera-core].**
 //!
-//! This crate provides a high-level builder API (`AgentBuilder` → `Agent`) and a
-//! mid-level `Orchestrator` to quickly integrate funera's LLM agent runtime into
-//! your own Rust projects — without needing to manually wire up tool registries,
-//! event buses, sessions, or the ReAct loop.
+//! This crate provides a high-level agent API (`Agent`) and a runtime container
+//! (`AgentRuntime`) that together let you integrate funera's LLM agent runtime
+//! into your own projects with minimal boilerplate.
 //!
 //! ---
 //!
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use funera_orchestrate::Agent;
+//! use funera_orchestrate::{Agent, AgentRuntime};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let mut agent = Agent::builder()
+//!     let runtime = AgentRuntime::builder()
 //!         .api_key(std::env::var("OPENAI_API_KEY")?)
 //!         .model("gpt-4o")
 //!         .build()?;
 //!
-//!     let response = agent.chat("Hello!").await?;
-//!     println!("{}", response.content);
+//!     let agent = Agent::builder()
+//!         .system_prompt("You are a helpful assistant.")
+//!         .build();
+//!
+//!     let resp = agent.fire("Hello!", &runtime).await?;
+//!     println!("{}", resp.content);
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Core Concepts
+//!
+//! | Concept | Type | Description |
+//! |---------|------|-------------|
+//! | **Runtime** | [`AgentRuntime`] | Shared infrastructure + conversation session |
+//! | **Agent** | [`Agent`] | Behavioural config (system prompt, callbacks) |
+//! | **One-shot** | [`Agent::fire`] | Temporary session, discarded after call |
+//! | **Multi-turn** | [`Agent::send`] | Persistent session across calls |
+//! | **Streaming** | [`fire_stream`](Agent::fire_stream) / [`send_stream`](Agent::send_stream) | Token-by-token streaming |
 //!
 //! ## Features
 //!
@@ -36,34 +49,21 @@
 //!
 //! ## Examples
 //!
-//! ### Agent with built-in tools
-//!
-//! ```rust,no_run,ignore
-//! # use funera_orchestrate::Agent;
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut agent = Agent::builder()
-//!     .api_key("sk-...")
-//!     .model("gpt-4o")
-//!     .with_builtin_tools()   // requires "builtin-tools" feature
-//!     .build()?;
-//!
-//! let resp = agent.chat("Read Cargo.toml").await?;
-//! println!("{}", resp.content);
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ### Streaming tokens
+//! ### One-shot query with stream
 //!
 //! ```rust,no_run
-//! # use funera_orchestrate::{Agent, AgentEvent};
+//! # use funera_orchestrate::{Agent, AgentEvent, AgentRuntime};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut agent = Agent::builder()
-//!     .api_key("sk-...")
+//! let runtime = AgentRuntime::builder()
+//!     .api_key(std::env::var("OPENAI_API_KEY")?)
 //!     .model("gpt-4o")
 //!     .build()?;
 //!
-//! let mut rx = agent.chat_stream("Explain Rust's ownership model").await?;
+//! let agent = Agent::builder()
+//!     .on_token(|t| print!("{t}"))
+//!     .build();
+//!
+//! let mut rx = agent.fire_stream("Explain Rust's ownership model", &runtime).await?;
 //! while let Some(event) = rx.recv().await {
 //!     if let AgentEvent::Token(t) = event {
 //!         print!("{t}");
@@ -76,58 +76,64 @@
 //! ### Multi-turn conversation with callbacks
 //!
 //! ```rust,no_run
-//! # use funera_orchestrate::Agent;
+//! # use funera_orchestrate::{Agent, AgentRuntime};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut agent = Agent::builder()
-//!     .api_key("sk-...")
+//! let mut runtime = AgentRuntime::builder()
+//!     .api_key(std::env::var("OPENAI_API_KEY")?)
 //!     .model("gpt-4o")
-//!     .on_token(|t| print!("{t}"))
-//!     .on_tool_call(|name, args| eprintln!("[tool] {name}: {args}"))
-//!     .on_turn_start(|| eprintln!("--- turn start ---"))
 //!     .build()?;
 //!
-//! let r1 = agent.send("Hi, I'm Alice.").await?;
-//! let r2 = agent.send("What's my name?").await?; // remembers Alice
-//! println!("{}", r2.content);
+//! let agent = Agent::builder()
+//!     .system_prompt("You are helpful.")
+//!     .on_tool_call(|name, _| eprintln!("[tool] {name}"))
+//!     .on_turn_start(|| eprintln!("--- turn ---"))
+//!     .build();
+//!
+//! agent.send("Hi, I'm Alice.", &mut runtime).await?;
+//! agent.send("What's my name?", &mut runtime).await?;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ## Architecture
+//! ### Switching runtimes
 //!
-//! The crate wraps `funera_core`'s raw building blocks into a clean API:
+//! ```rust,no_run
+//! # use funera_orchestrate::{Agent, AgentRuntime};
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let mut gpt = AgentRuntime::builder()
+//!     .api_key("sk-...").model("gpt-4o").build()?;
 //!
-//! ```text
-//! ┌──────────────┐         ┌─────────────────────────────────────┐
-//! │  AgentBuilder │ ──build──►│               Agent                │
-//! │  · api_key()  │         │  ┌─────────────────────────────┐   │
-//! │  · model()    │         │  │  FuneraSession (type-state) │   │
-//! │  · tools()    │         │  │  ReActLoop                  │   │
-//! │  · callbacks()│         │  │  ToolExecutor (background)  │   │
-//! └──────────────┘         │  │  CallbackDispatcher         │   │
-//!                          │  └─────────────────────────────┘   │
-//!                          └─────────────────────────────────────┘
+//! let mut claude = AgentRuntime::builder()
+//!     .api_key("sk-ant-...").model("claude-3-opus").build()?;
+//!
+//! let agent = Agent::builder().build();
+//!
+//! agent.send("What is Rust?", &mut gpt).await?;     // session in gpt
+//! agent.fire("What is Python?", &claude).await?;     // session in claude
+//! agent.send("Tell me more", &mut gpt).await?;       // continues gpt session
+//! # Ok(())
+//! # }
 //! ```
 //!
-//! ## Modules
+//! ## Module Structure
 //!
-//! - [`agent`] — High-level `AgentBuilder` and `Agent`
-//! - [`orchestrator`] — Mid-level `Orchestrator` for advanced use-cases
+//! - [`runtime`] — [`AgentRuntimeBuilder`] and [`AgentRuntime`]
+//! - [`agent`] — [`AgentBuilder`] and [`Agent`]
 //! - [`dispatcher`] — Event bus subscription and callback dispatch
-//! - [`event`] — [`AgentEvent`] enum for streaming responses
-//! - [`response`] — [`ChatResponse`] and related types
-//! - [`error`] — [`OrchestrateError`] enum
+//! - [`event`] — [`AgentEvent`] enum
+//! - [`response`] — [`ChatResponse`] and [`ToolCallInfo`]
+//! - [`error`] — [`OrchestrateError`]
 
 pub mod agent;
 pub mod dispatcher;
 pub mod error;
 pub mod event;
-pub mod orchestrator;
 pub mod response;
+pub mod runtime;
 
 pub use agent::{Agent, AgentBuilder};
 pub use dispatcher::CallbackRegistry;
 pub use error::OrchestrateError;
 pub use event::AgentEvent;
-pub use orchestrator::{Orchestrator, OrchestratorConfig};
 pub use response::{ChatResponse, ToolCallInfo};
+pub use runtime::{AgentRuntime, AgentRuntimeBuilder};

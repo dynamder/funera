@@ -1,31 +1,39 @@
 use std::sync::Arc;
 
-use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinHandle;
 
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::{FuneraSession, Idle};
-use funera_core::env::FuneraEnv;
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
-use funera_core::event_bus::tool_bus::ToolBus;
-use funera_core::re_act::tool::{Tool, ToolRegistry};
-use funera_core::re_act::tool_executor::ToolExecutor;
+use funera_core::re_act::ReActLoopConfig;
 
 use crate::dispatcher::{CallbackDispatcher, CallbackRegistry};
 use crate::error::OrchestrateError;
 use crate::event::AgentEvent;
 use crate::response::ChatResponse;
+use crate::runtime::AgentRuntime;
 
+// ---------------------------------------------------------------------------
+// AgentBuilder
+// ---------------------------------------------------------------------------
+
+/// Builds an [`Agent`].
+///
+/// An `Agent` is lightweight configuration — no infrastructure, no session.
+/// All runtime concerns are injected at call time via `&AgentRuntime` or
+/// `&mut AgentRuntime`.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # use funera_orchestrate::Agent;
+/// let agent = Agent::builder()
+///     .system_prompt("You are a helpful assistant.")
+///     .on_token(|t| print!("{t}"))
+///     .build();
+/// ```
 pub struct AgentBuilder {
-    api_key: Option<String>,
-    base_url: Option<String>,
-    client: Option<async_openai::Client<OpenAIConfig>>,
-    model: Option<String>,
-    max_iterations: usize,
-    channel_buffer: usize,
     system_prompt: Option<String>,
-    tools: Vec<Box<dyn Tool>>,
     callbacks: CallbackRegistry,
 }
 
@@ -38,77 +46,18 @@ impl Default for AgentBuilder {
 impl AgentBuilder {
     pub fn new() -> Self {
         Self {
-            api_key: None,
-            base_url: None,
-            client: None,
-            model: None,
-            max_iterations: 10,
-            channel_buffer: 32,
             system_prompt: None,
-            tools: Vec::new(),
             callbacks: CallbackRegistry::new(),
         }
     }
 
-    pub fn api_key(mut self, key: impl Into<String>) -> Self {
-        self.api_key = Some(key.into());
-        self
-    }
-
-    pub fn base_url(mut self, url: impl Into<String>) -> Self {
-        self.base_url = Some(url.into());
-        self
-    }
-
-    pub fn model(mut self, model: impl Into<String>) -> Self {
-        self.model = Some(model.into());
-        self
-    }
-
-    pub fn client(mut self, client: async_openai::Client<OpenAIConfig>) -> Self {
-        self.client = Some(client);
-        self
-    }
-
-    pub fn max_iterations(mut self, n: usize) -> Self {
-        self.max_iterations = n;
-        self
-    }
-
-    pub fn channel_buffer(mut self, n: usize) -> Self {
-        self.channel_buffer = n;
-        self
-    }
-
+    /// A system-level prompt that prefixes every interaction.
     pub fn system_prompt(mut self, prompt: impl Into<String>) -> Self {
         self.system_prompt = Some(prompt.into());
         self
     }
 
-    pub fn with_tool<T: Tool + 'static>(mut self) -> Self
-    where
-        T: Default,
-    {
-        let tool: T = T::default();
-        self.tools.push(Box::new(tool));
-        self
-    }
-
-    pub fn with_tool_instance(mut self, tool: Box<dyn Tool>) -> Self {
-        self.tools.push(tool);
-        self
-    }
-
-    #[cfg(feature = "builtin-tools")]
-    pub fn with_builtin_tools(mut self) -> Self {
-        use builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
-        self.tools.push(Box::new(ReadTool));
-        self.tools.push(Box::new(WriteTool));
-        self.tools.push(Box::new(EditTool));
-        self.tools.push(Box::new(ShellTool));
-        self
-    }
-
+    /// Fired for each text token streamed from the LLM.
     pub fn on_token<F>(mut self, f: F) -> Self
     where
         F: Fn(String) + Send + Sync + 'static,
@@ -121,6 +70,7 @@ impl AgentBuilder {
         self
     }
 
+    /// Fired when a tool call is detected (before execution).
     pub fn on_tool_call<F>(mut self, f: F) -> Self
     where
         F: Fn(String, serde_json::Value) + Send + Sync + 'static,
@@ -133,6 +83,7 @@ impl AgentBuilder {
         self
     }
 
+    /// Fired when a tool execution completes.
     pub fn on_tool_result<F>(mut self, f: F) -> Self
     where
         F: Fn(String, Result<String, String>) + Send + Sync + 'static,
@@ -145,6 +96,7 @@ impl AgentBuilder {
         self
     }
 
+    /// Fired at the start of each ReAct turn.
     pub fn on_turn_start<F>(mut self, f: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
@@ -157,6 +109,7 @@ impl AgentBuilder {
         self
     }
 
+    /// Fired at the end of each ReAct turn.
     pub fn on_turn_end<F>(mut self, f: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
@@ -169,6 +122,7 @@ impl AgentBuilder {
         self
     }
 
+    /// Fired for every [`AgentEvent`] (catch-all).
     pub fn on_event<F>(mut self, f: F) -> Self
     where
         F: Fn(AgentEvent) + Send + Sync + 'static,
@@ -177,138 +131,166 @@ impl AgentBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Agent, OrchestrateError> {
-        let api_key = self
-            .api_key
-            .or_else(|| std::env::var("OPENAI_API_KEY").ok());
-        let model = self
-            .model
-            .or_else(|| std::env::var("OPENAI_MODEL").ok())
-            .unwrap_or_else(|| "gpt-4o".into());
-
-        let client = match self.client {
-            Some(c) => c,
-            None => {
-                let api_key = api_key.ok_or_else(|| {
-                    OrchestrateError::Config(
-                        "no API key provided; set OPENAI_API_KEY or call .api_key()".into(),
-                    )
-                })?;
-
-                let mut config = OpenAIConfig::default().with_api_key(api_key);
-
-                if let Some(base_url) = &self.base_url {
-                    config = config.with_api_base(base_url);
-                }
-
-                async_openai::Client::with_config(config)
-            }
-        };
-
-        let mut registry = ToolRegistry::new();
-        for tool in self.tools {
-            registry.add_tool(tool);
+    /// Build the [`Agent`].
+    pub fn build(self) -> Agent {
+        let (event_tx, _) = broadcast::channel(256);
+        Agent {
+            system_prompt: self.system_prompt,
+            callbacks: Arc::new(self.callbacks),
+            event_tx,
         }
+    }
+}
 
-        let (env, env_watcher) = FuneraEnv::new(registry, client.clone(), model.clone());
+// ---------------------------------------------------------------------------
+// Agent
+// ---------------------------------------------------------------------------
+
+/// A lightweight agent configuration.
+///
+/// `Agent` holds only behavioural configuration (system prompt, callbacks).
+/// All runtime and session state lives in [`AgentRuntime`], which is injected
+/// at call time.
+///
+/// # Fire-and-forget (one-shot)
+///
+/// ```rust,no_run
+/// # use funera_orchestrate::{Agent, AgentRuntime};
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let runtime = AgentRuntime::builder()
+///     .api_key(std::env::var("OPENAI_API_KEY")?)
+///     .build()?;
+///
+/// let agent = Agent::builder()
+///     .system_prompt("You are helpful.")
+///     .build();
+///
+/// // fire uses a temporary session — runtime is &, no state mutated
+/// let resp = agent.fire("Hello!", &runtime).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Multi-turn conversation
+///
+/// ```rust,no_run
+/// # use funera_orchestrate::{Agent, AgentRuntime};
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let mut runtime = AgentRuntime::builder()
+///     .api_key(std::env::var("OPENAI_API_KEY")?)
+///     .build()?;
+///
+/// let agent = Agent::builder().build();
+///
+/// // send uses the runtime's session — runtime needs &mut
+/// agent.send("My name is Alice.", &mut runtime).await?;
+/// agent.send("What is my name?", &mut runtime).await?;
+/// // → "Alice"
+/// # Ok(())
+/// # }
+/// ```
+pub struct Agent {
+    pub(crate) system_prompt: Option<String>,
+    pub(crate) callbacks: Arc<CallbackRegistry>,
+    pub(crate) event_tx: broadcast::Sender<AgentEvent>,
+}
+
+impl Agent {
+    /// Create a new [`AgentBuilder`].
+    pub fn builder() -> AgentBuilder {
+        AgentBuilder::new()
+    }
+
+    /// Subscribe to all [`AgentEvent`]s from subsequent calls.
+    ///
+    /// The returned receiver gets a clone of every event (tokens, tool calls,
+    /// turn boundaries) dispatched during `fire`/`send`.
+    pub fn subscribe_events(&self) -> broadcast::Receiver<AgentEvent> {
+        self.event_tx.subscribe()
+    }
+
+    // ── fire (one-shot, no session) ────────────────────────────────
+
+    /// One-shot query. Creates a temporary session, runs a single ReAct loop,
+    /// and discards the session.  The runtime is accessed via a shared `&`
+    /// reference — no session state is mutated.
+    ///
+    /// Use [`send`](Self::send) instead if you need multi-turn conversation.
+    pub async fn fire(
+        &self,
+        msg: impl Into<String>,
+        runtime: &AgentRuntime,
+    ) -> Result<ChatResponse, OrchestrateError> {
+        let text = msg.into();
+
+        // Create per-call plumbing
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        let (tool_bus, exec_rx) = ToolBus::new();
-        let tool_registry = env.tool_registry.clone();
-
-        let executor_handle = tokio::spawn(async move {
-            ToolExecutor::new(tool_registry, exec_rx).run().await;
-        });
-
-        let callbacks = Arc::new(self.callbacks);
-        let (event_tx, _) = broadcast::channel(256);
-
+        // Per-call dispatcher
         let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, callbacks.clone(), event_tx.clone());
+            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone());
 
+        let _ = env_state_tx.send(EnvStateEvent::SessionStart);
+
+        // Fresh temp session — never stored back
         let session = FuneraSession::<Idle>::new();
-        let system_prompt = self.system_prompt;
 
-        Ok(Agent {
-            env: Some(env),
-            env_watcher: Some(env_watcher),
-            env_state_tx,
-            turn_highway_handle: Some(turn_highway_handle),
-            tool_bus,
-            _executor_handle: executor_handle,
-            callbacks,
-            event_tx,
-            session: Some(session),
-            session_msg_count: 0,
-            max_iterations: self.max_iterations,
-            channel_buffer: self.channel_buffer,
-            system_prompt,
-            model,
-        })
-    }
-}
+        // Inject system prompt
+        if let Some(ref sys) = self.system_prompt {
+            let sys_msg = FuneraMessage::new(
+                Role::System,
+                MsgVariant::Text(TextMessage { text: sys.clone().into() }),
+            );
+            session.push_message(sys_msg);
+        }
 
-pub struct Agent {
-    env: Option<FuneraEnv>,
-    env_watcher: Option<funera_core::env::FuneraEnvWatcher>,
-    env_state_tx: broadcast::Sender<EnvStateEvent>,
-    turn_highway_handle: Option<funera_core::event_bus::env_state_bus::TurnHighWayHandle>,
-    tool_bus: ToolBus,
-    _executor_handle: JoinHandle<()>,
-    callbacks: Arc<CallbackRegistry>,
-    event_tx: broadcast::Sender<AgentEvent>,
-    session: Option<FuneraSession<Idle>>,
-    session_msg_count: usize,
-    max_iterations: usize,
-    channel_buffer: usize,
-    system_prompt: Option<String>,
-    model: String,
-}
+        let mut running = session.run();
 
-impl Agent {
-    pub fn builder() -> AgentBuilder {
-        AgentBuilder::new()
+        let init_msg = FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage {
+                text: text.clone().into(),
+            }),
+        );
+
+        let config = ReActLoopConfig::new(
+            runtime.channel_buffer(),
+            runtime.max_iterations(),
+            runtime.env_watcher(),
+            runtime.tool_bus.clone(),
+            env_state_tx.clone(),
+            turn_highway_handle,
+        );
+
+        let result = running.react_loop(init_msg, config, env_state_tx.clone()).await;
+        let idle_session = running.idle();
+        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
+
+        Self::extract_response(result, idle_session)
     }
 
-    pub fn subscribe_events(&self) -> broadcast::Receiver<AgentEvent> {
-        self.event_tx.subscribe()
-    }
-
-    pub fn callbacks(&self) -> Arc<CallbackRegistry> {
-        self.callbacks.clone()
-    }
-
-    /// Send a message and wait for the full response.
-    /// This is a single-turn call; previous history is NOT retained.
-    pub async fn chat(&mut self, msg: impl Into<String>) -> Result<ChatResponse, OrchestrateError> {
-        self.run_session(msg, false).await
-    }
-
-    /// Send a message and wait for the full response.
-    /// Unlike `chat`, history from previous `send` calls IS retained,
-    /// enabling natural multi-turn conversations.
-    pub async fn send(&mut self, msg: impl Into<String>) -> Result<ChatResponse, OrchestrateError> {
-        self.run_session(msg, true).await
-    }
-
-    pub async fn chat_stream(
-        &mut self,
+    /// Streaming variant of [`fire`](Self::fire).
+    ///
+    /// Returns a channel receiver that yields [`AgentEvent`] items as they
+    /// happen (tokens, tool calls, turn boundaries), ending with `Done`.
+    pub async fn fire_stream(
+        &self,
         msg: impl Into<String>,
+        runtime: &AgentRuntime,
     ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
-        let (tx, rx) = mpsc::channel(256);
-        let event_tx = self.event_tx.clone();
-        let guard_tx = tx.clone();
+        let (relay_tx, rx) = mpsc::channel(256);
+        let tx = relay_tx.clone();
+        let event_rx = self.event_tx.subscribe();
 
-        let event_rx = event_tx.subscribe();
         tokio::spawn(async move {
             let mut rx = event_rx;
             loop {
                 match rx.recv().await {
                     Ok(event) => {
-                        if guard_tx.send(event.clone()).await.is_err() {
+                        if tx.send(event.clone()).await.is_err() {
                             break;
                         }
                         if matches!(event, AgentEvent::Done) {
@@ -320,83 +302,76 @@ impl Agent {
             }
         });
 
-        let _ = self.run_session(msg, false).await?;
-        let _ = tx.send(AgentEvent::Done).await;
-
+        let _ = self.fire(msg, runtime).await?;
+        let _ = relay_tx.send(AgentEvent::Done).await;
         Ok(rx)
     }
 
-    pub fn reset(&mut self) {
-        self.session = Some(FuneraSession::<Idle>::new());
-        self.session_msg_count = 0;
-    }
+    // ── send (multi-turn, persistent session) ──────────────────────
 
-    async fn run_session(
-        &mut self,
+    /// Multi-turn message. Uses the runtime's persistent session, storing
+    /// the updated session back into the runtime on completion.
+    ///
+    /// The runtime requires `&mut` because the session state is mutated.
+    pub async fn send(
+        &self,
         msg: impl Into<String>,
-        retain_history: bool,
+        runtime: &mut AgentRuntime,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
 
-        let _ = self.env_state_tx.send(EnvStateEvent::SessionStart);
+        // Per-call plumbing
+        let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
+        let env_state_tx = env_state_bus.env_state_tx.clone();
+        let env_state_rx = env_state_bus.subscribe();
+        env_state_bus.start_turn_highway();
 
-        let session = self.session.take().unwrap_or_else(|| {
-            self.session_msg_count = 0;
-            FuneraSession::<Idle>::new()
-        });
-        let mut running = session.run();
+        // Per-call dispatcher
+        let _dispatcher =
+            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone());
 
-        let init_msg = FuneraMessage::new(
-            Role::User,
-            MsgVariant::Text(TextMessage {
-                text: text.clone().into(),
-            }),
-        );
+        let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        let mut history_msg: Vec<serde_json::Value> = Vec::new();
+        // Take or create session
+        let session = runtime.take_session();
 
-        if let Some(ref system_prompt) = self.system_prompt {
-            history_msg.push(serde_json::json!({
-                "role": "system",
-                "content": system_prompt,
-            }));
+        // Inject system prompt on first interaction (session is fresh)
+        if let Some(ref sys) = self.system_prompt {
+            let msgs = session.session_context();
+            if msgs.is_empty() {
+                let sys_msg = FuneraMessage::new(Role::System, MsgVariant::Text(TextMessage { text: sys.clone().into() }));
+                session.push_message(sys_msg);
+            }
         }
 
-        let env_watcher = self.env_watcher.take().unwrap_or_else(|| {
-            let (env, watcher) = self.rebuild_env();
-            self.env = Some(env);
-            watcher
-        });
+        let mut running = session.run();
 
-        let turn_highway_handle = self.turn_highway_handle.take().unwrap();
+        let init_msg = FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: text.into() }));
 
-        let config = funera_core::re_act::ReActLoopConfig::new(
-            self.channel_buffer,
-            self.max_iterations,
-            env_watcher,
-            self.tool_bus.clone(),
-            self.env_state_tx.clone(),
+        let config = ReActLoopConfig::new(
+            runtime.channel_buffer(),
+            runtime.max_iterations(),
+            runtime.env_watcher(),
+            runtime.tool_bus.clone(),
+            env_state_tx.clone(),
             turn_highway_handle,
         );
 
-        let result = running
-            .react_loop(init_msg, config, self.env_state_tx.clone())
-            .await;
-
+        let result = running.react_loop(init_msg, config, env_state_tx.clone()).await;
         let idle_session = running.idle();
+        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
 
-        match result {
+        // Extract context before consuming the session
+        let ctx = idle_session.session_context();
+
+        let response = match result {
             Ok(()) => {
-                let ctx = idle_session.session_context();
                 let assistant_msgs: Vec<&serde_json::Value> =
                     ctx.iter().filter(|m| m["role"] == "assistant").collect();
 
                 let mut content = String::new();
-                let tool_calls = Vec::new();
-                let mut iterations = 0;
-
-                for msg in &assistant_msgs {
-                    if let Some(c) = msg["content"].as_str() {
+                for m in &assistant_msgs {
+                    if let Some(c) = m["content"].as_str() {
                         if !c.is_empty() {
                             if !content.is_empty() {
                                 content.push('\n');
@@ -404,7 +379,6 @@ impl Agent {
                             content.push_str(c);
                         }
                     }
-                    iterations += 1;
                 }
 
                 let finish_reason = assistant_msgs
@@ -412,44 +386,93 @@ impl Agent {
                     .and_then(|m| m["finish_reason"].as_str())
                     .map(|s| s.to_string());
 
-                if retain_history {
-                    self.session = Some(idle_session);
-                    self.session_msg_count += 1;
-                } else {
-                    self.session = Some(FuneraSession::<Idle>::new());
-                    self.session_msg_count = 0;
-                }
-
-                let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
-
                 Ok(ChatResponse {
                     content,
-                    tool_calls,
-                    iterations,
+                    tool_calls: Vec::new(),
+                    iterations: assistant_msgs.len(),
                     finish_reason,
                 })
             }
-            Err(e) => {
-                self.session = Some(if retain_history {
-                    idle_session
-                } else {
-                    FuneraSession::<Idle>::new()
-                });
-                let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
-                Err(OrchestrateError::Session(e))
-            }
+            Err(e) => Err(OrchestrateError::Session(e)),
+        };
+
+        // Store session back for multi-turn
+        if response.is_ok() {
+            runtime.store_session(idle_session);
         }
+
+        response
     }
 
-    fn rebuild_env(&self) -> (FuneraEnv, funera_core::env::FuneraEnvWatcher) {
-        let config = OpenAIConfig::default();
-        let client = async_openai::Client::with_config(config);
-        FuneraEnv::new(ToolRegistry::new(), client, self.model.clone())
-    }
-}
+    /// Streaming variant of [`send`](Self::send).
+    pub async fn send_stream(
+        &self,
+        msg: impl Into<String>,
+        runtime: &mut AgentRuntime,
+    ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
+        let (relay_tx, rx) = mpsc::channel(256);
+        let tx = relay_tx.clone();
+        let event_rx = self.event_tx.subscribe();
 
-impl Drop for Agent {
-    fn drop(&mut self) {
-        let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
+        tokio::spawn(async move {
+            let mut rx = event_rx;
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        if tx.send(event.clone()).await.is_err() {
+                            break;
+                        }
+                        if matches!(event, AgentEvent::Done) {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let _ = self.send(msg, runtime).await?;
+        let _ = relay_tx.send(AgentEvent::Done).await;
+        Ok(rx)
+    }
+
+    // ── internal helpers ──────────────────────────────────────────
+
+    fn extract_response(
+        result: Result<(), anyhow::Error>,
+        session: FuneraSession<Idle>,
+    ) -> Result<ChatResponse, OrchestrateError> {
+        match result {
+            Ok(()) => {
+                let ctx = session.session_context();
+                let assistant_msgs: Vec<&serde_json::Value> =
+                    ctx.iter().filter(|m| m["role"] == "assistant").collect();
+
+                let mut content = String::new();
+                for m in &assistant_msgs {
+                    if let Some(c) = m["content"].as_str() {
+                        if !c.is_empty() {
+                            if !content.is_empty() {
+                                content.push('\n');
+                            }
+                            content.push_str(c);
+                        }
+                    }
+                }
+
+                let finish_reason = assistant_msgs
+                    .last()
+                    .and_then(|m| m["finish_reason"].as_str())
+                    .map(|s| s.to_string());
+
+                Ok(ChatResponse {
+                    content,
+                    tool_calls: Vec::new(),
+                    iterations: assistant_msgs.len(),
+                    finish_reason,
+                })
+            }
+            Err(e) => Err(OrchestrateError::Session(e)),
+        }
     }
 }
