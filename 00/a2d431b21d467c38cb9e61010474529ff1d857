@@ -1,0 +1,29 @@
+funera_core_tune/tests/event_buses.rs
+  s_ccf6b99c212b6a::t_525228bbfe1ef7 3
+  s_ccf6b99c212b6a::t_8cd0942dd3d949 91-95,97-101
+  s_ccf6b99c212b6a::t_ee0bf69b07313c 75
+funera-orchestrate/examples/streaming_with_tools.rs
+  s_ccf6b99c212b6a::t_54c1c233fee34d 77
+  s_ccf6b99c212b6a::t_8a34d6c832346b 74-76
+funera_core/src/re_act.rs
+  s_ccf6b99c212b6a::t_39687a3ccaa666 368
+  s_ccf6b99c212b6a::t_564cd6c05dbddb 353,369-372,374
+funera-orchestrate/src/dispatcher.rs
+  s_ccf6b99c212b6a::t_16a7921500f929 189,193-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "00a2d431b21d467c38cb9e61010474529ff1d857",
+  "prompts": {},
+  "sessions": {
+    "s_ccf6b99c212b6a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b86f702affesLxGeeikjZgWe7",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
