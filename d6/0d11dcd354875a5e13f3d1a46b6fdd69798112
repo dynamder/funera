@@ -1,0 +1,43 @@
+funera-orchestrate/examples/session_reset.rs
+  s_499f6522d6d1a6::t_53fb5f7087c93d 4
+funera-orchestrate/Cargo.toml
+  s_499f6522d6d1a6::t_0ae6fa09c10b92 37
+funera-orchestrate/examples/streaming.rs
+  s_499f6522d6d1a6::t_d09e6a3fad8227 4
+funera-orchestrate/examples/streaming_with_tools.rs
+  s_499f6522d6d1a6::t_e1c537723142cb 71
+  s_499f6522d6d1a6::t_a62787ab05d5e4 1-70,72-85
+funera_core/src/re_act.rs
+  s_499f6522d6d1a6::t_2b346cd53d87eb 6-9
+  s_499f6522d6d1a6::t_6e49f98bfb7ad9 222-238
+  s_499f6522d6d1a6::t_19ad7fd38f2a97 566-589
+  s_499f6522d6d1a6::t_064eee405e65a5 565
+funera-orchestrate/examples/minimal.rs
+  s_499f6522d6d1a6::t_300d9eec8ef81b 1-4
+funera-orchestrate/examples/skills.rs
+  s_499f6522d6d1a6::t_4428a9a213c52b 4
+funera-orchestrate/examples/multi_runtime.rs
+  s_499f6522d6d1a6::t_5b2a96a0c95e29 4
+funera-orchestrate/examples/multi_turn.rs
+  s_499f6522d6d1a6::t_e51a5a1ae701e5 4
+funera-orchestrate/examples/custom_tool.rs
+  s_499f6522d6d1a6::t_b85823d89f5867 4
+funera-orchestrate/examples/builtin_tools.rs
+  s_499f6522d6d1a6::t_2b53441ae1ccce 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d60d11dcd354875a5e13f3d1a46b6fdd69798112",
+  "prompts": {},
+  "sessions": {
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
