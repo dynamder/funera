@@ -47,7 +47,13 @@ impl<C: StreamChunkExt> TokenBus<C> {
         match self.raw_response_stream.next().await {
             None => None,
             Some(Err(e)) => Some(Err(e)),
-            Some(Ok(chunk)) => Some(Ok(chunk.extract_events())),
+            Some(Ok(chunk)) => {
+                let events = chunk.extract_events();
+                for event in &events {
+                    self.token_tx.send(event.clone()).ok();
+                }
+                Some(Ok(events))
+            }
         }
     }
 

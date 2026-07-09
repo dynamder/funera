@@ -154,11 +154,11 @@ impl<P: ChatProvider> ReActLoop<P> {
                 let request_json =
                     P::build_request_json(&model, &history_json, &skill_content, &tools_json);
 
+                // Wait for dispatcher subscriber to be ready before starting
+                ready_barrier.wait().await;
+
                 react_bus.send(ReactEvent::TurnStart).ok();
                 let stream = P::create_stream(&client, request_json).await?;
-
-                // Wait for dispatcher subscriber to be ready
-                ready_barrier.wait().await;
 
                 // 6. Process stream
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);

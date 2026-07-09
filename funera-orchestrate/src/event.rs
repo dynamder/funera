@@ -5,6 +5,7 @@ use serde_json::Value as JsonValue;
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Token(String),
+    Reasoning(String),
     ToolCallRequest {
         index: usize,
         call_id: Arc<str>,

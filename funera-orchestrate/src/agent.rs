@@ -389,17 +389,13 @@ impl Agent {
                 let assistant_msgs: Vec<&serde_json::Value> =
                     ctx.iter().filter(|m| m["role"] == "assistant").collect();
 
-                let mut content = String::new();
-                for m in &assistant_msgs {
-                    if let Some(c) = m["content"].as_str() {
-                        if !c.is_empty() {
-                            if !content.is_empty() {
-                                content.push('\n');
-                            }
-                            content.push_str(c);
-                        }
-                    }
-                }
+                let content = assistant_msgs
+                    .iter()
+                    .filter_map(|m| m["content"].as_str())
+                    .filter(|c| !c.is_empty())
+                    .last()
+                    .unwrap_or("")
+                    .to_string();
 
                 let finish_reason = assistant_msgs
                     .last()
@@ -468,17 +464,13 @@ impl Agent {
                 let assistant_msgs: Vec<&serde_json::Value> =
                     ctx.iter().filter(|m| m["role"] == "assistant").collect();
 
-                let mut content = String::new();
-                for m in &assistant_msgs {
-                    if let Some(c) = m["content"].as_str() {
-                        if !c.is_empty() {
-                            if !content.is_empty() {
-                                content.push('\n');
-                            }
-                            content.push_str(c);
-                        }
-                    }
-                }
+                let content = assistant_msgs
+                    .iter()
+                    .filter_map(|m| m["content"].as_str())
+                    .filter(|c| !c.is_empty())
+                    .last()
+                    .unwrap_or("")
+                    .to_string();
 
                 let finish_reason = assistant_msgs
                     .last()

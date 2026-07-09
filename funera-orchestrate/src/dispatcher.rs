@@ -77,6 +77,7 @@ impl CallbackDispatcher {
         registry: Arc<CallbackRegistry>,
         event_tx: broadcast::Sender<AgentEvent>,
     ) {
+        let mut token_handle: Option<tokio::task::JoinHandle<()>> = None;
         loop {
             match rx.recv().await {
                 Ok(EnvStateEvent::PerTurnBusReady {
@@ -89,9 +90,9 @@ impl CallbackDispatcher {
 
                     let reg = registry.clone();
                     let tx = event_tx.clone();
-                    tokio::spawn(async move {
+                    token_handle = Some(tokio::spawn(async move {
                         Self::listen_token_bus(token_rx, reg.clone(), tx.clone()).await;
-                    });
+                    }));
 
                     let reg = registry.clone();
                     let tx = event_tx.clone();
@@ -101,6 +102,9 @@ impl CallbackDispatcher {
                     });
                 }
                 Ok(EnvStateEvent::SessionClosed) => {
+                    if let Some(h) = token_handle.take() {
+                        let _ = h.await;
+                    }
                     let _ = event_tx.send(AgentEvent::Done);
                     break;
                 }
@@ -123,28 +127,14 @@ impl CallbackDispatcher {
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
                 }
-                Ok(TokenEvent::ToolDelta {
-                    index,
-                    call_id,
-                    name,
-                    args_chunk,
-                }) => {
-                    if let (Some(name), Some(args_str)) = (name, args_chunk) {
-                        let args: serde_json::Value =
-                            serde_json::from_str(&args_str).unwrap_or(serde_json::Value::Null);
-                        let event = AgentEvent::ToolCallRequest {
-                            index,
-                            call_id: call_id.clone().into(),
-                            name,
-                            args,
-                        };
-                        registry.dispatch(event.clone());
-                        let _ = event_tx.send(event);
-                    }
+                Ok(TokenEvent::Reasoning(r)) => {
+                    let event = AgentEvent::Reasoning(r);
+                    registry.dispatch(event.clone());
+                    let _ = event_tx.send(event);
                 }
-                Ok(TokenEvent::Reasoning(_)) => {
-                    // Reasoning tokens are not dispatched as AgentEvent
-                    // (they are captured in session_msgs for history preservation)
+                Ok(TokenEvent::ToolDelta { .. }) => {
+                    // ToolDelta is raw stream data; ToolCallRequest is emitted
+                    // by listen_react_bus from ReactEvent::ToolExecRequest
                 }
                 Ok(TokenEvent::Finish(_)) => {
                     break;
