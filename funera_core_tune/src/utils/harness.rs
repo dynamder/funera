@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use funera_core::{
-    env::FuneraEnv,
-    event_bus::env_state_bus::EnvStateBus,
-    re_act::tool::ToolRegistry,
+    env::FuneraEnv, event_bus::env_state_bus::EnvStateBus, re_act::tool::ToolRegistry,
 };
 use tokio::sync::RwLock;
 

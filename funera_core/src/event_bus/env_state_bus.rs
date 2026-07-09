@@ -13,6 +13,10 @@ pub enum EnvStateEvent {
     ToolAdded(String),
     ToolRemoved(String),
     ToolAvailability(String, bool),
+    SkillAdded(String),
+    SkillRemoved(String),
+    SkillActivated(String),
+    SkillDeactivated(String),
     PerTurnBusReady {
         token_tx: broadcast::Sender<TokenEvent>,
         react_tx: broadcast::Sender<ReactEvent>,
@@ -155,6 +159,28 @@ mod tests {
         let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
         let _ = token_tx;
         // If we got here without hanging, fallback works
+    }
+
+    #[tokio::test]
+    async fn skill_events() {
+        let (bus, _handle) = EnvStateBus::new();
+        let mut rx = bus.subscribe();
+
+        bus.send(EnvStateEvent::SkillAdded("weather".into())).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::SkillAdded(n) if n == "weather"));
+
+        bus.send(EnvStateEvent::SkillActivated("weather".into())).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::SkillActivated(n) if n == "weather"));
+
+        bus.send(EnvStateEvent::SkillDeactivated("weather".into())).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::SkillDeactivated(n) if n == "weather"));
+
+        bus.send(EnvStateEvent::SkillRemoved("weather".into())).unwrap();
+        let event = rx.recv().await.unwrap();
+        assert!(matches!(event, EnvStateEvent::SkillRemoved(n) if n == "weather"));
     }
 
     #[tokio::test]

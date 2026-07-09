@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
@@ -7,6 +8,7 @@ use tokio::task::JoinHandle;
 use funera_core::chat::session::{FuneraSession, Idle};
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
 use funera_core::event_bus::tool_bus::ToolBus;
+use funera_core::re_act::skills::{Skill, SkillRegistry};
 use funera_core::re_act::tool::{Tool, ToolRegistry};
 use funera_core::re_act::tool_executor::ToolExecutor;
 
@@ -32,6 +34,9 @@ pub struct AgentRuntimeBuilder {
     max_iterations: usize,
     channel_buffer: usize,
     tools: Vec<Box<dyn Tool>>,
+    skills: Vec<Skill>,
+    skill_names_to_activate: Vec<String>,
+    load_default_skills: bool,
 }
 
 impl Default for AgentRuntimeBuilder {
@@ -50,6 +55,9 @@ impl AgentRuntimeBuilder {
             max_iterations: 10,
             channel_buffer: 32,
             tools: Vec::new(),
+            skills: Vec::new(),
+            skill_names_to_activate: Vec::new(),
+            load_default_skills: false,
         }
     }
 
@@ -92,6 +100,57 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    /// Load a skill from a SKILL.md file.
+    pub fn with_skill_file(mut self, path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+        match Skill::from_file(&path) {
+            Ok(skill) => {
+                self.skills.push(skill);
+            }
+            Err(e) => {
+                eprintln!("warn: failed to load skill from {:?}: {}", path, e);
+            }
+        }
+        self
+    }
+
+    /// Load all SKILL.md files from a directory.
+    pub fn with_skills_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+        match Skill::from_dir(&path) {
+            Ok(skills) => self.skills.extend(skills),
+            Err(e) => {
+                eprintln!("warn: failed to load skills from {:?}: {}", path, e);
+            }
+        }
+        self
+    }
+
+    /// Register an inline skill definition.
+    pub fn with_skill(
+        mut self,
+        name: impl Into<String>,
+        description: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
+        self.skills.push(Skill::new(name, description, content));
+        self
+    }
+
+    /// Activate a previously loaded skill by name.
+    /// If the skill does not exist, the call is silently ignored.
+    pub fn with_skill_active(mut self, name: impl Into<String>) -> Self {
+        self.skill_names_to_activate.push(name.into());
+        self
+    }
+
+    /// Auto-discover and load skills from default paths
+    /// (`$SKILLS_HOME` or `~/.agents/skills/`), then activate them.
+    pub fn with_skills_default_path(mut self) -> Self {
+        self.load_default_skills = true;
+        self
+    }
+
     /// Register a tool by its type (requires `Tool + Default`).
     pub fn with_tool<T: Tool + 'static>(mut self) -> Self
     where
@@ -123,7 +182,7 @@ impl AgentRuntimeBuilder {
     ///
     /// Spawns a background `ToolExecutor` task that lives for the runtime's
     /// lifetime and processes tool calls from the ReAct loop.
-    pub fn build(self) -> Result<AgentRuntime, OrchestrateError> {
+    pub fn build(mut self) -> Result<AgentRuntime, OrchestrateError> {
         let api_key = self.api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
         let model = self
             .model
@@ -151,7 +210,32 @@ impl AgentRuntimeBuilder {
             registry.add_tool(t);
         }
 
-        let (env, env_watcher) = FuneraEnv::new(registry, client, &model);
+        // Pre-build SkillRegistry synchronously (no locks needed yet)
+        let mut skill_registry = funera_core::re_act::skills::SkillRegistry::new();
+
+        // Load default skills if requested (auto-discover from $SKILLS_HOME / ~/.agents/skills/)
+        if self.load_default_skills {
+            let default_skills = Skill::from_default_path();
+            for skill in default_skills {
+                let name = skill.name.clone();
+                skill_registry.add(skill);
+                self.skill_names_to_activate.push(name);
+            }
+        }
+
+        // Add all explicitly registered skills
+        for skill in self.skills {
+            skill_registry.add(skill);
+        }
+
+        // Activate specified skills
+        for name in &self.skill_names_to_activate {
+            skill_registry.activate(&name);
+        }
+
+        // Create env with pre-built skill registry (prompt is computed internally)
+        let (env, env_watcher) = FuneraEnv::with_skills(registry, client, &model, skill_registry);
+
         let (tool_bus, exec_rx) = ToolBus::new();
         let reg = env.tool_registry.clone();
         let handle = tokio::spawn(async move {
@@ -230,6 +314,11 @@ impl AgentRuntime {
     /// The tool registry (for dynamic tool management).
     pub fn tool_registry(&self) -> Arc<RwLock<ToolRegistry>> {
         self.env.tool_registry.clone()
+    }
+
+    /// The skill registry (for dynamic skill management).
+    pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
+        self.env.skill_registry.clone()
     }
 
     /// Clone the env watcher for a session.
@@ -325,6 +414,42 @@ mod tests {
         let b = AgentRuntimeBuilder::new()
             .with_tool_instance(Box::new(MockTool));
         assert_eq!(b.tools.len(), 1);
+    }
+
+    // ── skill builder methods ───────────────────────────────────────
+
+    #[test]
+    fn builder_with_skill_inline() {
+        let b = AgentRuntimeBuilder::new()
+            .with_skill("s1", "desc", "content");
+        assert_eq!(b.skills.len(), 1);
+        assert_eq!(b.skills[0].name, "s1");
+        assert_eq!(b.skills[0].description, "desc");
+        assert_eq!(b.skills[0].content, "content");
+    }
+
+    #[test]
+    fn builder_with_skill_active_adds_to_list() {
+        let b = AgentRuntimeBuilder::new()
+            .with_skill_active("s1")
+            .with_skill_active("s2");
+        assert_eq!(b.skill_names_to_activate, vec!["s1", "s2"]);
+    }
+
+    #[test]
+    fn builder_with_skills_default_path_sets_flag() {
+        let b = AgentRuntimeBuilder::new().with_skills_default_path();
+        assert!(b.load_default_skills);
+    }
+
+    #[test]
+    fn builder_skills_combined() {
+        let b = AgentRuntimeBuilder::new()
+            .with_skill("a", "", "aaa")
+            .with_skill("b", "", "bbb")
+            .with_skill_active("a");
+        assert_eq!(b.skills.len(), 2);
+        assert_eq!(b.skill_names_to_activate, vec!["a"]);
     }
 
     // ── build ──────────────────────────────────────────────────────

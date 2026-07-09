@@ -36,3 +36,7 @@ path = "src/lib.rs"
 [[example]]
 name = "06_builtin_tools"
 required-features = ["builtin-tools"]
+
+[[example]]
+name = "09_all_modules"
+required-features = ["builtin-tools"]

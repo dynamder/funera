@@ -129,16 +129,17 @@ impl ReActLoop {
                     self.history_msg.push(msg.format_json());
                 }
 
-                // 2. Get current env state (client, tools, model)
+                // 2. Get current env state (client, tools, model, skills)
                 let client = env_watcher.watch_client();
                 let tools_json = env_watcher.watch_tool();
                 let model = env_watcher.watch_model();
+                let skill_content = env_watcher.watch_skill();
 
                 // 4. TurnHighWay handshake
                 let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
 
-                // 5. Format messages for LLM
-                let llm_messages = build_llm_messages(&self.history_msg)?;
+                // 5. Format messages for LLM (with skill content appended after system prompts)
+                let llm_messages = build_llm_messages(&self.history_msg, &skill_content)?;
 
                 // 6. Build the API request
                 let request = build_chat_request(&model, llm_messages, &tools_json)?;
@@ -186,7 +187,10 @@ impl ReActLoop {
     }
 }
 
-fn build_llm_messages(history: &[JsonValue]) -> Result<Vec<ChatCompletionRequestMessage>> {
+fn build_llm_messages(
+    history: &[JsonValue],
+    skill_content: &str,
+) -> Result<Vec<ChatCompletionRequestMessage>> {
     let mut messages = Vec::new();
     for entry in history {
         let role = entry["role"].as_str().unwrap_or("user");
@@ -230,6 +234,16 @@ fn build_llm_messages(history: &[JsonValue]) -> Result<Vec<ChatCompletionRequest
             _ => {}
         }
     }
+
+    // Append active skill content as additional system message(s) after existing system prompts
+    if !skill_content.is_empty() {
+        messages.push(ChatCompletionRequestMessage::System(
+            ChatCompletionRequestSystemMessageArgs::default()
+                .content(skill_content)
+                .build()?,
+        ));
+    }
+
     Ok(messages)
 }
 
@@ -437,7 +451,7 @@ mod tests {
             json!({"role": "assistant", "content": "hi"}),
             json!({"role": "tool", "tool_call_id": "call_1", "content": "result"}),
         ];
-        let msgs = build_llm_messages(&history).unwrap();
+        let msgs = build_llm_messages(&history, "").unwrap();
         assert_eq!(msgs.len(), 4);
         let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
         assert!(debug_strs[0].starts_with("System"), "got: {}", debug_strs[0]);
@@ -448,8 +462,30 @@ mod tests {
 
     #[test]
     fn build_msgs_empty() {
-        let msgs = build_llm_messages(&[]).unwrap();
+        let msgs = build_llm_messages(&[], "").unwrap();
         assert!(msgs.is_empty());
+    }
+
+    #[test]
+    fn build_msgs_with_skill_content_appended() {
+        let history = vec![
+            json!({"role": "system", "content": "You are a bot"}),
+            json!({"role": "user", "content": "hello"}),
+        ];
+        let msgs = build_llm_messages(&history, "Skill instruction here").unwrap();
+        assert_eq!(msgs.len(), 3);
+        // System first, then user, then skill as an additional system message
+        let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
+        assert!(debug_strs[0].starts_with("System"), "got: {}", debug_strs[0]);
+        assert!(debug_strs[1].starts_with("User"), "got: {}", debug_strs[1]);
+        assert!(debug_strs[2].starts_with("System"), "got: {}", debug_strs[2]);
+    }
+
+    #[test]
+    fn build_msgs_skill_content_empty_noop() {
+        let history = vec![json!({"role": "user", "content": "hi"})];
+        let msgs = build_llm_messages(&history, "").unwrap();
+        assert_eq!(msgs.len(), 1);
     }
 
     #[test]
@@ -459,7 +495,7 @@ mod tests {
             json!({"role": "unknown_role", "content": "whatever"}),
             json!({"role": "assistant", "content": "hello"}),
         ];
-        let msgs = build_llm_messages(&history).unwrap();
+        let msgs = build_llm_messages(&history, "").unwrap();
         assert_eq!(msgs.len(), 2);
     }
 
@@ -467,7 +503,7 @@ mod tests {
 
     #[test]
     fn build_request_no_tools() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})]).unwrap();
+        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
         let req = build_chat_request("gpt-4o", msgs, &json!([])).unwrap();
         assert_eq!(req.model, "gpt-4o");
         assert!(req.stream.unwrap_or(false));
@@ -476,7 +512,7 @@ mod tests {
 
     #[test]
     fn build_request_with_tools() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})]).unwrap();
+        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
         let tools_json = json!([{
             "type": "function",
             "function": {
@@ -492,7 +528,7 @@ mod tests {
 
     #[test]
     fn build_request_tools_not_array() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})]).unwrap();
+        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
         let req = build_chat_request("gpt-4o", msgs, &json!("not_array")).unwrap();
         assert!(req.tools.is_none());
     }
