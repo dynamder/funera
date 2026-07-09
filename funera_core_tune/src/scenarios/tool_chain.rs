@@ -40,9 +40,12 @@ pub async fn multiple_tool_calls() -> Result<String> {
     tokio::spawn(ToolExecutor::new(treg, exec_rx).run());
 
     let (state_tx, _state_rx) = broadcast::channel(20);
-    let history = vec![json!({"role": "user", "content": "use multiple tools"})];
-
-    let loop_instance = ReActLoop::new(10, 3, history, env_watcher, tool_bus, state_tx, turn_highway_handle);
+    let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
+    session_msgs.write().push(funera_core::chat::message::FuneraMessage::new(
+        funera_core::chat::message::Role::User,
+        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "use multiple tools".into() }),
+    ));
+    let loop_instance = ReActLoop::new(10, 3, session_msgs, env_watcher, tool_bus, state_tx, turn_highway_handle);
     let loop_handle = loop_instance.run();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     loop_handle.cancel_token.cancel();

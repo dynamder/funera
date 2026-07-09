@@ -40,12 +40,13 @@ pub async fn multi_turn_conversation() -> Result<String> {
     tokio::spawn(ToolExecutor::new(tool_registry, exec_rx).run());
 
     let (state_tx, _state_rx) = broadcast::channel(20);
-    let history = vec![
-        json!({"role": "system", "content": "You are a helpful assistant."}),
-        json!({"role": "user", "content": "Hello!"}),
-    ];
-
-    let loop_instance = ReActLoop::new(10, 3, history, env_watcher, tool_bus, state_tx, turn_highway_handle);
+    let session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>> = Default::default();
+    {
+        let mut msgs = session_msgs.write();
+        msgs.push(FuneraMessage::new(Role::System, MsgVariant::Text(TextMessage { text: "You are a helpful assistant.".into() })));
+        msgs.push(FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: "Hello!".into() })));
+    }
+    let loop_instance = ReActLoop::new(10, 3, session_msgs, env_watcher, tool_bus, state_tx, turn_highway_handle);
     let sender = loop_instance.sender();
     sender
         .send(FuneraMessage::new(

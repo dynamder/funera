@@ -77,7 +77,7 @@ impl FuneraSession<Running> {
     pub async fn react_loop(
         &mut self,
         init_msg: FuneraMessage,
-        config: ReActLoopConfig,
+        mut config: ReActLoopConfig,
         env_state_tx: broadcast::Sender<EnvStateEvent>,
     ) -> Result<()> {
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
@@ -87,7 +87,8 @@ impl FuneraSession<Running> {
             msgs.push(init_msg.clone());
         }
 
-        let react_loop = ReActLoop::from_config(config, self.session_context());
+        config.session_msgs = Some(self.msgs.clone());
+        let react_loop = ReActLoop::from_config(config);
         let sender = react_loop.sender();
         sender.send(init_msg).await?;
 

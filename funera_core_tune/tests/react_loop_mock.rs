@@ -57,12 +57,19 @@ async fn react_loop_new_and_sender() {
     let _ = tx2;
     let _ = rx1;
 
-    let history = vec![
-        json!({"role": "user", "content": "hello"}),
-        json!({"role": "assistant", "content": "hi"}),
-    ];
-
-    let loop_instance = ReActLoop::new(10, 5, history, env_watcher, bus, tx, handle);
+    let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
+    {
+        let mut msgs = session_msgs.write();
+        msgs.push(funera_core::chat::message::FuneraMessage::new(
+            funera_core::chat::message::Role::User,
+            funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into() }),
+        ));
+        msgs.push(funera_core::chat::message::FuneraMessage::new(
+            funera_core::chat::message::Role::Assistant,
+            funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hi".into() }),
+        ));
+    }
+    let loop_instance = ReActLoop::new(10, 5, session_msgs, env_watcher, bus, tx, handle);
     let sender = loop_instance.sender();
     let msg = text_message(Role::User, "test");
     sender.send(msg).await.ok();
@@ -88,8 +95,12 @@ async fn react_loop_run_handle() {
         turn_high_way_rx: rx2,
     };
 
-    let history = vec![json!({"role": "user", "content": "hello"})];
-    let loop_instance = ReActLoop::new(10, 2, history, env_watcher, bus, state_tx, handle);
+    let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
+    session_msgs.write().push(funera_core::chat::message::FuneraMessage::new(
+        funera_core::chat::message::Role::User,
+        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into() }),
+    ));
+    let loop_instance = ReActLoop::new(10, 2, session_msgs, env_watcher, bus, state_tx, handle);
     let _handle = loop_instance.run();
 
     // _handle.cancel_token.cancel() is available
@@ -113,8 +124,12 @@ async fn react_loop_cancel() {
     let _ = tx2;
     let _ = rx1;
 
-    let history = vec![json!({"role": "user", "content": "hello"})];
-    let loop_instance = ReActLoop::new(10, 3, history, env_watcher, bus, state_tx, handle);
+    let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
+    session_msgs.write().push(funera_core::chat::message::FuneraMessage::new(
+        funera_core::chat::message::Role::User,
+        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into() }),
+    ));
+    let loop_instance = ReActLoop::new(10, 3, session_msgs, env_watcher, bus, state_tx, handle);
     let handle = loop_instance.run();
 
     handle.cancel_token.cancel();
