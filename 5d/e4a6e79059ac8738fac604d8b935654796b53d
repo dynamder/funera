@@ -1,0 +1,57 @@
+funera_core/src/re_act.rs
+  s_499f6522d6d1a6::t_631aaf581a6ed8 671,680
+  s_499f6522d6d1a6::t_e598b3289eecde 807
+  s_499f6522d6d1a6::t_601a657a92eec3 107-108
+  s_499f6522d6d1a6::t_400ae777bba3d1 2
+  s_499f6522d6d1a6::t_01afccc6b42dbd 141
+  s_499f6522d6d1a6::t_a9646542ab4445 17
+  s_499f6522d6d1a6::t_0e3919665f7f43 772
+  s_499f6522d6d1a6::t_d2fc613fa5e2b5 696,710
+  s_499f6522d6d1a6::t_800d742791881d 63
+  s_499f6522d6d1a6::t_71cc3cbf033bcd 75,85,99
+  s_499f6522d6d1a6::t_715bbbad00a958 179
+  s_499f6522d6d1a6::t_6d3716e351a09e 660-663
+  s_499f6522d6d1a6::t_88b9d1726cf2c4 23
+  s_499f6522d6d1a6::t_efe3365909ca40 375-383,385-390
+  s_499f6522d6d1a6::t_3b649218b8180c 36,55,94-95,109-113,139,150,157,479-492,494,496-507,541,543-550,558-560,582-583,587-595,598,600,605,607,611,613,618-620,624,626,631-633,686-688,697-701,716-717,740,748,787,825-853
+  s_499f6522d6d1a6::t_83033e0e87b707 384
+  s_499f6522d6d1a6::t_652866be24ba2d 151
+  s_499f6522d6d1a6::t_880d73d6354644 725,734
+  s_499f6522d6d1a6::t_03b030acd1a21b 356,361-366
+  s_499f6522d6d1a6::t_1a076be8915e3e 152
+funera_core_tune/src/scenarios/tool_chain.rs
+  s_499f6522d6d1a6::t_cae05955d2a5d8 43
+  s_499f6522d6d1a6::t_aa41c5ea75452d 44-48
+funera_core_tune/src/scenarios/error_recovery.rs
+  s_499f6522d6d1a6::t_7e8867a4991f5e 62-66
+  s_499f6522d6d1a6::t_7a554ffe5e4358 36,61
+  s_499f6522d6d1a6::t_2c0ca656c1e9b1 37-41
+funera_core_tune/src/scenarios/complex_conversation.rs
+  s_499f6522d6d1a6::t_8a504897148472 44-49
+  s_499f6522d6d1a6::t_e9ddb6a4d83d68 43
+funera_core/src/chat/session.rs
+  s_499f6522d6d1a6::t_50e6dde04f8ea4 80
+  s_499f6522d6d1a6::t_bd805a7bf8185f 90-91
+funera_core_tune/tests/react_loop_mock.rs
+  s_499f6522d6d1a6::t_a5741533a09875 61-72
+  s_499f6522d6d1a6::t_cb60768a39e690 127
+  s_499f6522d6d1a6::t_2fddb2410df0ec 98
+  s_499f6522d6d1a6::t_315004ae00219d 60
+  s_499f6522d6d1a6::t_67af6653a2ece4 99-103,128-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5de4a6e79059ac8738fac604d8b935654796b53d",
+  "prompts": {},
+  "sessions": {
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
