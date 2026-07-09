@@ -4,21 +4,21 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 async-openai = { version = "0.41.1", features = ["_api", "chat-completion", "responses", "skill"] }
 async-trait = "0.1.89"
-chrono = { version = "0.4.44", features = ["serde"] }
+chrono = { version = "0.4.45", features = ["serde"] }
 futures = "0.3.32"
 parking_lot = { version = "0.12.5", features = ["serde"] }
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+serde_json = "1.0.150"
 thiserror = "2.0.18"
-zeroize = { version = "1.8", features = ["derive"] }
+zeroize = { version = "1.9", features = ["derive"] }
 regex = { version = "1", optional = true }
 tokio = { version = "1.52.3", features = ["full"] }
 tokio-util = "0.7.18"
-uuid = { version = "1.23.1", features = ["serde", "v4"] }
+uuid = { version = "1.23.4", features = ["serde", "v4"] }
 serde_yaml = "0.9.34"
 
 [features]

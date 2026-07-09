@@ -13,7 +13,7 @@ path = "src/bin/test_runner.rs"
 
 [dependencies]
 anyhow = "1.0.103"
-async-openai = "0.38.0"
+async-openai = "0.41.1"
 async-trait = "0.1.89"
 chrono = { version = "0.4.45", features = ["serde"] }
 crossterm = "0.29.0"
