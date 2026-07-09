@@ -1,0 +1,22 @@
+funera_core_tune/tests/message_pipeline.rs
+  s_499f6522d6d1a6::t_291109730ba159 61-63,198-203
+  s_499f6522d6d1a6::t_e6f0334023f6de 64
+funera_core/src/chat/message.rs
+  s_499f6522d6d1a6::t_c1910c8943f7f4 150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "768205707d806f9eb706e776052a5e0ac59c7883",
+  "prompts": {},
+  "sessions": {
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
