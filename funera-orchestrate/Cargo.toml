@@ -34,9 +34,5 @@ name = "funera_orchestrate"
 path = "src/lib.rs"
 
 [[example]]
-name = "06_builtin_tools"
-required-features = ["builtin-tools"]
-
-[[example]]
-name = "09_all_modules"
+name = "builtin_tools"
 required-features = ["builtin-tools"]

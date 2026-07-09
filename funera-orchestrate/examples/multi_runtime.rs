@@ -1,7 +1,7 @@
 //! Switching between multiple runtime contexts.
 //!
 //! ```bash
-//! cargo run --example 05_switch_runtime
+//! cargo run --example multi_runtime
 //! ```
 //!
 //! Each `AgentRuntime` maintains its own independent session.  You can

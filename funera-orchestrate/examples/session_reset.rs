@@ -1,7 +1,7 @@
 //! Resetting a runtime's session history.
 //!
 //! ```bash
-//! cargo run --example 07_reset_session
+//! cargo run --example session_reset
 //! ```
 //!
 //! `AgentRuntime::reset()` clears the persisted session, allowing the

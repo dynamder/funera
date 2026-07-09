@@ -1,7 +1,7 @@
 //! Token-level streaming with `fire_stream` and `send_stream`.
 //!
 //! ```bash
-//! cargo run --example 03_streaming
+//! cargo run --example streaming
 //! ```
 //!
 //! Both `fire_stream` (one-shot) and `send_stream` (multi-turn) return an

@@ -1,7 +1,7 @@
-//! A minimal one-shot query using `Agent::fire`.
+//! Minimal one-shot query using `Agent::fire`.
 //!
 //! ```bash
-//! cargo run --example 01_fire_basic
+//! cargo run --example minimal
 //! ```
 //!
 //! This demonstrates the simplest possible use:

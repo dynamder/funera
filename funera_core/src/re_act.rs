@@ -3,10 +3,10 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_openai::types::chat::{
-    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestMessage,
-    ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs,
-    ChatCompletionRequestUserMessageArgs, ChatCompletionTools, CreateChatCompletionRequest,
-    CreateChatCompletionRequestArgs, FinishReason,
+    ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessageArgs,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+    ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, ChatCompletionTools,
+    CreateChatCompletionRequest, CreateChatCompletionRequestArgs, FinishReason,
 };
 use serde_json::Value as JsonValue;
 use tokio::sync::{broadcast, mpsc};
@@ -14,7 +14,9 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage};
+use crate::chat::message::{
+    FuneraMessage, MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage,
+};
 use crate::env::FuneraEnvWatcher;
 use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallRequest, ToolCallResponse};
@@ -105,10 +107,7 @@ impl ReActLoop {
     }
 
     fn build_history_from(msgs: &Arc<parking_lot::RwLock<Vec<FuneraMessage>>>) -> Vec<JsonValue> {
-        msgs.read()
-            .iter()
-            .map(|msg| msg.format_json())
-            .collect()
+        msgs.read().iter().map(|msg| msg.format_json()).collect()
     }
 
     pub fn sender(&self) -> mpsc::Sender<FuneraMessage> {
@@ -220,12 +219,23 @@ fn build_llm_messages(
                 messages.push(msg);
             }
             "assistant" => {
-                let content = entry["content"].as_str().unwrap_or("");
-                messages.push(ChatCompletionRequestMessage::Assistant(
-                    ChatCompletionRequestAssistantMessageArgs::default()
-                        .content(content)
-                        .build()?,
-                ));
+                if let Some(tool_calls) = entry.get("tool_calls").and_then(|t| t.as_array()) {
+                    let tool_calls: Vec<ChatCompletionMessageToolCalls> =
+                        serde_json::from_value(JsonValue::Array(tool_calls.clone()))
+                            .unwrap_or_default();
+                    messages.push(ChatCompletionRequestMessage::Assistant(
+                        ChatCompletionRequestAssistantMessageArgs::default()
+                            .tool_calls(tool_calls)
+                            .build()?,
+                    ));
+                } else {
+                    let content = entry["content"].as_str().unwrap_or("");
+                    messages.push(ChatCompletionRequestMessage::Assistant(
+                        ChatCompletionRequestAssistantMessageArgs::default()
+                            .content(content)
+                            .build()?,
+                    ));
+                }
             }
             "tool" => {
                 let tool_call_id = entry["tool_call_id"].as_str().unwrap_or("");
@@ -509,9 +519,17 @@ mod tests {
         let msgs = build_llm_messages(&history, "").unwrap();
         assert_eq!(msgs.len(), 4);
         let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
-        assert!(debug_strs[0].starts_with("System"), "got: {}", debug_strs[0]);
+        assert!(
+            debug_strs[0].starts_with("System"),
+            "got: {}",
+            debug_strs[0]
+        );
         assert!(debug_strs[1].starts_with("User"), "got: {}", debug_strs[1]);
-        assert!(debug_strs[2].starts_with("Assistant"), "got: {}", debug_strs[2]);
+        assert!(
+            debug_strs[2].starts_with("Assistant"),
+            "got: {}",
+            debug_strs[2]
+        );
         assert!(debug_strs[3].starts_with("Tool"), "got: {}", debug_strs[3]);
     }
 
@@ -524,9 +542,17 @@ mod tests {
         let msgs = build_llm_messages(&history, "Skill instruction here").unwrap();
         assert_eq!(msgs.len(), 3);
         let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
-        assert!(debug_strs[0].starts_with("System"), "got: {}", debug_strs[0]);
+        assert!(
+            debug_strs[0].starts_with("System"),
+            "got: {}",
+            debug_strs[0]
+        );
         assert!(debug_strs[1].starts_with("User"), "got: {}", debug_strs[1]);
-        assert!(debug_strs[2].starts_with("System"), "got: {}", debug_strs[2]);
+        assert!(
+            debug_strs[2].starts_with("System"),
+            "got: {}",
+            debug_strs[2]
+        );
     }
 
     #[test]
@@ -534,6 +560,31 @@ mod tests {
         let history = vec![json!({"role": "user", "content": "hi"})];
         let msgs = build_llm_messages(&history, "").unwrap();
         assert_eq!(msgs.len(), 1);
+    }
+
+    #[test]
+    fn build_msgs_assistant_with_tool_calls() {
+        let history = vec![
+            json!({"role": "user", "content": "check weather"}),
+            json!({
+                "role": "assistant",
+                "content": null,
+                "tool_calls": [{
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": r#"{"city":"Tokyo"}"#
+                    }
+                }]
+            }),
+            json!({"role": "tool", "tool_call_id": "call_abc", "content": "22°C"}),
+        ];
+        let msgs = build_llm_messages(&history, "").unwrap();
+        assert_eq!(msgs.len(), 3);
+        // Tool calls must not produce empty assistant — serialized form should contain tool_calls
+        let debug = format!("{:?}", msgs[1]);
+        assert!(debug.contains("tool_calls"), "expected tool_calls in assistant msg: {debug}");
     }
 
     #[test]
@@ -601,7 +652,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "");
         assert!(accums.is_empty());
         assert!(reason.is_none());
@@ -614,7 +667,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "Hello World");
         assert!(accums.is_empty());
         assert!(matches!(reason, Some(FinishReason::Stop)));
@@ -627,7 +682,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "");
         assert_eq!(accums.len(), 1);
         assert!(matches!(reason, Some(FinishReason::ToolCalls)));
@@ -647,11 +704,18 @@ mod tests {
     #[tokio::test]
     async fn process_stream_text_and_tool() {
         let (tx, _) = tokio::sync::broadcast::channel(50);
-        let stream = test_helpers::mock_text_plus_tool_stream("Thinking...", "calc", r#"{"n":42}"#, "call_1");
+        let stream = test_helpers::mock_text_plus_tool_stream(
+            "Thinking...",
+            "calc",
+            r#"{"n":42}"#,
+            "call_1",
+        );
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "Thinking...");
         assert_eq!(accums.len(), 1);
         assert!(matches!(reason, Some(FinishReason::ToolCalls)));
@@ -776,7 +840,10 @@ mod tests {
 
         assert!(should_continue);
         let received = buf_rx.try_recv().unwrap();
-        assert!(matches!(received.msg_variant(), MsgVariant::ToolResponse(_)));
+        assert!(matches!(
+            received.msg_variant(),
+            MsgVariant::ToolResponse(_)
+        ));
     }
 
     #[tokio::test]
@@ -848,8 +915,24 @@ mod tests {
     #[test]
     fn tool_call_accumulator_multiple_inserts() {
         let mut map: HashMap<usize, ToolCallAccumulator> = HashMap::new();
-        map.insert(0, ToolCallAccumulator { index: 0, call_id: "a".into(), name: "t1".into(), args: "{}".into() });
-        map.insert(1, ToolCallAccumulator { index: 1, call_id: "b".into(), name: "t2".into(), args: "[]".into() });
+        map.insert(
+            0,
+            ToolCallAccumulator {
+                index: 0,
+                call_id: "a".into(),
+                name: "t1".into(),
+                args: "{}".into(),
+            },
+        );
+        map.insert(
+            1,
+            ToolCallAccumulator {
+                index: 1,
+                call_id: "b".into(),
+                name: "t2".into(),
+                args: "[]".into(),
+            },
+        );
         assert_eq!(map.len(), 2);
     }
 }

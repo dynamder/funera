@@ -1,7 +1,7 @@
 //! Using built-in file/shell tools.
 //!
 //! ```bash
-//! cargo run --example 06_builtin_tools --features builtin-tools
+//! cargo run --example builtin_tools --features builtin-tools
 //! ```
 //!
 //! The `builtin-tools` feature bundles Read, Write, Edit, and Shell tools

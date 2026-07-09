@@ -1,7 +1,7 @@
 //! Custom tool implementation with callbacks.
 //!
 //! ```bash
-//! cargo run --example 04_custom_tool
+//! cargo run --example custom_tool
 //! ```
 //!
 //! Demonstrates:
@@ -72,15 +72,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .on_tool_call(|name, args| {
             eprintln!("[tool call] {name}({args})");
         })
-        .on_tool_result(|name, result| {
-            match result {
-                Ok(r) => eprintln!("[tool result] {name} => {r}"),
-                Err(e) => eprintln!("[tool error] {name} => {e}"),
-            }
+        .on_tool_result(|name, result| match result {
+            Ok(r) => eprintln!("[tool result] {name} => {r}"),
+            Err(e) => eprintln!("[tool error] {name} => {e}"),
         })
         .build();
 
-    let resp = agent.send("What's the weather in Tokyo?", &mut runtime).await?;
+    let resp = agent
+        .send("What's the weather in Tokyo?", &mut runtime)
+        .await?;
     println!("\n{}", resp.content);
 
     Ok(())

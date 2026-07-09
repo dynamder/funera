@@ -1,7 +1,7 @@
 //! Multi-turn conversation using `Agent::send`.
 //!
 //! ```bash
-//! cargo run --example 02_send_multi_turn
+//! cargo run --example multi_turn
 //! ```
 //!
 //! `send()` preserves session history in the runtime, enabling natural

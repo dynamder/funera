@@ -1,7 +1,7 @@
 //! Skill system usage.
 //!
 //! ```bash
-//! cargo run --example 08_skills
+//! cargo run --example skills
 //! ```
 //!
 //! Demonstrates:
