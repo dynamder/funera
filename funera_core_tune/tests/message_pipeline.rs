@@ -58,8 +58,10 @@ fn tool_request_message_format_json() {
     assert!(json["tool_calls"].is_array());
     assert_eq!(json["tool_calls"][0]["function"]["name"], "calculate");
     assert_eq!(
-        json["tool_calls"][0]["function"]["arguments"]["expr"],
-        "1+1"
+        json["tool_calls"][0]["function"]["arguments"]
+            .as_str()
+            .unwrap(),
+        "{\"expr\":\"1+1\"}",
     );
 }
 
@@ -193,7 +195,12 @@ fn tool_request_with_empty_args() {
     );
     let json = msg.format_json();
     assert_eq!(json["tool_calls"][0]["function"]["name"], "noop");
-    assert!(json["tool_calls"][0]["function"]["arguments"].is_object());
+    assert_eq!(
+        json["tool_calls"][0]["function"]["arguments"]
+            .as_str()
+            .unwrap(),
+        "{}",
+    );
 }
 
 #[test]

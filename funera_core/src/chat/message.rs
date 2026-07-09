@@ -147,7 +147,7 @@ impl FuneraMessage {
                             "type": tool_request_msg.tool_type.to_string(),
                             "function": {
                                 "name": tool_request_msg.function_name.clone(),
-                                "arguments": tool_request_msg.function_args.clone(),
+                                "arguments": serde_json::to_string(&tool_request_msg.function_args).unwrap_or_default(),
                             }
                         }
                     ]
