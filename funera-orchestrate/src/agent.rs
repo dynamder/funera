@@ -77,7 +77,7 @@ impl AgentBuilder {
         F: Fn(String, serde_json::Value) + Send + Sync + 'static,
     {
         self.callbacks.add(Arc::new(move |event| {
-            if let AgentEvent::ToolCallStart { name, args, .. } = event {
+            if let AgentEvent::ToolCallRequest { name, args, .. } = event {
                 f(name, args);
             }
         }));
@@ -360,7 +360,10 @@ impl Agent {
 
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: text.into(),
+                reasoning_content: None,
+            }),
         );
 
         let config = ReActLoopConfig::new(
@@ -528,49 +531,37 @@ mod tests {
 
     #[test]
     fn builder_on_token_registers() {
-        let agent = AgentBuilder::new()
-            .on_token(|_| {})
-            .build();
+        let agent = AgentBuilder::new().on_token(|_| {}).build();
         assert!(!agent.callbacks.is_empty());
     }
 
     #[test]
     fn builder_on_tool_call_registers() {
-        let agent = AgentBuilder::new()
-            .on_tool_call(|_, _| {})
-            .build();
+        let agent = AgentBuilder::new().on_tool_call(|_, _| {}).build();
         assert!(!agent.callbacks.is_empty());
     }
 
     #[test]
     fn builder_on_tool_result_registers() {
-        let agent = AgentBuilder::new()
-            .on_tool_result(|_, _| {})
-            .build();
+        let agent = AgentBuilder::new().on_tool_result(|_, _| {}).build();
         assert!(!agent.callbacks.is_empty());
     }
 
     #[test]
     fn builder_on_turn_start_registers() {
-        let agent = AgentBuilder::new()
-            .on_turn_start(|| {})
-            .build();
+        let agent = AgentBuilder::new().on_turn_start(|| {}).build();
         assert!(!agent.callbacks.is_empty());
     }
 
     #[test]
     fn builder_on_turn_end_registers() {
-        let agent = AgentBuilder::new()
-            .on_turn_end(|| {})
-            .build();
+        let agent = AgentBuilder::new().on_turn_end(|| {}).build();
         assert!(!agent.callbacks.is_empty());
     }
 
     #[test]
     fn builder_on_event_registers() {
-        let agent = AgentBuilder::new()
-            .on_event(|_| {})
-            .build();
+        let agent = AgentBuilder::new().on_event(|_| {}).build();
         assert!(!agent.callbacks.is_empty());
     }
 
@@ -595,11 +586,7 @@ mod tests {
             .event_tx
             .send(AgentEvent::Token("hello".into()))
             .unwrap();
-        let got = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            rx.recv(),
-        )
-        .await;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
         assert!(matches!(got, Ok(Ok(AgentEvent::Token(t))) if t == "hello"));
     }
 
@@ -609,19 +596,15 @@ mod tests {
         let mut rx = agent.subscribe_events();
         agent
             .event_tx
-            .send(AgentEvent::ToolCallStart {
+            .send(AgentEvent::ToolCallRequest {
                 index: 0,
                 call_id: "call_abc".into(),
                 name: "test".into(),
                 args: serde_json::json!({}),
             })
             .unwrap();
-        let got = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            rx.recv(),
-        )
-        .await;
-        assert!(matches!(got, Ok(Ok(AgentEvent::ToolCallStart { .. }))));
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(got, Ok(Ok(AgentEvent::ToolCallRequest { .. }))));
     }
 
     #[tokio::test]
@@ -629,21 +612,10 @@ mod tests {
         let agent = AgentBuilder::new().build();
         let mut rx1 = agent.subscribe_events();
         let mut rx2 = agent.subscribe_events();
-        agent
-            .event_tx
-            .send(AgentEvent::Done)
-            .unwrap();
+        agent.event_tx.send(AgentEvent::Done).unwrap();
 
-        let r1 = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            rx1.recv(),
-        )
-        .await;
-        let r2 = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            rx2.recv(),
-        )
-        .await;
+        let r1 = tokio::time::timeout(std::time::Duration::from_secs(1), rx1.recv()).await;
+        let r2 = tokio::time::timeout(std::time::Duration::from_secs(1), rx2.recv()).await;
         assert!(r1.is_ok());
         assert!(r2.is_ok());
     }
@@ -656,7 +628,9 @@ mod tests {
         let agent = AgentBuilder::new()
             .on_event({
                 let c = counter.clone();
-                move |_| { c.fetch_add(1, Ordering::SeqCst); }
+                move |_| {
+                    c.fetch_add(1, Ordering::SeqCst);
+                }
             })
             .build();
         agent.callbacks.dispatch(AgentEvent::Done);
@@ -671,11 +645,15 @@ mod tests {
         let agent = AgentBuilder::new()
             .on_token({
                 let c = token_hits.clone();
-                move |_| { c.fetch_add(1, Ordering::SeqCst); }
+                move |_| {
+                    c.fetch_add(1, Ordering::SeqCst);
+                }
             })
             .on_tool_call({
                 let c = tool_hits.clone();
-                move |_, _| { c.fetch_add(1, Ordering::SeqCst); }
+                move |_, _| {
+                    c.fetch_add(1, Ordering::SeqCst);
+                }
             })
             .build();
 

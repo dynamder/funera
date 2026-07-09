@@ -14,7 +14,7 @@ use crate::chat::message::{
 };
 use crate::env::FuneraEnvWatcher;
 use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
-use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallRequest, ToolCallResponse};
+use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 use crate::event_bus::tool_bus::ToolBus;
 use crate::provider::ChatProvider;
@@ -350,6 +350,7 @@ async fn handle_turn_finish(
                         react_bus
                             .send(ReactEvent::ToolExecResponse(Ok(ToolCallResponse {
                                 call_id: acc.call_id.clone(),
+                                name: acc.name.clone(),
                                 result: response.clone(),
                             })))
                             .ok();
@@ -364,8 +365,13 @@ async fn handle_turn_finish(
                         buf_msg_tx.send(tool_response_msg).await?;
                     }
                     Err(e) => {
+                        let error_info = ToolCallErrorInfo {
+                            call_id: acc.call_id.clone(),
+                            name: acc.name.clone(),
+                            error: e.to_string(),
+                        };
                         react_bus
-                            .send(ReactEvent::ToolExecResponse(Err(e.to_string())))
+                            .send(ReactEvent::ToolExecResponse(Err(error_info)))
                             .ok();
                     }
                 }

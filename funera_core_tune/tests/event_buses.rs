@@ -1,6 +1,6 @@
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent, TurnHighWayHandle};
-use funera_core::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallRequest, ToolCallResponse};
+use funera_core::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
 use funera_core::event_bus::token_bus::TokenEvent;
 use funera_core::event_bus::tool_bus::ToolBus;
 use serde_json::json;
@@ -72,6 +72,7 @@ fn react_bus_send_tool_exec_response() {
     let mut rx = bus.subscribe();
     let resp = ToolCallResponse {
         call_id: "call_456".into(),
+        name: "get_weather".into(),
         result: "ok".into(),
     };
     bus.send(ReactEvent::ToolExecResponse(Ok(resp))).ok();
@@ -87,9 +88,17 @@ fn react_bus_send_tool_exec_response() {
 fn react_bus_send_tool_exec_error() {
     let bus = ReactBus::new();
     let mut rx = bus.subscribe();
-    bus.send(ReactEvent::ToolExecResponse(Err("fail".into()))).ok();
+    bus.send(ReactEvent::ToolExecResponse(Err(ToolCallErrorInfo {
+        call_id: "call_err".into(),
+        name: "test_tool".into(),
+        error: "fail".into(),
+    }))).ok();
     match rx.try_recv().unwrap() {
-        ReactEvent::ToolExecResponse(Err(e)) => assert_eq!(e, "fail"),
+        ReactEvent::ToolExecResponse(Err(e)) => {
+            assert_eq!(e.call_id, "call_err");
+            assert_eq!(e.name, "test_tool");
+            assert_eq!(e.error, "fail");
+        }
         _ => panic!("expected ToolExecResponse(Err)"),
     }
 }

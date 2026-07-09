@@ -13,7 +13,15 @@ pub struct ToolCallRequest {
 #[derive(Debug, Clone)]
 pub struct ToolCallResponse {
     pub call_id: String,
+    pub name: String,
     pub result: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolCallErrorInfo {
+    pub call_id: String,
+    pub name: String,
+    pub error: String,
 }
 
 #[derive(Debug, Clone)]
@@ -22,7 +30,7 @@ pub enum ReactEvent {
     TurnEnd,
     MessageQueued(FuneraMessage),
     ToolExecRequest(ToolCallRequest),
-    ToolExecResponse(Result<ToolCallResponse, String>),
+    ToolExecResponse(Result<ToolCallResponse, ToolCallErrorInfo>),
 }
 
 #[derive(Debug, Clone)]

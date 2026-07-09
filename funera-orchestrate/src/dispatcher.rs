@@ -132,7 +132,7 @@ impl CallbackDispatcher {
                     if let (Some(name), Some(args_str)) = (name, args_chunk) {
                         let args: serde_json::Value =
                             serde_json::from_str(&args_str).unwrap_or(serde_json::Value::Null);
-                        let event = AgentEvent::ToolCallStart {
+                        let event = AgentEvent::ToolCallRequest {
                             index,
                             call_id: call_id.clone().into(),
                             name,
@@ -173,7 +173,7 @@ impl CallbackDispatcher {
                     let _ = event_tx.send(event);
                 }
                 Ok(ReactEvent::ToolExecRequest(req)) => {
-                    let event = AgentEvent::ToolCallStart {
+                    let event = AgentEvent::ToolCallRequest {
                         index: req.index,
                         call_id: req.call_id.clone().into(),
                         name: req.name,
@@ -186,13 +186,13 @@ impl CallbackDispatcher {
                     let event = match res {
                         Ok(response) => AgentEvent::ToolCallResult {
                             call_id: response.call_id.clone().into(),
-                            name: String::new(),
+                            name: response.name.clone(),
                             result: Ok(response.result),
                         },
                         Err(e) => AgentEvent::ToolCallResult {
-                            call_id: Arc::from(""),
-                            name: String::new(),
-                            result: Err(e),
+                            call_id: e.call_id.clone().into(),
+                            name: e.name.clone(),
+                            result: Err(e.error),
                         },
                     };
                     registry.dispatch(event.clone());
@@ -322,14 +322,16 @@ mod tests {
 
         let (token_tx, _, barrier) = handle.prepare_turn().await;
         token_tx.send(TokenEvent::Text("streamed".into())).unwrap();
-        token_tx.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).unwrap();
-        tokio::spawn(async move { barrier.wait().await; });
+        token_tx
+            .send(TokenEvent::Finish(
+                async_openai::types::chat::FinishReason::Stop,
+            ))
+            .unwrap();
+        tokio::spawn(async move {
+            barrier.wait().await;
+        });
 
-        let got = tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            event_rx.recv(),
-        )
-        .await;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv()).await;
 
         assert!(matches!(got, Ok(Ok(AgentEvent::Token(t))) if t == "streamed"));
     }
@@ -345,20 +347,22 @@ mod tests {
         bus.start_turn_highway();
 
         let (token_tx, _, barrier) = handle.prepare_turn().await;
-        tokio::spawn(async move { barrier.wait().await; });
+        tokio::spawn(async move {
+            barrier.wait().await;
+        });
         // Send a Finish to end the token bus listener so the react event comes through
-        token_tx.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).unwrap();
+        token_tx
+            .send(TokenEvent::Finish(
+                async_openai::types::chat::FinishReason::Stop,
+            ))
+            .unwrap();
 
         // We can't send ToolExecRequest directly via the highway
         // since ReactBus is created per-turn by the highway server.
         // Instead verify that the dispatcher at least starts cleanly
         // by checking that event_tx works normally.
         let _ = event_tx.send(AgentEvent::TurnStart);
-        let got = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            event_rx.recv(),
-        )
-        .await;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), event_rx.recv()).await;
         assert!(matches!(got, Ok(Ok(AgentEvent::TurnStart))));
     }
 
@@ -374,11 +378,7 @@ mod tests {
         // Send SessionClosed — dispatcher should emit AgentEvent::Done
         bus.send(EnvStateEvent::SessionClosed).unwrap();
 
-        let got = tokio::time::timeout(
-            std::time::Duration::from_secs(1),
-            event_rx.recv(),
-        )
-        .await;
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), event_rx.recv()).await;
         assert!(matches!(got, Ok(Ok(AgentEvent::Done))));
     }
 
@@ -393,18 +393,21 @@ mod tests {
         bus.start_turn_highway();
 
         let (token_tx, _, barrier) = handle.prepare_turn().await;
-        tokio::spawn(async move { barrier.wait().await; });
+        tokio::spawn(async move {
+            barrier.wait().await;
+        });
         token_tx.send(TokenEvent::Text("one ".into())).unwrap();
         token_tx.send(TokenEvent::Text("two ".into())).unwrap();
-        token_tx.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).unwrap();
+        token_tx
+            .send(TokenEvent::Finish(
+                async_openai::types::chat::FinishReason::Stop,
+            ))
+            .unwrap();
 
         let mut count = 0;
         loop {
-            let got = tokio::time::timeout(
-                std::time::Duration::from_millis(500),
-                event_rx.recv(),
-            )
-            .await;
+            let got =
+                tokio::time::timeout(std::time::Duration::from_millis(500), event_rx.recv()).await;
             match got {
                 Ok(Ok(AgentEvent::Token(_))) => count += 1,
                 Ok(Ok(AgentEvent::Done)) | Ok(Err(_)) | Err(_) => break,

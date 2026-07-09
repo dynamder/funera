@@ -18,8 +18,12 @@ struct WeatherTool;
 
 #[async_trait]
 impl Tool for WeatherTool {
-    fn name(&self) -> &str { "get_weather" }
-    fn description(&self) -> &str { "Get the current weather for a city" }
+    fn name(&self) -> &str {
+        "get_weather"
+    }
+    fn description(&self) -> &str {
+        "Get the current weather for a city"
+    }
     fn schema(&self) -> JsonValue {
         serde_json::json!({
             "type": "function",
@@ -57,23 +61,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("=== Streaming with tools ===\n");
 
-    let mut rx = agent.fire_stream(
-        "What's the weather in Tokyo, Beijing, and Paris?",
-        &runtime,
-    ).await?;
+    let mut rx = agent
+        .fire_stream("What's the weather in Tokyo, Beijing, and Paris?", &runtime)
+        .await?;
 
     while let Some(event) = rx.recv().await {
         match event {
             AgentEvent::Token(t) => print!("{t}"),
-            AgentEvent::ToolCallStart { call_id, name, args, .. } => {
-                eprint!("\n  🔧 [{call_id}] {name}({args}) ... ");
+            AgentEvent::ToolCallRequest {
+                call_id,
+                name,
+                args,
+                ..
+            } => {
+                eprintln!("  🔧 [{call_id}] {name}({args}) ...");
             }
-            AgentEvent::ToolCallResult { result, .. } => {
-                match result {
-                    Ok(r) => eprintln!(" = {r}"),
-                    Err(e) => eprintln!(" ❌ {e}"),
-                }
-            }
+            AgentEvent::ToolCallResult { name, result, .. } => match result {
+                Ok(r) => eprintln!("  {name} => {r}"),
+                Err(e) => eprintln!("  {name} ❌ {e}"),
+            },
             AgentEvent::TurnStart => eprintln!("\n── Turn ──"),
             AgentEvent::TurnEnd => eprintln!(),
             AgentEvent::Done => eprintln!("\n── Done ──"),

@@ -5,7 +5,7 @@ use serde_json::Value as JsonValue;
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Token(String),
-    ToolCallStart {
+    ToolCallRequest {
         index: usize,
         call_id: Arc<str>,
         name: String,
@@ -34,13 +34,13 @@ mod tests {
 
     #[test]
     fn agent_event_tool_call_start() {
-        let e = AgentEvent::ToolCallStart {
+        let e = AgentEvent::ToolCallRequest {
             index: 0,
             call_id: "call_abc".into(),
             name: "test".into(),
             args: serde_json::json!({"x": 1}),
         };
-        assert!(matches!(e, AgentEvent::ToolCallStart { name, .. } if name == "test"));
+        assert!(matches!(e, AgentEvent::ToolCallRequest { name, .. } if name == "test"));
     }
 
     #[test]
