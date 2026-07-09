@@ -1,0 +1,40 @@
+funera_core_tune/tests/message.rs
+  s_e5ec1476107def::t_daaf51c3f4b5f5 89,93,111,113
+  s_e5ec1476107def::t_767f0f9624cf70 5
+funera_core_tune/src/utils/fixtures.rs
+  s_e5ec1476107def::t_aa97da24024eb1 5-6,21,25
+funera_core/src/chat/message.rs
+  s_499f6522d6d1a6::t_f232a552531c8e 166
+funera_core/src/re_act.rs
+  s_499f6522d6d1a6::t_70d5b460ce47ee 357
+funera_core_tune/tests/message_pipeline.rs
+  s_e5ec1476107def::t_346bd5452d4634 149
+  s_e5ec1476107def::t_f4329e12833ca9 280,292
+  s_e5ec1476107def::t_a0d799eee493a4 17,34,53,78,138,191,219,238,242
+  s_e5ec1476107def::t_de5ebdb52a992a 200
+  s_e5ec1476107def::t_f288d2b2807562 5-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f49836091261c4d75b4c5c39b06fc94d97ac8bf1",
+  "prompts": {},
+  "sessions": {
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_e5ec1476107def": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b88a0c4cffefN92En1rk6eg5U",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
