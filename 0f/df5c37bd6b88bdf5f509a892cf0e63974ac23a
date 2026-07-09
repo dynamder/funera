@@ -1,0 +1,65 @@
+funera_core/src/re_act.rs
+  s_499f6522d6d1a6::t_c732efe76bff34 132,136
+  s_499f6522d6d1a6::t_48d8a4080c5145 454
+  s_499f6522d6d1a6::t_a53d870abcbd8d 190-193,237-246
+  s_499f6522d6d1a6::t_cb4db7603d3c41 465
+  s_499f6522d6d1a6::t_7e2f6d89a4b853 469-490
+  s_499f6522d6d1a6::t_597a1833e62496 498,506
+  s_499f6522d6d1a6::t_71ee242badc9f4 141-142
+  s_499f6522d6d1a6::t_1475ca856d1356 515,531
+funera-orchestrate/Cargo.toml
+  s_499f6522d6d1a6::t_27c4cd2a9828c0 39-42
+funera_core/src/event_bus/env_state_bus.rs
+  s_499f6522d6d1a6::t_a553302e9e3607 16-19
+  s_499f6522d6d1a6::t_6f13a49709309a 165-185
+  s_499f6522d6d1a6::t_273270697e53af 164
+funera-orchestrate/src/runtime.rs
+  s_499f6522d6d1a6::t_57f087c499bbc5 319-323
+  s_499f6522d6d1a6::t_9d387907095645 37-39,58-60
+  s_499f6522d6d1a6::t_95e4f244874197 1
+  s_499f6522d6d1a6::t_a65825d7732213 185,215,217-220,222-225,227,229-232,234-235,238
+  s_499f6522d6d1a6::t_d129b59f6e2629 213-214,221,226,228,233,236-237
+  s_499f6522d6d1a6::t_23a37b53d989d1 419-454
+  s_499f6522d6d1a6::t_c192ec395fab7c 11
+  s_499f6522d6d1a6::t_0e3d13bf1a1d7d 103-153
+  s_499f6522d6d1a6::t_435c84b58c00db 216
+funera_core/Cargo.toml
+  s_499f6522d6d1a6::t_52d4bbd9adf3fc 22
+  s_499f6522d6d1a6::t_d677c56914fe20 8
+funera-orchestrate/examples/09_all_modules.rs
+  s_499f6522d6d1a6::t_e5624209690639 293
+  s_499f6522d6d1a6::t_f68b6342c3102e 231-236
+  s_499f6522d6d1a6::t_fc42e03ad1c8fd 1-3,5-122,148-230,237,239,241-292,294-345,348-360,362-432,434-463
+  s_499f6522d6d1a6::t_5cb2ca624fc521 4
+  s_499f6522d6d1a6::t_6c52efaa3726ff 123-147
+  s_499f6522d6d1a6::t_c4c739c60b6c7c 346-347
+  s_499f6522d6d1a6::t_cefc9178548f8c 238
+  s_499f6522d6d1a6::t_abb111bb599e69 240
+  s_499f6522d6d1a6::t_296645643f9e25 361
+  s_499f6522d6d1a6::t_589c8a614c29dd 433
+funera_core/src/env.rs
+  s_499f6522d6d1a6::t_fd204e3cb7b81b 5,15,21,56,62,94-122,128-129,132,140,156-159,172-175,191-194
+  s_499f6522d6d1a6::t_da30173fab1128 30-37,45-46,50
+  s_499f6522d6d1a6::t_7a30ecc4ccbb07 123-127,130-131
+  s_499f6522d6d1a6::t_4fba45ea9165a4 29
+funera-orchestrate/examples/08_skills.rs
+  s_499f6522d6d1a6::t_484ce91edd9bd4 1-92
+funera_core/src/re_act/skills.rs
+  s_499f6522d6d1a6::t_9c954e13d43bbb 1-395
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0fdf5c37bd6b88bdf5f509a892cf0e63974ac23a",
+  "prompts": {},
+  "sessions": {
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
