@@ -82,6 +82,7 @@ impl CallbackDispatcher {
                 Ok(EnvStateEvent::PerTurnBusReady {
                     token_tx,
                     react_tx,
+                    ready_barrier,
                 }) => {
                     let token_rx = token_tx.subscribe();
                     let react_rx = react_tx.subscribe();
@@ -95,7 +96,8 @@ impl CallbackDispatcher {
                     let reg = registry.clone();
                     let tx = event_tx.clone();
                     tokio::spawn(async move {
-                        Self::listen_react_bus(react_rx, reg.clone(), tx.clone()).await;
+                        ready_barrier.wait().await;
+                        Self::listen_react_bus(react_rx, reg, tx).await;
                     });
                 }
                 Ok(EnvStateEvent::SessionClosed) => {
@@ -130,13 +132,9 @@ impl CallbackDispatcher {
                     if let (Some(name), Some(args_str)) = (name, args_chunk) {
                         let args: serde_json::Value =
                             serde_json::from_str(&args_str).unwrap_or(serde_json::Value::Null);
-                        let call_id = uuid::Uuid::parse_str(
-                            &call_id,
-                        )
-                        .unwrap_or_default();
                         let event = AgentEvent::ToolCallStart {
                             index,
-                            call_id,
+                            call_id: call_id.clone().into(),
                             name,
                             args,
                         };
@@ -175,10 +173,9 @@ impl CallbackDispatcher {
                     let _ = event_tx.send(event);
                 }
                 Ok(ReactEvent::ToolExecRequest(req)) => {
-                    let call_id = uuid::Uuid::parse_str(&req.call_id).unwrap_or_default();
                     let event = AgentEvent::ToolCallStart {
                         index: req.index,
-                        call_id,
+                        call_id: req.call_id.clone().into(),
                         name: req.name,
                         args: req.args,
                     };
@@ -186,20 +183,17 @@ impl CallbackDispatcher {
                     let _ = event_tx.send(event);
                 }
                 Ok(ReactEvent::ToolExecResponse(res)) => {
-                    let (call_id, name, result) = match res {
-                        Ok(response) => {
-                            let call_id =
-                                uuid::Uuid::parse_str(&response.call_id).unwrap_or_default();
-                            (call_id, String::new(), Ok(response.result))
-                        }
-                        Err(e) => {
-                            (uuid::Uuid::nil(), String::new(), Err(e))
-                        }
-                    };
-                    let event = AgentEvent::ToolCallResult {
-                        call_id,
-                        name,
-                        result,
+                    let event = match res {
+                        Ok(response) => AgentEvent::ToolCallResult {
+                            call_id: response.call_id.clone().into(),
+                            name: String::new(),
+                            result: Ok(response.result),
+                        },
+                        Err(e) => AgentEvent::ToolCallResult {
+                            call_id: Arc::from(""),
+                            name: String::new(),
+                            result: Err(e),
+                        },
                     };
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
@@ -326,9 +320,10 @@ mod tests {
         let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
         bus.start_turn_highway();
 
-        let (token_tx, _) = handle.prepare_turn().await;
+        let (token_tx, _, barrier) = handle.prepare_turn().await;
         token_tx.send(TokenEvent::Text("streamed".into())).unwrap();
         token_tx.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).unwrap();
+        tokio::spawn(async move { barrier.wait().await; });
 
         let got = tokio::time::timeout(
             std::time::Duration::from_secs(2),
@@ -349,7 +344,8 @@ mod tests {
         let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
         bus.start_turn_highway();
 
-        let token_tx = handle.prepare_turn().await.0;
+        let (token_tx, _, barrier) = handle.prepare_turn().await;
+        tokio::spawn(async move { barrier.wait().await; });
         // Send a Finish to end the token bus listener so the react event comes through
         token_tx.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).unwrap();
 
@@ -396,7 +392,8 @@ mod tests {
         let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
         bus.start_turn_highway();
 
-        let (token_tx, _) = handle.prepare_turn().await;
+        let (token_tx, _, barrier) = handle.prepare_turn().await;
+        tokio::spawn(async move { barrier.wait().await; });
         token_tx.send(TokenEvent::Text("one ".into())).unwrap();
         token_tx.send(TokenEvent::Text("two ".into())).unwrap();
         token_tx.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).unwrap();

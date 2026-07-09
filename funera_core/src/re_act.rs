@@ -148,7 +148,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                 let history_json = Self::build_history_from(&self.session_msgs);
 
                 // 4. TurnHighWay handshake
-                let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
+                let (token_tx, react_bus, ready_barrier) = self.turn_highway_handle.prepare_turn().await;
 
                 // 5. Build request via provider and call LLM
                 let request_json =
@@ -156,6 +156,9 @@ impl<P: ChatProvider> ReActLoop<P> {
 
                 react_bus.send(ReactEvent::TurnStart).ok();
                 let stream = P::create_stream(&client, request_json).await?;
+
+                // Wait for dispatcher subscriber to be ready
+                ready_barrier.wait().await;
 
                 // 6. Process stream
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);

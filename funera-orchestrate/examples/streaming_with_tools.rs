@@ -65,13 +65,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(event) = rx.recv().await {
         match event {
             AgentEvent::Token(t) => print!("{t}"),
-            AgentEvent::ToolCallStart { name, args, .. } => {
-                eprint!("\n  🔧 {name}({args}) ... ");
+            AgentEvent::ToolCallStart { call_id, name, args, .. } => {
+                eprint!("\n  🔧 [{call_id}] {name}({args}) ... ");
             }
             AgentEvent::ToolCallResult { result, .. } => {
                 match result {
-                    Ok(r) => eprintln!("= {r}"),
-                    Err(e) => eprintln!("❌ {e}"),
+                    Ok(r) => eprintln!(" = {r}"),
+                    Err(e) => eprintln!(" ❌ {e}"),
                 }
             }
             AgentEvent::TurnStart => eprintln!("\n── Turn ──"),

@@ -1,17 +1,18 @@
+use std::sync::Arc;
+
 use serde_json::Value as JsonValue;
-use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Token(String),
     ToolCallStart {
         index: usize,
-        call_id: Uuid,
+        call_id: Arc<str>,
         name: String,
         args: JsonValue,
     },
     ToolCallResult {
-        call_id: Uuid,
+        call_id: Arc<str>,
         name: String,
         result: Result<String, String>,
     },
@@ -33,10 +34,9 @@ mod tests {
 
     #[test]
     fn agent_event_tool_call_start() {
-        let id = Uuid::new_v4();
         let e = AgentEvent::ToolCallStart {
             index: 0,
-            call_id: id,
+            call_id: "call_abc".into(),
             name: "test".into(),
             args: serde_json::json!({"x": 1}),
         };
@@ -45,9 +45,8 @@ mod tests {
 
     #[test]
     fn agent_event_tool_call_result_ok() {
-        let id = Uuid::new_v4();
         let e = AgentEvent::ToolCallResult {
-            call_id: id,
+            call_id: "call_abc".into(),
             name: "test".into(),
             result: Ok("done".into()),
         };
@@ -56,9 +55,8 @@ mod tests {
 
     #[test]
     fn agent_event_tool_call_result_err() {
-        let id = Uuid::new_v4();
         let e = AgentEvent::ToolCallResult {
-            call_id: id,
+            call_id: "call_abc".into(),
             name: "test".into(),
             result: Err("fail".into()),
         };

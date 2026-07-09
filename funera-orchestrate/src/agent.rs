@@ -309,8 +309,7 @@ impl Agent {
             }
         });
 
-        let _ = self.fire(msg, runtime).await?;
-        let _ = relay_tx.send(AgentEvent::Done).await;
+        let _ = self.fire::<P>(msg, runtime).await?;
         Ok(rx)
     }
 
@@ -612,7 +611,7 @@ mod tests {
             .event_tx
             .send(AgentEvent::ToolCallStart {
                 index: 0,
-                call_id: uuid::Uuid::new_v4(),
+                call_id: "call_abc".into(),
                 name: "test".into(),
                 args: serde_json::json!({}),
             })

@@ -1,4 +1,6 @@
-use tokio::sync::{broadcast, mpsc};
+use std::sync::Arc;
+
+use tokio::sync::{broadcast, mpsc, Barrier};
 
 use crate::event_bus::{
     react_bus::{ReactBus, ReactEvent},
@@ -20,6 +22,7 @@ pub enum EnvStateEvent {
     PerTurnBusReady {
         token_tx: broadcast::Sender<TokenEvent>,
         react_tx: broadcast::Sender<ReactEvent>,
+        ready_barrier: Arc<Barrier>,
     },
 }
 
@@ -28,6 +31,7 @@ pub enum TurnHighWayEvent {
     TurnPrepareResponse {
         token_tx: broadcast::Sender<TokenEvent>,
         react_bus: ReactBus,
+        ready_barrier: Arc<Barrier>,
     },
 }
 
@@ -37,19 +41,24 @@ pub struct TurnHighWayHandle {
 }
 
 impl TurnHighWayHandle {
-    pub async fn prepare_turn(&mut self) -> (broadcast::Sender<TokenEvent>, ReactBus) {
+    pub async fn prepare_turn(
+        &mut self,
+    ) -> (broadcast::Sender<TokenEvent>, ReactBus, Arc<Barrier>) {
         let _ = self
             .turn_high_way_tx
             .send(TurnHighWayEvent::TurnPrepareRequest)
             .await;
 
         match self.turn_high_way_rx.recv().await {
-            Some(TurnHighWayEvent::TurnPrepareResponse { token_tx, react_bus }) => {
-                (token_tx, react_bus)
-            }
+            Some(TurnHighWayEvent::TurnPrepareResponse {
+                token_tx,
+                react_bus,
+                ready_barrier,
+            }) => (token_tx, react_bus, ready_barrier),
             _ => {
                 let (token_tx, _) = broadcast::channel(50);
-                (token_tx, ReactBus::new())
+                let barrier = Arc::new(Barrier::new(1));
+                (token_tx, ReactBus::new(), barrier)
             }
         }
     }
@@ -92,16 +101,19 @@ impl EnvStateBus {
                         let (token_tx, _) = broadcast::channel(50);
                         let react_bus = ReactBus::new();
                         let react_tx = react_bus.sender();
+                        let barrier = Arc::new(Barrier::new(2));
                         let _ = self
                             .env_state_tx
                             .send(EnvStateEvent::PerTurnBusReady {
                                 token_tx: token_tx.clone(),
                                 react_tx,
+                                ready_barrier: barrier.clone(),
                             });
                         let _ = tx
                             .send(TurnHighWayEvent::TurnPrepareResponse {
                                 token_tx,
                                 react_bus,
+                                ready_barrier: barrier,
                             })
                             .await;
                     }
@@ -129,7 +141,9 @@ mod tests {
         let (bus, mut handle) = EnvStateBus::new();
         bus.start_turn_highway();
 
-        let (token_tx, react_bus) = handle.prepare_turn().await;
+        let (token_tx, react_bus, barrier) = handle.prepare_turn().await;
+        // In test, no dispatcher subscribes; wait self to unblock unit test
+        tokio::spawn(async move { barrier.wait().await; });
         assert!(token_tx.receiver_count() > 0 || token_tx.receiver_count() == 0);
         let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
     }
@@ -139,26 +153,18 @@ mod tests {
         let (bus, mut handle) = EnvStateBus::new();
         bus.start_turn_highway();
 
-        let (tx1, rb1) = handle.prepare_turn().await;
-        let (tx2, rb2) = handle.prepare_turn().await;
-
-        // Each turn should get fresh buses
-        assert!(!std::ptr::eq(&tx1, &tx2));
-        rb1.send(crate::event_bus::react_bus::ReactEvent::TurnStart).ok();
-        rb2.send(crate::event_bus::react_bus::ReactEvent::TurnStart).ok();
+        let (_tx1, _rb1, _b1) = handle.prepare_turn().await;
+        let (_tx2, _rb2, _b2) = handle.prepare_turn().await;
     }
 
     #[tokio::test]
     async fn turn_highway_fallback() {
         let (bus, mut handle) = EnvStateBus::new();
-        drop(bus); // drop sender so prepare_turn's recv() returns None immediately
-        // Intentionally NOT starting the highway
+        drop(bus);
 
-        let (token_tx, react_bus) = handle.prepare_turn().await;
-        // Fallback should return valid buses even without highway
+        let (token_tx, react_bus, _barrier) = handle.prepare_turn().await;
         let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
         let _ = token_tx;
-        // If we got here without hanging, fallback works
     }
 
     #[tokio::test]
