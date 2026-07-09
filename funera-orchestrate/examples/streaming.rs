@@ -28,10 +28,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     while let Some(event) = rx.recv().await {
         match event {
-            AgentEvent::Token(t) => print!("{t}"),
-            AgentEvent::TurnStart => println!("\n[Turn Start]"),
-            AgentEvent::TurnEnd => println!("\n[Turn End]"),
-            AgentEvent::Done => println!("\n[Done]"),
+            AgentEvent::Token(t) => eprint!("{t}"),
+            AgentEvent::TurnStart => eprintln!("\n[Turn Start]"),
+            AgentEvent::TurnEnd => eprintln!("\n[Turn End]"),
+            AgentEvent::Done => eprintln!("\n[Done]"),
             _ => {}
         }
     }

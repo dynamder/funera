@@ -78,6 +78,7 @@ impl CallbackDispatcher {
         event_tx: broadcast::Sender<AgentEvent>,
     ) {
         let mut token_handle: Option<tokio::task::JoinHandle<()>> = None;
+        let mut react_handle: Option<tokio::task::JoinHandle<()>> = None;
         loop {
             match rx.recv().await {
                 Ok(EnvStateEvent::PerTurnBusReady {
@@ -96,13 +97,16 @@ impl CallbackDispatcher {
 
                     let reg = registry.clone();
                     let tx = event_tx.clone();
-                    tokio::spawn(async move {
+                    react_handle = Some(tokio::spawn(async move {
                         ready_barrier.wait().await;
                         Self::listen_react_bus(react_rx, reg, tx).await;
-                    });
+                    }));
                 }
                 Ok(EnvStateEvent::SessionClosed) => {
                     if let Some(h) = token_handle.take() {
+                        let _ = h.await;
+                    }
+                    if let Some(h) = react_handle.take() {
                         let _ = h.await;
                     }
                     let _ = event_tx.send(AgentEvent::Done);
