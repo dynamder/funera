@@ -2,18 +2,19 @@ use funera_core::chat::message::{
     FuneraMessage, Message, MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage,
 };
 use funera_core::re_act::tool::ToolType;
+use std::sync::Arc;
+
 use serde_json::{json, Value as JsonValue};
-use uuid::Uuid;
 
 // ── ToolRequestMessage tests ────────────────────────────────────
 
 #[test]
 fn tool_request_message_fields() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_9".into();
     let msg = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "get_weather".into(),
             function_args: json!({"city": "NYC"}),
@@ -26,11 +27,11 @@ fn tool_request_message_fields() {
 
 #[test]
 fn tool_request_message_to_prompt_content() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_2".into();
     let msg = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "search".into(),
             function_args: json!({"q": "rust"}),
@@ -45,11 +46,11 @@ fn tool_request_message_to_prompt_content() {
 
 #[test]
 fn tool_request_message_format_json() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_3".into();
     let msg = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "calculate".into(),
             function_args: json!({"expr": "1+1"}),
@@ -70,11 +71,11 @@ fn tool_request_message_format_json() {
 
 #[test]
 fn tool_request_format_json_with_reasoning() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_4".into();
     let msg = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "get_weather".into(),
             function_args: json!({"city": "Tokyo"}),
@@ -130,11 +131,11 @@ fn multi_turn_tool_chain_formats_correctly() {
         }),
     );
 
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_1".into();
     let assistant_tool_call = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "get_weather".into(),
             function_args: json!({"city": "NYC"}),
@@ -145,7 +146,7 @@ fn multi_turn_tool_chain_formats_correctly() {
     let tool_response = FuneraMessage::new(
         Role::Tool,
         MsgVariant::ToolResponse(ToolResponseMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             result: "72°F, sunny".into(),
         }),
     );
@@ -183,11 +184,11 @@ fn multi_turn_tool_chain_formats_correctly() {
 
 #[test]
 fn tool_request_serde_roundtrip() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_6".into();
     let original = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "test".into(),
             function_args: json!({"key": "value"}),
@@ -196,6 +197,7 @@ fn tool_request_serde_roundtrip() {
     );
 
     let json_str = serde_json::to_string(&original).unwrap();
+
     let deserialized: FuneraMessage = serde_json::from_str(&json_str).unwrap();
 
     assert_eq!(original.id(), deserialized.id());
@@ -210,11 +212,11 @@ fn tool_request_serde_roundtrip() {
 
 #[test]
 fn tool_request_with_empty_args() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_7".into();
     let msg = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             tool_type: ToolType::Function,
             function_name: "noop".into(),
             function_args: json!({}),
@@ -233,11 +235,11 @@ fn tool_request_with_empty_args() {
 
 #[test]
 fn tool_response_with_empty_result() {
-    let call_id = Uuid::new_v4();
+    let call_id: Arc<str> = "call_8".into();
     let msg = FuneraMessage::new(
         Role::Tool,
         MsgVariant::ToolResponse(ToolResponseMessage {
-            tool_call_id: call_id,
+            tool_call_id: call_id.clone(),
             result: "".into(),
         }),
     );
@@ -275,7 +277,7 @@ fn funera_message_msg_variant_matches() {
     let req_msg = FuneraMessage::new(
         Role::Assistant,
         MsgVariant::ToolRequest(ToolRequestMessage {
-            tool_call_id: Uuid::new_v4(),
+            tool_call_id: "call_def".into(),
             tool_type: ToolType::Function,
             function_name: "fn".into(),
             function_args: json!({}),
@@ -287,7 +289,7 @@ fn funera_message_msg_variant_matches() {
     let resp_msg = FuneraMessage::new(
         Role::Tool,
         MsgVariant::ToolResponse(ToolResponseMessage {
-            tool_call_id: Uuid::new_v4(),
+            tool_call_id: "call_def".into(),
             result: "done".into(),
         }),
     );

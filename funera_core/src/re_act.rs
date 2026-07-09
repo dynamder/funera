@@ -8,7 +8,6 @@ use serde_json::Value as JsonValue;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 use crate::chat::message::{
     FuneraMessage, MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage,
@@ -311,7 +310,7 @@ async fn handle_turn_finish(
                 session_msgs.write().push(FuneraMessage::new(
                     Role::Assistant,
                     MsgVariant::ToolRequest(ToolRequestMessage {
-                        tool_call_id: Uuid::parse_str(&acc.call_id).unwrap_or_default(),
+                        tool_call_id: acc.call_id.clone().into(),
                         tool_type: ToolType::Function,
                         function_name: acc.name.clone().into(),
                         function_args: args,
@@ -355,7 +354,7 @@ async fn handle_turn_finish(
                         let tool_response_msg = FuneraMessage::new(
                             Role::Tool,
                             MsgVariant::ToolResponse(ToolResponseMessage {
-                                tool_call_id: Uuid::parse_str(&acc.call_id).unwrap_or_default(),
+                                tool_call_id: acc.call_id.clone().into(),
                                 result: response.clone().into(),
                             }),
                         );

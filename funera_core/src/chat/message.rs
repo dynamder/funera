@@ -52,7 +52,7 @@ pub struct TextMessage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolRequestMessage {
-    pub tool_call_id: Uuid,
+    pub tool_call_id: Arc<str>,
     pub tool_type: ToolType,
     pub function_name: Arc<str>,
     pub function_args: JsonValue,
@@ -61,7 +61,7 @@ pub struct ToolRequestMessage {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolResponseMessage {
-    pub tool_call_id: Uuid,
+    pub tool_call_id: Arc<str>,
     pub result: Arc<str>,
 }
 
@@ -144,10 +144,10 @@ impl FuneraMessage {
                     "role": self.role.to_string(),
                     "tool_calls": [
                         {
-                            "id": tool_request_msg.tool_call_id.clone(),
+                            "id": tool_request_msg.tool_call_id.as_ref(),
                             "type": tool_request_msg.tool_type.to_string(),
                             "function": {
-                                "name": tool_request_msg.function_name.clone(),
+                                "name": tool_request_msg.function_name.as_ref(),
                                 "arguments": serde_json::to_string(&tool_request_msg.function_args).unwrap_or_default(),
                             }
                         }
@@ -163,7 +163,7 @@ impl FuneraMessage {
             MsgVariant::ToolResponse(tool_response_msg) => {
                 json!({
                     "role": self.role.to_string(),
-                    "tool_call_id": tool_response_msg.tool_call_id.clone(),
+                    "tool_call_id": tool_response_msg.tool_call_id.as_ref(),
                     "content": tool_response_msg.to_prompt_content(),
                 })
             }

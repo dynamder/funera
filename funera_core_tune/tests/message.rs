@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use funera_core::chat::message::{
     FuneraMessage, Message, MsgVariant, Role, TextMessage, ToolResponseMessage,
 };
-use uuid::Uuid;
+use std::sync::Arc;
 
 #[test]
 fn role_display() {
@@ -86,11 +86,11 @@ fn text_message_timestamp_is_recent() {
 
 #[test]
 fn tool_response_message_format_json() {
-    let tool_call_id = Uuid::new_v4();
+    let tool_call_id: Arc<str> = "call_abc".into();
     let msg = FuneraMessage::new(
         Role::Tool,
         MsgVariant::ToolResponse(ToolResponseMessage {
-            tool_call_id,
+            tool_call_id: tool_call_id.clone(),
             result: "25°C".into(),
         }),
     );
@@ -108,9 +108,9 @@ fn tool_response_message_format_json() {
 
 #[test]
 fn tool_response_message_impl_message() {
-    let id = Uuid::new_v4();
+    let id: Arc<str> = "call_xyz".into();
     let resp = ToolResponseMessage {
-        tool_call_id: id,
+        tool_call_id: id.clone(),
         result: "42".into(),
     };
     let content = resp.to_prompt_content();

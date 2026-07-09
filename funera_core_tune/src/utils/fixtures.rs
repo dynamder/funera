@@ -2,8 +2,9 @@ use funera_core::{
     chat::message::{FuneraMessage, MsgVariant, Role, TextMessage, ToolResponseMessage},
     re_act::tool::{ToolCallError, ToolRegistry},
 };
+use std::sync::Arc;
+
 use serde_json::Value as JsonValue;
-use uuid::Uuid;
 
 use crate::utils::mock_tool::MockTool;
 
@@ -17,11 +18,11 @@ pub fn text_message(role: Role, text: &str) -> FuneraMessage {
     )
 }
 
-pub fn tool_response_message(tool_call_id: Uuid, result: &str) -> FuneraMessage {
+pub fn tool_response_message(tool_call_id: impl Into<Arc<str>>, result: &str) -> FuneraMessage {
     FuneraMessage::new(
         Role::Tool,
         MsgVariant::ToolResponse(ToolResponseMessage {
-            tool_call_id,
+            tool_call_id: tool_call_id.into(),
             result: result.into(),
         }),
     )
