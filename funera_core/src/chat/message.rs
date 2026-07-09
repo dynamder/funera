@@ -56,6 +56,7 @@ pub struct ToolRequestMessage {
     pub tool_type: ToolType,
     pub function_name: Arc<str>,
     pub function_args: JsonValue,
+    pub reasoning_content: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -139,7 +140,7 @@ impl FuneraMessage {
                 obj
             }
             MsgVariant::ToolRequest(tool_request_msg) => {
-                json!({
+                let mut obj = json!({
                     "role": self.role.to_string(),
                     "tool_calls": [
                         {
@@ -151,7 +152,13 @@ impl FuneraMessage {
                             }
                         }
                     ]
-                })
+                });
+                if let Some(ref rc) = tool_request_msg.reasoning_content {
+                    obj.as_object_mut()
+                        .unwrap()
+                        .insert("reasoning_content".into(), json!(rc.as_ref()));
+                }
+                obj
             }
             MsgVariant::ToolResponse(tool_response_msg) => {
                 json!({

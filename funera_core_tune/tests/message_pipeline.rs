@@ -17,6 +17,7 @@ fn tool_request_message_fields() {
             tool_type: ToolType::Function,
             function_name: "get_weather".into(),
             function_args: json!({"city": "NYC"}),
+            reasoning_content: None,
         }),
     );
     assert_eq!(msg.role().to_string(), "assistant");
@@ -33,6 +34,7 @@ fn tool_request_message_to_prompt_content() {
             tool_type: ToolType::Function,
             function_name: "search".into(),
             function_args: json!({"q": "rust"}),
+            reasoning_content: None,
         }),
     );
     let content = msg.to_prompt_content();
@@ -51,6 +53,7 @@ fn tool_request_message_format_json() {
             tool_type: ToolType::Function,
             function_name: "calculate".into(),
             function_args: json!({"expr": "1+1"}),
+            reasoning_content: None,
         }),
     );
     let json = msg.format_json();
@@ -63,6 +66,28 @@ fn tool_request_message_format_json() {
             .unwrap(),
         "{\"expr\":\"1+1\"}",
     );
+}
+
+#[test]
+fn tool_request_format_json_with_reasoning() {
+    let call_id = Uuid::new_v4();
+    let msg = FuneraMessage::new(
+        Role::Assistant,
+        MsgVariant::ToolRequest(ToolRequestMessage {
+            tool_call_id: call_id,
+            tool_type: ToolType::Function,
+            function_name: "get_weather".into(),
+            function_args: json!({"city": "Tokyo"}),
+            reasoning_content: Some("I need to check the weather API.".into()),
+        }),
+    );
+    let json = msg.format_json();
+    assert_eq!(json["role"], "assistant");
+    assert_eq!(
+        json["reasoning_content"].as_str().unwrap(),
+        "I need to check the weather API."
+    );
+    assert_eq!(json["tool_calls"][0]["function"]["name"], "get_weather");
 }
 
 // ── System message tests ───────────────────────────────────────
@@ -113,6 +138,7 @@ fn multi_turn_tool_chain_formats_correctly() {
             tool_type: ToolType::Function,
             function_name: "get_weather".into(),
             function_args: json!({"city": "NYC"}),
+            reasoning_content: None,
         }),
     );
 
@@ -165,6 +191,7 @@ fn tool_request_serde_roundtrip() {
             tool_type: ToolType::Function,
             function_name: "test".into(),
             function_args: json!({"key": "value"}),
+            reasoning_content: None,
         }),
     );
 
@@ -191,6 +218,7 @@ fn tool_request_with_empty_args() {
             tool_type: ToolType::Function,
             function_name: "noop".into(),
             function_args: json!({}),
+            reasoning_content: None,
         }),
     );
     let json = msg.format_json();
@@ -251,6 +279,7 @@ fn funera_message_msg_variant_matches() {
             tool_type: ToolType::Function,
             function_name: "fn".into(),
             function_args: json!({}),
+            reasoning_content: None,
         }),
     );
     assert!(matches!(req_msg.msg_variant(), MsgVariant::ToolRequest(_)));

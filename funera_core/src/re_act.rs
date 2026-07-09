@@ -301,6 +301,11 @@ async fn handle_turn_finish(
             // Sync the assistant tool call messages to session
             let mut acc_sorted = accums.clone();
             acc_sorted.sort_by_key(|a| a.index);
+            let rc: Option<Arc<str>> = if reasoning_content.is_empty() {
+                None
+            } else {
+                Some(reasoning_content.into())
+            };
             for acc in &acc_sorted {
                 let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
                 session_msgs.write().push(FuneraMessage::new(
@@ -310,6 +315,7 @@ async fn handle_turn_finish(
                         tool_type: ToolType::Function,
                         function_name: acc.name.clone().into(),
                         function_args: args,
+                        reasoning_content: rc.clone(),
                     }),
                 ));
             }
@@ -599,6 +605,53 @@ mod tests {
         assert!(should_continue);
         let received = buf_rx.try_recv().unwrap();
         assert!(matches!(received.msg_variant(), MsgVariant::ToolResponse(_)));
+    }
+
+    #[tokio::test]
+    async fn handle_finish_tool_calls_preserves_reasoning() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, mut exec_rx) = ToolBus::new();
+        let (buf_tx, mut buf_rx) = mpsc::channel(10);
+        let session_msgs = empty_session_msgs();
+
+        let mut accums = HashMap::new();
+        accums.insert(0, ToolCallAccumulator {
+            index: 0,
+            call_id: "call_abc".into(),
+            name: "mock_tool".into(),
+            args: r#"{"x":1}"#.into(),
+        });
+
+        tokio::spawn(async move {
+            if let Some(cmd) = exec_rx.recv().await {
+                let _ = cmd.resp_tx.send(Ok("ok".into()));
+            }
+        });
+
+        let should_continue = handle_turn_finish(
+            Some(&FinishReason::ToolCalls),
+            "",
+            "I need to think about this first",
+            &accums,
+            &react_bus,
+            &tool_bus,
+            &buf_tx,
+            &session_msgs,
+        )
+        .await
+        .unwrap();
+
+        assert!(should_continue);
+        let guard = session_msgs.read();
+        assert_eq!(guard.len(), 1);
+        let req = match guard[0].msg_variant() {
+            MsgVariant::ToolRequest(r) => r,
+            _ => panic!("expected ToolRequest"),
+        };
+        assert_eq!(
+            req.reasoning_content.as_deref(),
+            Some("I need to think about this first")
+        );
     }
 
     #[tokio::test]
