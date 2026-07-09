@@ -1,0 +1,169 @@
+funera_core_tune/tests/real_llm.rs
+  s_03faaed36573a2::t_b3a28b2b95c2c9 114
+funera-orchestrate/examples/multi_turn.rs
+  s_079461838a2495::t_83e52129a1306e 14
+  s_079461838a2495::t_5590afab903034 10
+funera-orchestrate/examples/multi_runtime.rs
+  s_079461838a2495::t_dafa61a939f1e2 11
+  s_499f6522d6d1a6::t_e4d5e5b3db5ead 14
+  s_079461838a2495::t_b0e41a0cf3187c 15
+funera-orchestrate/examples/session_reset.rs
+  s_079461838a2495::t_2dd7c2c22f5d8e 10
+  s_079461838a2495::t_c62e12da88c29e 14
+funera_core_tune/tests/message.rs
+  s_03faaed36573a2::t_583e88cee9021c 125
+  s_03faaed36573a2::t_eb630268c01624 77-80
+  s_03faaed36573a2::t_4e51aa435f8ec3 31,57-60,64-67
+  s_03faaed36573a2::t_84d43f82bfa6fd 160-163
+  s_03faaed36573a2::t_5d25044f8296dc 43-46
+  s_03faaed36573a2::t_913801509101ee 136
+  s_03faaed36573a2::t_ee068b7916c83c 150
+funera_core_tune/src/scenarios/complex_conversation.rs
+  s_03faaed36573a2::t_3b9d90c465d69f 48,57
+  s_499f6522d6d1a6::t_89ed3aba05853d 50
+  s_03faaed36573a2::t_e76ec76b9b75ad 47
+funera_core/Cargo.toml
+  s_499f6522d6d1a6::t_4eede6d60dc0b6 25,27-28
+  s_499f6522d6d1a6::t_99d36b5d073e2b 8
+funera_core/src/lib.rs
+  s_499f6522d6d1a6::t_71e87e1af83854 4
+funera_core_tune/src/scenarios/error_recovery.rs
+  s_03faaed36573a2::t_b665f2d8d42c3c 65
+  s_499f6522d6d1a6::t_0e326a0860b4f0 42,67
+  s_03faaed36573a2::t_deba34b3e95643 40
+funera_core/src/provider.rs
+  s_499f6522d6d1a6::t_10a6c53789d6d3 10-38,84-118
+  s_499f6522d6d1a6::t_1e2882c070a87c 1-5,7-9,39-83
+  s_499f6522d6d1a6::t_fad194d8cf373d 6
+funera_core_tune/src/utils/fixtures.rs
+  s_03faaed36573a2::t_24a41f641f1fe4 11-17
+funera-orchestrate/src/dispatcher.rs
+  s_499f6522d6d1a6::t_9fa57d20c7ec2c 147-150
+  s_499f6522d6d1a6::t_eca6e3957b3ac7 134
+funera-orchestrate/examples/skills.rs
+  s_079461838a2495::t_2062c96aaa4dfb 17
+  s_079461838a2495::t_3cc87a3b345eda 23
+funera_core_tune/tests/message_pipeline.rs
+  s_03faaed36573a2::t_ada2e9bcbaa59c 74,102,233-236
+  s_03faaed36573a2::t_29ba9b5758d2d1 220
+  s_03faaed36573a2::t_f53947a697db59 88
+  s_03faaed36573a2::t_bdbea14a1b5b61 129
+funera_core/src/provider/openai.rs
+  s_499f6522d6d1a6::t_bce3bb0e974ff7 5,12
+  s_499f6522d6d1a6::t_2520090f2705d0 1,4,7,9-11,13-33,35-37
+  s_499f6522d6d1a6::t_cd1b3a7fe1b91b 34
+  s_499f6522d6d1a6::t_c378da3c820416 2
+  s_499f6522d6d1a6::t_52c8d78d856a2c 3,6,8
+funera-orchestrate/examples/streaming_with_tools.rs
+  s_079461838a2495::t_5c9b2168c346e4 47
+  s_079461838a2495::t_c3810a6957de69 13
+funera_core/src/re_act.rs
+  s_499f6522d6d1a6::t_1051352dff03e8 2,6,21,59,68,71,91,154-156,159,161-163,166,170,201-202,205,211,225,230-232,248-249,265,271,281-285,290,402-403,415-416,418,430-431,433,445-446,448,476-477,479,496,520,526,550,589,601,611,625,637-664
+  s_499f6522d6d1a6::t_83b96550691231 665-666
+funera-orchestrate/src/runtime.rs
+  s_3e845e3bd884a0::t_4e0e33012ad1c7 24,199
+  s_499f6522d6d1a6::t_554f92999f5133 272
+  s_499f6522d6d1a6::t_1d7e9999ae7022 10-11
+  s_499f6522d6d1a6::t_24336aff24fe03 286-289,299,302
+  s_499f6522d6d1a6::t_d2ed185ab0278e 185,189-198,200-203
+  s_499f6522d6d1a6::t_3a8dbece8e9014 290
+funera_core_tune/tests/event_buses.rs
+  s_03faaed36573a2::t_1d50823d9a8f6c 41
+  s_499f6522d6d1a6::t_c27981415013e4 121,128,140,144
+funera-orchestrate/examples/custom_tool.rs
+  s_079461838a2495::t_41762b2aad80b6 14
+  s_079461838a2495::t_4af87e8385cb1c 63
+funera-orchestrate/Cargo.toml
+  s_499f6522d6d1a6::t_ef5e18c019c80e 24
+  s_499f6522d6d1a6::t_8a5e4329882e82 27-28
+funera_core_tune/src/scenarios/tool_chain.rs
+  s_499f6522d6d1a6::t_c18b9e4a57c18b 9,49
+  s_03faaed36573a2::t_46ba86368c928c 47
+funera_core/src/provider/deepseek.rs
+  s_499f6522d6d1a6::t_2462ead5b0c8c9 3-8
+  s_499f6522d6d1a6::t_a933a10188540a 1-2,9
+  s_499f6522d6d1a6::t_b7d9d7447a522f 117
+  s_499f6522d6d1a6::t_e20ea0bc2837ce 114
+  s_499f6522d6d1a6::t_6bc485d56a733c 10-113,115-116,118-120
+funera_core_tune/tests/react_loop_mock.rs
+  s_499f6522d6d1a6::t_73ec3c98aa727e 73
+  s_499f6522d6d1a6::t_9c4a76538e9270 6
+  s_03faaed36573a2::t_92fc494f2bc2ab 66,102,104,131
+  s_03faaed36573a2::t_8e8a6e758a7bd3 70
+  s_499f6522d6d1a6::t_784bf3d13270d6 133
+funera-orchestrate/examples/minimal.rs
+  s_079461838a2495::t_871d1a25d98d00 17
+  s_079461838a2495::t_e30ba271a647e0 12
+funera_core/src/event_bus/token_bus.rs
+  s_499f6522d6d1a6::t_b3896da9d667eb 1,6-7,13,17-18,21,23,26-27,31,35,41,46-50,53
+  s_499f6522d6d1a6::t_0bf539df570770 2
+funera-orchestrate/examples/streaming.rs
+  s_079461838a2495::t_372e1119d45c37 15
+  s_079461838a2495::t_ad22c07d7d516b 11
+funera-orchestrate/src/lib.rs
+  s_358d3dc07cbb47::t_1e638d7ac8449e 103,106
+  s_499f6522d6d1a6::t_afcea99c0d8f25 139,141
+  s_499f6522d6d1a6::t_437c2bc230a081 138,140
+  s_358d3dc07cbb47::t_978e0093608970 81
+  s_3e845e3bd884a0::t_dbeba10e838fac 79,101
+funera_core/src/chat/message.rs
+  s_499f6522d6d1a6::t_6d83215dbf1627 130,133-139
+funera-orchestrate/src/agent.rs
+  s_358d3dc07cbb47::t_a0de321839e4ff 180
+  s_499f6522d6d1a6::t_f02e7637dcb6a1 326,426,429
+  s_499f6522d6d1a6::t_8865b13dd35f5c 8
+  s_3e845e3bd884a0::t_4431019f8c14a0 159,161,178
+funera_core/src/chat/session.rs
+  s_499f6522d6d1a6::t_fe84ba94307370 77,91
+funera-orchestrate/examples/builtin_tools.rs
+  s_079461838a2495::t_62c45c0f1b3664 10
+  s_079461838a2495::t_089189dd1d9a4d 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6d23597c39deb0e5bede4fb4158a905002155093",
+  "prompts": {},
+  "sessions": {
+    "s_03faaed36573a2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b8d8a8c2ffeGHxSVQ63bbNVPI",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_079461838a2495": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b8cbf665ffeLqH2cBHCwCwyKY",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_358d3dc07cbb47": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b8d103c3ffeT3LS5Kvurl9EyM",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_3e845e3bd884a0": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b8cb56bdffeYRP0hFnAxE0mCk",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
