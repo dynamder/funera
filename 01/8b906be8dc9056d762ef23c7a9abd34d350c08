@@ -1,0 +1,22 @@
+funera_core/src/provider/deepseek.rs
+  s_499f6522d6d1a6::t_aacee39786e743 105-146,152-161
+  s_499f6522d6d1a6::t_ccdd173ed8aa94 147-148,151
+  s_499f6522d6d1a6::t_43dd4b52f8d606 149-150,178-261
+  s_499f6522d6d1a6::t_280ec9ea4942d6 262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "018b906be8dc9056d762ef23c7a9abd34d350c08",
+  "prompts": {},
+  "sessions": {
+    "s_499f6522d6d1a6": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0bae034a7ffe1Gr5az6J89Zuf5",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
