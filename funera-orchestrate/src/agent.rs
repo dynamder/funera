@@ -5,6 +5,7 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::{FuneraSession, Idle};
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
+use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 
 use crate::dispatcher::{CallbackDispatcher, CallbackRegistry};
@@ -155,9 +156,9 @@ impl AgentBuilder {
 /// # Fire-and-forget (one-shot)
 ///
 /// ```rust,no_run
-/// # use funera_orchestrate::{Agent, AgentRuntime};
+/// # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let runtime = AgentRuntime::builder()
+/// let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 ///     .api_key(std::env::var("OPENAI_API_KEY")?)
 ///     .build()?;
 ///
@@ -174,9 +175,9 @@ impl AgentBuilder {
 /// # Multi-turn conversation
 ///
 /// ```rust,no_run
-/// # use funera_orchestrate::{Agent, AgentRuntime};
+/// # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let mut runtime = AgentRuntime::builder()
+/// let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
 ///     .api_key(std::env::var("OPENAI_API_KEY")?)
 ///     .build()?;
 ///
@@ -216,10 +217,10 @@ impl Agent {
     /// reference — no session state is mutated.
     ///
     /// Use [`send`](Self::send) instead if you need multi-turn conversation.
-    pub async fn fire(
+    pub async fn fire<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &AgentRuntime,
+        runtime: &AgentRuntime<P>,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
 
@@ -244,6 +245,7 @@ impl Agent {
                 Role::System,
                 MsgVariant::Text(TextMessage {
                     text: sys.clone().into(),
+                    reasoning_content: None,
                 }),
             );
             session.push_message(sys_msg);
@@ -255,6 +257,7 @@ impl Agent {
             Role::User,
             MsgVariant::Text(TextMessage {
                 text: text.clone().into(),
+                reasoning_content: None,
             }),
         );
 
@@ -268,7 +271,7 @@ impl Agent {
         );
 
         let result = running
-            .react_loop(init_msg, config, env_state_tx.clone())
+            .react_loop::<P>(init_msg, config, env_state_tx.clone())
             .await;
         let idle_session = running.idle();
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
@@ -280,10 +283,10 @@ impl Agent {
     ///
     /// Returns a channel receiver that yields [`AgentEvent`] items as they
     /// happen (tokens, tool calls, turn boundaries), ending with `Done`.
-    pub async fn fire_stream(
+    pub async fn fire_stream<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &AgentRuntime,
+        runtime: &AgentRuntime<P>,
     ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
         let (relay_tx, rx) = mpsc::channel(256);
         let tx = relay_tx.clone();
@@ -317,10 +320,10 @@ impl Agent {
     /// the updated session back into the runtime on completion.
     ///
     /// The runtime requires `&mut` because the session state is mutated.
-    pub async fn send(
+    pub async fn send<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &mut AgentRuntime,
+        runtime: &mut AgentRuntime<P>,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
 
@@ -347,6 +350,7 @@ impl Agent {
                     Role::System,
                     MsgVariant::Text(TextMessage {
                         text: sys.clone().into(),
+                        reasoning_content: None,
                     }),
                 );
                 session.push_message(sys_msg);
@@ -357,7 +361,7 @@ impl Agent {
 
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: text.into() }),
+            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
         );
 
         let config = ReActLoopConfig::new(
@@ -370,7 +374,7 @@ impl Agent {
         );
 
         let result = running
-            .react_loop(init_msg, config, env_state_tx.clone())
+            .react_loop::<P>(init_msg, config, env_state_tx.clone())
             .await;
         let idle_session = running.idle();
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
@@ -419,10 +423,10 @@ impl Agent {
     }
 
     /// Streaming variant of [`send`](Self::send).
-    pub async fn send_stream(
+    pub async fn send_stream<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &mut AgentRuntime,
+        runtime: &mut AgentRuntime<P>,
     ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
         let (relay_tx, rx) = mpsc::channel(256);
         let tx = relay_tx.clone();

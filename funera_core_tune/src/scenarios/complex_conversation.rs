@@ -8,6 +8,7 @@ use funera_core::event_bus::env_state_bus::EnvStateBus;
 use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::re_act::tool::ToolRegistry;
 use funera_core::re_act::tool_executor::ToolExecutor;
+use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::re_act::ReActLoop;
 use crate::utils::env_config::default_model;
 use crate::utils::fixtures::default_schema;
@@ -43,16 +44,17 @@ pub async fn multi_turn_conversation() -> Result<String> {
     let session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>> = Default::default();
     {
         let mut msgs = session_msgs.write();
-        msgs.push(FuneraMessage::new(Role::System, MsgVariant::Text(TextMessage { text: "You are a helpful assistant.".into() })));
-        msgs.push(FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: "Hello!".into() })));
+        msgs.push(FuneraMessage::new(Role::System, MsgVariant::Text(TextMessage { text: "You are a helpful assistant.".into(), reasoning_content: None })));
+        msgs.push(FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: "Hello!".into(), reasoning_content: None })));
     }
-    let loop_instance = ReActLoop::new(10, 3, session_msgs, env_watcher, tool_bus, state_tx, turn_highway_handle);
+    let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 3, session_msgs, env_watcher, tool_bus, state_tx, turn_highway_handle);
     let sender = loop_instance.sender();
     sender
         .send(FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage {
                 text: "What can you do?".into(),
+                reasoning_content: None,
             }),
         ))
         .await?;

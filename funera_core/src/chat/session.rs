@@ -74,7 +74,7 @@ impl FuneraSession<Idle> {
 }
 
 impl FuneraSession<Running> {
-    pub async fn react_loop(
+    pub async fn react_loop<P: crate::provider::ChatProvider>(
         &mut self,
         init_msg: FuneraMessage,
         mut config: ReActLoopConfig,
@@ -88,7 +88,7 @@ impl FuneraSession<Running> {
         }
 
         config.session_msgs = Some(self.msgs.clone());
-        let react_loop = ReActLoop::from_config(config);
+        let react_loop = ReActLoop::<P>::from_config(config);
         let sender = react_loop.sender();
         sender.send(init_msg).await?;
 

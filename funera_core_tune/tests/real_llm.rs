@@ -111,6 +111,7 @@ async fn real_llm_with_tool_calling() {
         Role::User,
         MsgVariant::Text(TextMessage {
             text: "What is the weather in Tokyo?".into(),
+            reasoning_content: None,
         }),
     );
 

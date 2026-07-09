@@ -6,6 +6,7 @@ use funera_core::event_bus::env_state_bus::EnvStateBus;
 use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::re_act::tool::ToolRegistry;
 use funera_core::re_act::tool_executor::ToolExecutor;
+use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::re_act::ReActLoop;
 use crate::utils::env_config::default_model;
 use crate::utils::fixtures::default_schema;
@@ -43,9 +44,9 @@ pub async fn multiple_tool_calls() -> Result<String> {
     let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
     session_msgs.write().push(funera_core::chat::message::FuneraMessage::new(
         funera_core::chat::message::Role::User,
-        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "use multiple tools".into() }),
+        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "use multiple tools".into(), reasoning_content: None }),
     ));
-    let loop_instance = ReActLoop::new(10, 3, session_msgs, env_watcher, tool_bus, state_tx, turn_highway_handle);
+    let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 3, session_msgs, env_watcher, tool_bus, state_tx, turn_highway_handle);
     let loop_handle = loop_instance.run();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     loop_handle.cancel_token.cancel();

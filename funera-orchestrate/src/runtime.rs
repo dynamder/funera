@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -6,8 +7,11 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 use funera_core::chat::session::{FuneraSession, Idle};
+#[cfg(feature = "deepseek")]
+use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
 use funera_core::event_bus::tool_bus::ToolBus;
+use funera_core::provider::ChatProvider;
 use funera_core::re_act::skills::{Skill, SkillRegistry};
 use funera_core::re_act::tool::{Tool, ToolRegistry};
 use funera_core::re_act::tool_executor::ToolExecutor;
@@ -17,9 +21,9 @@ use crate::error::OrchestrateError;
 /// Builds an [`AgentRuntime`].
 ///
 /// ```rust,no_run
-/// # use funera_orchestrate::AgentRuntime;
+/// # use funera_orchestrate::{AgentRuntime, DeepSeekProvider};
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let mut runtime = AgentRuntime::builder()
+/// let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
 ///     .api_key(std::env::var("OPENAI_API_KEY")?)
 ///     .model("gpt-4o")
 ///     .build()?;
@@ -178,11 +182,25 @@ impl AgentRuntimeBuilder {
         self
     }
 
-    /// Build the runtime.
+    /// Build the runtime with the default DeepSeek provider.
     ///
     /// Spawns a background `ToolExecutor` task that lives for the runtime's
     /// lifetime and processes tool calls from the ReAct loop.
-    pub fn build(mut self) -> Result<AgentRuntime, OrchestrateError> {
+    #[cfg(feature = "deepseek")]
+    pub fn build(self) -> Result<AgentRuntime<DeepSeekProvider>, OrchestrateError> {
+        self.build_with::<DeepSeekProvider>()
+    }
+
+    /// Build the runtime with a custom LLM provider.
+    ///
+    /// ```rust,no_run
+    /// # use funera_orchestrate::{AgentRuntime, DeepSeekProvider};
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let rt = AgentRuntime::<DeepSeekProvider>::builder().api_key("sk-key").model("gpt-4o").build_with::<DeepSeekProvider>()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn build_with<P: ChatProvider>(mut self) -> Result<AgentRuntime<P>, OrchestrateError> {
         let api_key = self.api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
         let model = self
             .model
@@ -251,6 +269,7 @@ impl AgentRuntimeBuilder {
             channel_buffer: self.channel_buffer,
             _executor_handle: handle,
             session: None,
+            _phantom: PhantomData,
         })
     }
 }
@@ -264,7 +283,11 @@ impl AgentRuntimeBuilder {
 /// [`Agent::send_stream`](crate::Agent::send_stream) for multi-turn
 /// conversations, or `&AgentRuntime` to [`Agent::fire`](crate::Agent::fire) /
 /// [`Agent::fire_stream`](crate::Agent::fire_stream) for one-shot queries.
-pub struct AgentRuntime {
+///
+/// The generic parameter `P` selects the LLM provider — typically
+/// [`DeepSeekProvider`](funera_core::provider::deepseek::DeepSeekProvider) or
+/// [`OpenAIProvider`](funera_core::provider::openai::OpenAIProvider).
+pub struct AgentRuntime<P: ChatProvider> {
     env: FuneraEnv,
     pub(crate) env_watcher: FuneraEnvWatcher,
     pub(crate) tool_bus: ToolBus,
@@ -273,9 +296,10 @@ pub struct AgentRuntime {
     pub(crate) channel_buffer: usize,
     _executor_handle: JoinHandle<()>,
     session: Option<FuneraSession<Idle>>,
+    _phantom: PhantomData<P>,
 }
 
-impl AgentRuntime {
+impl<P: ChatProvider> AgentRuntime<P> {
     /// Create a new builder.
     pub fn builder() -> AgentRuntimeBuilder {
         AgentRuntimeBuilder::new()

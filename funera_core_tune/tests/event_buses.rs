@@ -38,7 +38,7 @@ fn react_bus_send_turn_start_end() {
 fn react_bus_send_message_queued() {
     let bus = ReactBus::new();
     let mut rx = bus.subscribe();
-    let msg = FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: "test".into() }));
+    let msg = FuneraMessage::new(Role::User, MsgVariant::Text(TextMessage { text: "test".into(), reasoning_content: None }));
     bus.send(ReactEvent::MessageQueued(msg.clone())).ok();
     match rx.try_recv().unwrap() {
         ReactEvent::MessageQueued(m) => assert_eq!(m.id(), msg.id()),
@@ -118,14 +118,14 @@ fn token_event_text() {
 fn token_event_tool_delta_full() {
     let event = TokenEvent::ToolDelta {
         index: 0,
-        call_id: Some("call_1".into()),
+        call_id: "call_1".into(),
         name: Some("search".into()),
         args_chunk: Some("{\"q\":".into()),
     };
     match event {
         TokenEvent::ToolDelta { index, call_id, name, args_chunk } => {
             assert_eq!(index, 0);
-            assert_eq!(call_id.unwrap(), "call_1");
+            assert_eq!(call_id, "call_1");
             assert_eq!(name.unwrap(), "search");
             assert_eq!(args_chunk.unwrap(), "{\"q\":");
         }
@@ -137,11 +137,11 @@ fn token_event_tool_delta_full() {
 fn token_event_tool_delta_partial() {
     let event = TokenEvent::ToolDelta {
         index: 1,
-        call_id: None,
+        call_id: String::new(),
         name: None,
         args_chunk: None,
     };
-    assert!(matches!(event, TokenEvent::ToolDelta { index: 1, call_id: None, name: None, args_chunk: None }));
+    assert!(matches!(event, TokenEvent::ToolDelta { index: 1, .. }));
 }
 
 #[test]

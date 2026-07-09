@@ -1,13 +1,9 @@
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use anyhow::Result;
-use async_openai::types::chat::{
-    ChatCompletionMessageToolCalls, ChatCompletionRequestAssistantMessageArgs,
-    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, ChatCompletionTools,
-    CreateChatCompletionRequest, CreateChatCompletionRequestArgs, FinishReason,
-};
+use async_openai::types::chat::FinishReason;
 use serde_json::Value as JsonValue;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
@@ -22,6 +18,7 @@ use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallRequest, ToolCallResponse};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 use crate::event_bus::tool_bus::ToolBus;
+use crate::provider::ChatProvider;
 use crate::re_act::tool::{ToolCallError, ToolType};
 
 pub mod skills;
@@ -59,7 +56,7 @@ impl ReActLoopConfig {
     }
 }
 
-pub struct ReActLoop {
+pub struct ReActLoop<P: ChatProvider> {
     buf_msg_rx: mpsc::Receiver<FuneraMessage>,
     buf_msg_tx: mpsc::Sender<FuneraMessage>,
     session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>>,
@@ -68,9 +65,10 @@ pub struct ReActLoop {
     tool_bus: ToolBus,
     env_state_tx: broadcast::Sender<EnvStateEvent>,
     turn_highway_handle: TurnHighWayHandle,
+    _phantom: PhantomData<P>,
 }
 
-impl ReActLoop {
+impl<P: ChatProvider> ReActLoop<P> {
     pub fn new(
         buffer: usize,
         max_iteration: usize,
@@ -90,6 +88,7 @@ impl ReActLoop {
             tool_bus,
             env_state_tx,
             turn_highway_handle,
+            _phantom: PhantomData,
         }
     }
 
@@ -152,25 +151,23 @@ impl ReActLoop {
                 // 4. TurnHighWay handshake
                 let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
 
-                // 5. Format messages for LLM (with skill content appended after system prompts)
-                let llm_messages = build_llm_messages(&history_json, &skill_content)?;
+                // 5. Build request via provider and call LLM
+                let request_json =
+                    P::build_request_json(&model, &history_json, &skill_content, &tools_json);
 
-                // 6. Build the API request
-                let request = build_chat_request(&model, llm_messages, &tools_json)?;
-
-                // 7. Call LLM streaming
                 react_bus.send(ReactEvent::TurnStart).ok();
-                let stream = client.chat().create_stream(request).await?;
+                let stream = P::create_stream(&client, request_json).await?;
 
-                // 8. Process stream
-                let mut token_bus = TokenBus::with_sender(token_tx, stream);
-                let (assistant_content, tool_call_accums, turn_finish_reason) =
+                // 6. Process stream
+                let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);
+                let (assistant_content, reasoning_content, tool_call_accums, turn_finish_reason) =
                     process_token_stream(&mut token_bus, &react_bus).await?;
 
-                // 9. Handle finish reason
+                // 7. Handle finish reason
                 let should_continue = handle_turn_finish(
                     turn_finish_reason.as_ref(),
                     &assistant_content,
+                    &reasoning_content,
                     &tool_call_accums,
                     &react_bus,
                     &self.tool_bus,
@@ -201,109 +198,17 @@ impl ReActLoop {
     }
 }
 
-fn build_llm_messages(
-    history: &[JsonValue],
-    skill_content: &str,
-) -> Result<Vec<ChatCompletionRequestMessage>> {
-    let mut messages = Vec::new();
-    for entry in history {
-        let role = entry["role"].as_str().unwrap_or("user");
-        match role {
-            "user" => {
-                let content = entry["content"].as_str().unwrap_or("");
-                let msg = ChatCompletionRequestMessage::User(
-                    ChatCompletionRequestUserMessageArgs::default()
-                        .content(content)
-                        .build()?,
-                );
-                messages.push(msg);
-            }
-            "assistant" => {
-                if let Some(tool_calls) = entry.get("tool_calls").and_then(|t| t.as_array()) {
-                    let tool_calls: Vec<ChatCompletionMessageToolCalls> =
-                        serde_json::from_value(JsonValue::Array(tool_calls.clone()))
-                            .unwrap_or_default();
-                    messages.push(ChatCompletionRequestMessage::Assistant(
-                        ChatCompletionRequestAssistantMessageArgs::default()
-                            .tool_calls(tool_calls)
-                            .build()?,
-                    ));
-                } else {
-                    let content = entry["content"].as_str().unwrap_or("");
-                    messages.push(ChatCompletionRequestMessage::Assistant(
-                        ChatCompletionRequestAssistantMessageArgs::default()
-                            .content(content)
-                            .build()?,
-                    ));
-                }
-            }
-            "tool" => {
-                let tool_call_id = entry["tool_call_id"].as_str().unwrap_or("");
-                let content = entry["content"].as_str().unwrap_or("");
-                let msg = ChatCompletionRequestMessage::Tool(
-                    ChatCompletionRequestToolMessageArgs::default()
-                        .tool_call_id(tool_call_id)
-                        .content(content)
-                        .build()?,
-                );
-                messages.push(msg);
-            }
-            "system" => {
-                let content = entry["content"].as_str().unwrap_or("");
-                messages.push(ChatCompletionRequestMessage::System(
-                    ChatCompletionRequestSystemMessageArgs::default()
-                        .content(content)
-                        .build()?,
-                ));
-            }
-            _ => {}
-        }
-    }
-
-    // Append active skill content as additional system message(s) after existing system prompts
-    if !skill_content.is_empty() {
-        messages.push(ChatCompletionRequestMessage::System(
-            ChatCompletionRequestSystemMessageArgs::default()
-                .content(skill_content)
-                .build()?,
-        ));
-    }
-
-    Ok(messages)
-}
-
-fn build_chat_request(
-    model: &str,
-    messages: Vec<ChatCompletionRequestMessage>,
-    tools_json: &JsonValue,
-) -> Result<CreateChatCompletionRequest> {
-    let mut builder = CreateChatCompletionRequestArgs::default();
-    builder.model(model);
-    builder.messages(messages);
-    builder.stream(true);
-
-    if let Some(tools_array) = tools_json.as_array() {
-        if !tools_array.is_empty() {
-            let chat_tools: Vec<ChatCompletionTools> =
-                serde_json::from_value(tools_json.clone()).unwrap_or_default();
-            if !chat_tools.is_empty() {
-                builder.tools(chat_tools);
-            }
-        }
-    }
-
-    Ok(builder.build()?)
-}
-
-async fn process_token_stream(
-    token_bus: &mut TokenBus,
+async fn process_token_stream<C: crate::provider::StreamChunkExt>(
+    token_bus: &mut TokenBus<C>,
     react_bus: &ReactBus,
 ) -> Result<(
+    String,
     String,
     HashMap<usize, ToolCallAccumulator>,
     Option<FinishReason>,
 )> {
     let mut assistant_content = String::new();
+    let mut reasoning_content = String::new();
     let mut tool_call_accums: HashMap<usize, ToolCallAccumulator> = HashMap::new();
     let mut turn_finish_reason: Option<FinishReason> = None;
 
@@ -317,9 +222,13 @@ async fn process_token_stream(
                         Role::Assistant,
                         MsgVariant::Text(TextMessage {
                             text: t.clone().into(),
+                            reasoning_content: None,
                         }),
                     );
                     react_bus.send(ReactEvent::MessageQueued(text_msg)).ok();
+                }
+                TokenEvent::Reasoning(r) => {
+                    reasoning_content.push_str(&r);
                 }
                 TokenEvent::ToolDelta {
                     index,
@@ -336,8 +245,8 @@ async fn process_token_stream(
                                 name: String::new(),
                                 args: String::new(),
                             });
-                    if let Some(id) = call_id {
-                        acc.call_id = id;
+                    if !call_id.is_empty() {
+                        acc.call_id = call_id;
                     }
                     if let Some(n) = name {
                         acc.name = n;
@@ -353,12 +262,13 @@ async fn process_token_stream(
         }
     }
 
-    Ok((assistant_content, tool_call_accums, turn_finish_reason))
+    Ok((assistant_content, reasoning_content, tool_call_accums, turn_finish_reason))
 }
 
 async fn handle_turn_finish(
     finish_reason: Option<&FinishReason>,
     assistant_content: &str,
+    reasoning_content: &str,
     tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
     react_bus: &ReactBus,
     tool_bus: &ToolBus,
@@ -368,10 +278,16 @@ async fn handle_turn_finish(
     match finish_reason {
         None | Some(FinishReason::Stop) => {
             if !assistant_content.is_empty() {
+                let rc = if reasoning_content.is_empty() {
+                    None
+                } else {
+                    Some(reasoning_content.into())
+                };
                 session_msgs.write().push(FuneraMessage::new(
                     Role::Assistant,
                     MsgVariant::Text(TextMessage {
                         text: assistant_content.into(),
+                        reasoning_content: rc,
                     }),
                 ));
             }
@@ -483,164 +399,8 @@ mod tests {
 
     use super::*;
 
-    // ── build_llm_messages ───────────────────────────────────────
-
-    #[test]
-    fn build_msgs_empty_history() {
-        let msgs = build_llm_messages(&[], "").unwrap();
-        assert!(msgs.is_empty());
-    }
-
-    #[test]
-    fn build_msgs_user() {
-        let history = vec![json!({"role": "user", "content": "hello"})];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 1);
-    }
-
-    #[test]
-    fn build_msgs_system_user() {
-        let history = vec![
-            json!({"role": "system", "content": "be helpful"}),
-            json!({"role": "user", "content": "hello"}),
-        ];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 2);
-    }
-
-    #[test]
-    fn build_msgs_all_roles() {
-        let history = vec![
-            json!({"role": "system", "content": "sys"}),
-            json!({"role": "user", "content": "usr"}),
-            json!({"role": "assistant", "content": "asst"}),
-            json!({"role": "tool", "tool_call_id": "call_1", "content": "tool result"}),
-        ];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 4);
-        let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
-        assert!(
-            debug_strs[0].starts_with("System"),
-            "got: {}",
-            debug_strs[0]
-        );
-        assert!(debug_strs[1].starts_with("User"), "got: {}", debug_strs[1]);
-        assert!(
-            debug_strs[2].starts_with("Assistant"),
-            "got: {}",
-            debug_strs[2]
-        );
-        assert!(debug_strs[3].starts_with("Tool"), "got: {}", debug_strs[3]);
-    }
-
-    #[test]
-    fn build_msgs_with_skill_content_appended() {
-        let history = vec![
-            json!({"role": "system", "content": "You are a bot"}),
-            json!({"role": "user", "content": "hello"}),
-        ];
-        let msgs = build_llm_messages(&history, "Skill instruction here").unwrap();
-        assert_eq!(msgs.len(), 3);
-        let debug_strs: Vec<String> = msgs.iter().map(|m| format!("{:?}", m)).collect();
-        assert!(
-            debug_strs[0].starts_with("System"),
-            "got: {}",
-            debug_strs[0]
-        );
-        assert!(debug_strs[1].starts_with("User"), "got: {}", debug_strs[1]);
-        assert!(
-            debug_strs[2].starts_with("System"),
-            "got: {}",
-            debug_strs[2]
-        );
-    }
-
-    #[test]
-    fn build_msgs_skill_content_empty_noop() {
-        let history = vec![json!({"role": "user", "content": "hi"})];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 1);
-    }
-
-    #[test]
-    fn build_msgs_assistant_with_tool_calls() {
-        let history = vec![
-            json!({"role": "user", "content": "check weather"}),
-            json!({
-                "role": "assistant",
-                "content": null,
-                "tool_calls": [{
-                    "id": "call_abc",
-                    "type": "function",
-                    "function": {
-                        "name": "get_weather",
-                        "arguments": r#"{"city":"Tokyo"}"#
-                    }
-                }]
-            }),
-            json!({"role": "tool", "tool_call_id": "call_abc", "content": "22°C"}),
-        ];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 3);
-        // Tool calls must not produce empty assistant — serialized form should contain tool_calls
-        let debug = format!("{:?}", msgs[1]);
-        assert!(debug.contains("tool_calls"), "expected tool_calls in assistant msg: {debug}");
-    }
-
-    #[test]
-    fn build_msgs_unknown_role_skipped() {
-        let history = vec![json!({"role": "unknown_role", "content": "???", "extra": "field"})];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 0);
-    }
-
-    #[test]
-    fn build_msgs_missing_role_defaults_to_user() {
-        let history = vec![json!({"content": "no role"})];
-        let msgs = build_llm_messages(&history, "").unwrap();
-        assert_eq!(msgs.len(), 1);
-    }
-
-    // ── build_chat_request ──────────────────────────────────────
-
-    #[test]
-    fn build_request_no_tools() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
-        let tools_json = json!([]);
-        let req = build_chat_request("gpt-4o", msgs, &tools_json).unwrap();
-        assert!(req.tools.is_none() || req.tools.as_ref().map(|t| t.is_empty()).unwrap_or(true));
-    }
-
-    #[test]
-    fn build_request_with_tools() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
-        let tools_json = json!([{
-            "type": "function",
-            "function": {
-                "name": "test_tool",
-                "description": "A test",
-                "parameters": {"type": "object", "properties": {}, "required": []}
-            }
-        }]);
-        let req = build_chat_request("gpt-4o", msgs, &tools_json).unwrap();
-        assert!(req.tools.is_some());
-        assert!(req.tools.unwrap().len() > 0);
-    }
-
-    #[test]
-    fn build_request_tools_not_array() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
-        let tools_json = json!("not_an_array");
-        let req = build_chat_request("gpt-4o", msgs, &tools_json).unwrap();
-        assert!(req.tools.is_none());
-    }
-
-    #[test]
-    fn build_request_empty_tools_array() {
-        let msgs = build_llm_messages(&[json!({"role": "user", "content": "hi"})], "").unwrap();
-        let tools_json = json!([]);
-        let req = build_chat_request("gpt-4o", msgs, &tools_json).unwrap();
-        assert!(req.tools.is_none() || req.tools.as_ref().map(|t| t.is_empty()).unwrap_or(true));
+    fn empty_session_msgs() -> Arc<parking_lot::RwLock<Vec<FuneraMessage>>> {
+        Arc::new(parking_lot::RwLock::new(Vec::new()))
     }
 
     // ── process_token_stream ────────────────────────────────────
@@ -652,10 +412,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason) =
+            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
         assert_eq!(content, "");
+        assert_eq!(reasoning, "");
         assert!(accums.is_empty());
         assert!(reason.is_none());
     }
@@ -667,10 +427,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason) =
+            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
         assert_eq!(content, "Hello World");
+        assert_eq!(reasoning, "");
         assert!(accums.is_empty());
         assert!(matches!(reason, Some(FinishReason::Stop)));
     }
@@ -682,10 +442,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason) =
+            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
         assert_eq!(content, "");
+        assert_eq!(reasoning, "");
         assert_eq!(accums.len(), 1);
         assert!(matches!(reason, Some(FinishReason::ToolCalls)));
     }
@@ -713,16 +473,12 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason) =
+            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
         assert_eq!(content, "Thinking...");
+        assert_eq!(reasoning, "");
         assert_eq!(accums.len(), 1);
         assert!(matches!(reason, Some(FinishReason::ToolCalls)));
-    }
-
-    fn empty_session_msgs() -> Arc<parking_lot::RwLock<Vec<FuneraMessage>>> {
-        Arc::new(parking_lot::RwLock::new(Vec::new()))
     }
 
     // ── handle_turn_finish ───────────────────────────────────────
@@ -737,6 +493,7 @@ mod tests {
         let should_continue = handle_turn_finish(
             Some(&FinishReason::Stop),
             "Hello!",
+            "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
@@ -758,14 +515,14 @@ mod tests {
         let (tool_bus, _rx) = ToolBus::new();
         let (tx, _rx) = mpsc::channel(10);
         let session_msgs = empty_session_msgs();
-        // Seed with one existing msg
         session_msgs.write().push(FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: "hi".into() }),
+            MsgVariant::Text(TextMessage { text: "hi".into(), reasoning_content: None }),
         ));
 
         let should_continue = handle_turn_finish(
             Some(&FinishReason::Stop),
+            "",
             "",
             &HashMap::new(),
             &react_bus,
@@ -777,7 +534,6 @@ mod tests {
         .unwrap();
 
         assert!(!should_continue);
-        // No new message added
         assert_eq!(session_msgs.read().len(), 1);
     }
 
@@ -791,6 +547,7 @@ mod tests {
         let should_continue = handle_turn_finish(
             None,
             "Hello!",
+            "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
@@ -829,6 +586,7 @@ mod tests {
         let should_continue = handle_turn_finish(
             Some(&FinishReason::ToolCalls),
             "",
+            "",
             &accums,
             &react_bus,
             &tool_bus,
@@ -840,10 +598,7 @@ mod tests {
 
         assert!(should_continue);
         let received = buf_rx.try_recv().unwrap();
-        assert!(matches!(
-            received.msg_variant(),
-            MsgVariant::ToolResponse(_)
-        ));
+        assert!(matches!(received.msg_variant(), MsgVariant::ToolResponse(_)));
     }
 
     #[tokio::test]
@@ -853,7 +608,7 @@ mod tests {
         let (tx, _) = mpsc::channel(10);
         let session_msgs = empty_session_msgs();
 
-        drop(exec_rx); // close receiver so ToolBus::execute fails immediately
+        drop(exec_rx);
 
         let mut accums = HashMap::new();
         let accum = ToolCallAccumulator {
@@ -867,6 +622,7 @@ mod tests {
         let should_continue = handle_turn_finish(
             Some(&FinishReason::Length),
             "",
+            "",
             &accums,
             &react_bus,
             &tool_bus,
@@ -876,6 +632,36 @@ mod tests {
         .await;
 
         assert!(should_continue.is_ok());
+    }
+
+    #[tokio::test]
+    async fn handle_finish_stop_with_reasoning() {
+        let react_bus = ReactBus::new();
+        let (tool_bus, _rx) = ToolBus::new();
+        let (tx, _rx) = mpsc::channel(10);
+        let session_msgs = empty_session_msgs();
+
+        let should_continue = handle_turn_finish(
+            Some(&FinishReason::Stop),
+            "Final answer",
+            "I need to think about this...",
+            &HashMap::new(),
+            &react_bus,
+            &tool_bus,
+            &tx,
+            &session_msgs,
+        )
+        .await
+        .unwrap();
+
+        assert!(!should_continue);
+        let guard = session_msgs.read();
+        assert_eq!(guard.len(), 1);
+        let text = match guard[0].msg_variant() {
+            MsgVariant::Text(t) => t,
+            _ => panic!("expected Text"),
+        };
+        assert_eq!(text.reasoning_content.as_deref(), Some("I need to think about this..."));
     }
 
     // ── ToolCallAccumulator behavior ────────────────────────────

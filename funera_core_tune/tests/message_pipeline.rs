@@ -71,6 +71,7 @@ fn system_message_format_json() {
         Role::System,
         MsgVariant::Text(TextMessage {
             text: "You are a helpful assistant.".into(),
+            reasoning_content: None,
         }),
     );
     let json = msg.format_json();
@@ -84,6 +85,7 @@ fn system_message_to_prompt_content() {
         Role::System,
         MsgVariant::Text(TextMessage {
             text: "Be concise.".into(),
+            reasoning_content: None,
         }),
     );
     assert_eq!(msg.to_prompt_content(), "Be concise.");
@@ -97,6 +99,7 @@ fn multi_turn_tool_chain_formats_correctly() {
         Role::User,
         MsgVariant::Text(TextMessage {
             text: "What's the weather in NYC?".into(),
+            reasoning_content: None,
         }),
     );
 
@@ -123,6 +126,7 @@ fn multi_turn_tool_chain_formats_correctly() {
         Role::Assistant,
         MsgVariant::Text(TextMessage {
             text: "The weather in NYC is 72°F and sunny.".into(),
+            reasoning_content: None,
         }),
     );
 
@@ -213,6 +217,7 @@ fn text_message_with_special_chars() {
         Role::User,
         MsgVariant::Text(TextMessage {
             text: "line1\nline2\twith\ttabs".into(),
+            reasoning_content: None,
         }),
     );
     let json = msg.format_json();
@@ -225,7 +230,10 @@ fn text_message_with_special_chars() {
 fn funera_message_msg_variant_matches() {
     let text_msg = FuneraMessage::new(
         Role::User,
-        MsgVariant::Text(TextMessage { text: "hi".into() }),
+        MsgVariant::Text(TextMessage {
+            text: "hi".into(),
+            reasoning_content: None,
+        }),
     );
     assert!(matches!(text_msg.msg_variant(), MsgVariant::Text(_)));
 

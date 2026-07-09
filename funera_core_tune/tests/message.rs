@@ -28,6 +28,7 @@ fn text_message_new() {
         Role::User,
         MsgVariant::Text(TextMessage {
             text: "hello".into(),
+            reasoning_content: None,
         }),
     );
     assert_eq!(*msg.role(), Role::User);
@@ -39,7 +40,10 @@ fn text_message_new() {
 fn text_message_format_json() {
     let msg = FuneraMessage::new(
         Role::Assistant,
-        MsgVariant::Text(TextMessage { text: "hi".into() }),
+        MsgVariant::Text(TextMessage {
+            text: "hi".into(),
+            reasoning_content: None,
+        }),
     );
     let json = msg.format_json();
     assert_eq!(json["role"], "assistant");
@@ -50,11 +54,17 @@ fn text_message_format_json() {
 fn text_message_is_unique_id() {
     let msg1 = FuneraMessage::new(
         Role::User,
-        MsgVariant::Text(TextMessage { text: "a".into() }),
+        MsgVariant::Text(TextMessage {
+            text: "a".into(),
+            reasoning_content: None,
+        }),
     );
     let msg2 = FuneraMessage::new(
         Role::User,
-        MsgVariant::Text(TextMessage { text: "a".into() }),
+        MsgVariant::Text(TextMessage {
+            text: "a".into(),
+            reasoning_content: None,
+        }),
     );
     assert_ne!(msg1.id(), msg2.id());
 }
@@ -64,7 +74,10 @@ fn text_message_timestamp_is_recent() {
     let before = Utc::now();
     let msg = FuneraMessage::new(
         Role::User,
-        MsgVariant::Text(TextMessage { text: "x".into() }),
+        MsgVariant::Text(TextMessage {
+            text: "x".into(),
+            reasoning_content: None,
+        }),
     );
     let after = Utc::now();
     assert!(*msg.timestamp() >= before);
@@ -109,6 +122,7 @@ fn tool_response_message_impl_message() {
 fn text_message_impl_message() {
     let text = TextMessage {
         text: "test content".into(),
+        reasoning_content: None,
     };
     assert_eq!(text.to_prompt_content(), "test content");
 }
@@ -119,6 +133,7 @@ fn funera_message_serde_roundtrip() {
         Role::System,
         MsgVariant::Text(TextMessage {
             text: "sys msg".into(),
+            reasoning_content: None,
         }),
     );
     let json = serde_json::to_string(&msg).unwrap();
@@ -132,6 +147,7 @@ fn funera_message_serde_roundtrip() {
 fn msg_variant_debug_and_clone() {
     let variant = MsgVariant::Text(TextMessage {
         text: "debug".into(),
+        reasoning_content: None,
     });
     let cloned = variant.clone();
     assert_eq!(format!("{:?}", variant), format!("{:?}", cloned));
@@ -141,7 +157,10 @@ fn msg_variant_debug_and_clone() {
 fn timestamp_is_utc() {
     let msg = FuneraMessage::new(
         Role::User,
-        MsgVariant::Text(TextMessage { text: "t".into() }),
+        MsgVariant::Text(TextMessage {
+            text: "t".into(),
+            reasoning_content: None,
+        }),
     );
     let ts: &DateTime<Utc> = msg.timestamp();
     let _ = ts.format("%+");

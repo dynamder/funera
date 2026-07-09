@@ -21,9 +21,11 @@ futures = "0.3.32"
 tracing = "0.1"
 
 [features]
-default = []
+default = ["deepseek"]
 builtin-tools = ["dep:builtin_tools"]
 security = ["funera_core/security"]
+deepseek = ["funera_core/deepseek"]
+openai = ["funera_core/openai"]
 real-llm = []
 
 [dev-dependencies]

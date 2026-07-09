@@ -11,11 +11,11 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use funera_orchestrate::{Agent, AgentRuntime};
+//! use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let runtime = AgentRuntime::builder()
+//!     let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 //!         .api_key(std::env::var("OPENAI_API_KEY")?)
 //!         .model("gpt-4o")
 //!         .build()?;
@@ -52,9 +52,9 @@
 //! ### One-shot query with stream
 //!
 //! ```rust,no_run
-//! # use funera_orchestrate::{Agent, AgentEvent, AgentRuntime};
+//! # use funera_orchestrate::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let runtime = AgentRuntime::builder()
+//! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key(std::env::var("OPENAI_API_KEY")?)
 //!     .model("gpt-4o")
 //!     .build()?;
@@ -76,9 +76,9 @@
 //! ### Multi-turn conversation with callbacks
 //!
 //! ```rust,no_run
-//! # use funera_orchestrate::{Agent, AgentRuntime};
+//! # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut runtime = AgentRuntime::builder()
+//! let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key(std::env::var("OPENAI_API_KEY")?)
 //!     .model("gpt-4o")
 //!     .build()?;
@@ -98,12 +98,12 @@
 //! ### Switching runtimes
 //!
 //! ```rust,no_run
-//! # use funera_orchestrate::{Agent, AgentRuntime};
+//! # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut gpt = AgentRuntime::builder()
+//! let mut gpt = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key("sk-...").model("gpt-4o").build()?;
 //!
-//! let mut claude = AgentRuntime::builder()
+//! let mut claude = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key("sk-ant-...").model("claude-3-opus").build()?;
 //!
 //! let agent = Agent::builder().build();
@@ -135,5 +135,9 @@ pub use agent::{Agent, AgentBuilder};
 pub use dispatcher::CallbackRegistry;
 pub use error::OrchestrateError;
 pub use event::AgentEvent;
+#[cfg(feature = "deepseek")]
+pub use funera_core::provider::deepseek::DeepSeekProvider;
+#[cfg(feature = "openai")]
+pub use funera_core::provider::openai::OpenAIProvider;
 pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{AgentRuntime, AgentRuntimeBuilder};

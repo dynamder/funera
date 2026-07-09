@@ -131,7 +131,7 @@ impl CallbackDispatcher {
                         let args: serde_json::Value =
                             serde_json::from_str(&args_str).unwrap_or(serde_json::Value::Null);
                         let call_id = uuid::Uuid::parse_str(
-                            &call_id.unwrap_or_default(),
+                            &call_id,
                         )
                         .unwrap_or_default();
                         let event = AgentEvent::ToolCallStart {
@@ -143,6 +143,10 @@ impl CallbackDispatcher {
                         registry.dispatch(event.clone());
                         let _ = event_tx.send(event);
                     }
+                }
+                Ok(TokenEvent::Reasoning(_)) => {
+                    // Reasoning tokens are not dispatched as AgentEvent
+                    // (they are captured in session_msgs for history preservation)
                 }
                 Ok(TokenEvent::Finish(_)) => {
                     break;

@@ -47,6 +47,7 @@ pub struct FuneraMessage {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TextMessage {
     pub text: Arc<str>,
+    pub reasoning_content: Option<Arc<str>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -126,10 +127,16 @@ impl FuneraMessage {
     pub fn format_json(&self) -> JsonValue {
         match &self.msg_variant {
             MsgVariant::Text(text_msg) => {
-                json!({
+                let mut obj = json!({
                     "role": self.role.to_string(),
                     "content": text_msg.to_prompt_content(),
-                })
+                });
+                if let Some(ref rc) = text_msg.reasoning_content {
+                    obj.as_object_mut()
+                        .unwrap()
+                        .insert("reasoning_content".into(), json!(rc.as_ref()));
+                }
+                obj
             }
             MsgVariant::ToolRequest(tool_request_msg) => {
                 json!({

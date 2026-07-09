@@ -8,11 +8,11 @@
 //! `mpsc::Receiver<AgentEvent>` that yields tokens, tool calls, and turn
 //! boundary events in real time.
 
-use funera_orchestrate::{Agent, AgentEvent, AgentRuntime};
+use funera_orchestrate::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime = AgentRuntime::builder()
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()))

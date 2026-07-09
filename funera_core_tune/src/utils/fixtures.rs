@@ -8,7 +8,13 @@ use uuid::Uuid;
 use crate::utils::mock_tool::MockTool;
 
 pub fn text_message(role: Role, text: &str) -> FuneraMessage {
-    FuneraMessage::new(role, MsgVariant::Text(TextMessage { text: text.into() }))
+    FuneraMessage::new(
+        role,
+        MsgVariant::Text(TextMessage {
+            text: text.into(),
+            reasoning_content: None,
+        }),
+    )
 }
 
 pub fn tool_response_message(tool_call_id: Uuid, result: &str) -> FuneraMessage {

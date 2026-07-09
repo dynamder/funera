@@ -14,13 +14,13 @@
 //! Skills are markdown files with YAML frontmatter that provide
 //! reusable instructions, workflows, or constraints to the agent.
 
-use funera_orchestrate::{Agent, AgentRuntime};
+use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Runtime with skills ───────────────────────────────────────
 
-    let runtime = AgentRuntime::builder()
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()))

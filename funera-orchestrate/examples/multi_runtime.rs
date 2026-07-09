@@ -8,11 +8,11 @@
 //! `fire` or `send` messages through different runtimes with the same
 //! `Agent`, making it easy to switch LLM providers or tool sets.
 
-use funera_orchestrate::{Agent, AgentRuntime};
+use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 
 /// Convenience to create a runtime from env vars.
-fn make_runtime(model: &str) -> Result<AgentRuntime, Box<dyn std::error::Error>> {
-    Ok(AgentRuntime::builder()
+fn make_runtime(model: &str) -> Result<AgentRuntime<DeepSeekProvider>, Box<dyn std::error::Error>> {
+    Ok(AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(model)

@@ -3,6 +3,7 @@ use funera_core::chat::session::{FuneraSession, Idle};
 use funera_core::env::FuneraEnv;
 use funera_core::event_bus::env_state_bus::TurnHighWayHandle;
 use funera_core::event_bus::tool_bus::ToolBus;
+use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::re_act::tool::ToolRegistry;
 use funera_core::re_act::tool_executor::ToolExecutor;
 use funera_core::re_act::{ReActLoop, ReActLoopConfig};
@@ -62,14 +63,14 @@ async fn react_loop_new_and_sender() {
         let mut msgs = session_msgs.write();
         msgs.push(funera_core::chat::message::FuneraMessage::new(
             funera_core::chat::message::Role::User,
-            funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into() }),
+            funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into(), reasoning_content: None }),
         ));
         msgs.push(funera_core::chat::message::FuneraMessage::new(
             funera_core::chat::message::Role::Assistant,
-            funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hi".into() }),
+            funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hi".into(), reasoning_content: None }),
         ));
     }
-    let loop_instance = ReActLoop::new(10, 5, session_msgs, env_watcher, bus, tx, handle);
+    let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 5, session_msgs, env_watcher, bus, tx, handle);
     let sender = loop_instance.sender();
     let msg = text_message(Role::User, "test");
     sender.send(msg).await.ok();
@@ -98,9 +99,9 @@ async fn react_loop_run_handle() {
     let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
     session_msgs.write().push(funera_core::chat::message::FuneraMessage::new(
         funera_core::chat::message::Role::User,
-        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into() }),
+        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into(), reasoning_content: None }),
     ));
-    let loop_instance = ReActLoop::new(10, 2, session_msgs, env_watcher, bus, state_tx, handle);
+    let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 2, session_msgs, env_watcher, bus, state_tx, handle);
     let _handle = loop_instance.run();
 
     // _handle.cancel_token.cancel() is available
@@ -127,9 +128,9 @@ async fn react_loop_cancel() {
     let session_msgs: Arc<parking_lot::RwLock<Vec<funera_core::chat::message::FuneraMessage>>> = Default::default();
     session_msgs.write().push(funera_core::chat::message::FuneraMessage::new(
         funera_core::chat::message::Role::User,
-        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into() }),
+        funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into(), reasoning_content: None }),
     ));
-    let loop_instance = ReActLoop::new(10, 3, session_msgs, env_watcher, bus, state_tx, handle);
+    let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 3, session_msgs, env_watcher, bus, state_tx, handle);
     let handle = loop_instance.run();
 
     handle.cancel_token.cancel();
