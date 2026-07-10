@@ -21,34 +21,28 @@ fn make_runtime(model: &str) -> Result<AgentRuntime<DeepSeekProvider>, Box<dyn s
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Two runtimes, different models
-    let mut gpt4 = make_runtime("deepseek-v4-pro")?;
-    let mut gpt35 = make_runtime("deepseek-v4-flash")?;
-
     let agent = Agent::builder()
         .system_prompt("You are a helpful assistant.")
         .build();
 
+    // Two runtimes, different models
+    let gpt4 = make_runtime("deepseek-v4-pro")?;
+    let gpt35 = make_runtime("deepseek-v4-flash")?;
+
     // ── Talk to gpt-4o ──
-    agent
-        .send("I need a detailed explanation of monads.", &mut gpt4)
-        .await?;
-    agent
-        .send("Can you give me a code example?", &mut gpt4)
-        .await?;
+    let (gpt4, _) = agent.send("I need a detailed explanation of monads.", gpt4).await?.await?;
+    let (gpt4, _) = agent.send("Can you give me a code example?", gpt4).await?.await?;
     println!("(gpt-4o session has 2 messages)");
 
     // ── Talk to gpt-4o-mini on the side ──
-    // This is a completely independent conversation
-    agent.send("Write a haiku about Rust.", &mut gpt35).await?;
+    let (_gpt35, _) = agent.send("Write a haiku about Rust.", gpt35).await?.await?;
     println!("(gpt-4o-mini session has 1 message)");
 
     // ── Continue gpt-4o conversation ──
-    let resp = agent.send("Now explain functors too.", &mut gpt4).await?;
+    let (gpt4, resp) = agent.send("Now explain functors too.", gpt4).await?.await?;
     println!("\n=== gpt-4o response ===");
     println!("{}", resp.content);
 
-    // ── Each runtime's session is independent ──
     println!("\n(gpt-4o session has 3 messages, gpt-4o-mini has 1)");
     println!("Runtimes are fully isolated.");
 

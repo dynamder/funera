@@ -99,8 +99,10 @@
 //!     .on_turn_start(|| eprintln!("--- turn ---"))
 //!     .build();
 //!
-//! agent.send("Hi, I'm Alice.", &mut runtime).await?;
-//! agent.send("What's my name?", &mut runtime).await?;
+//! let handle = agent.send("Hi, I'm Alice.", runtime).await?;
+//! let (runtime, _resp) = handle.await?;
+//! let handle = agent.send("What's my name?", runtime).await?;
+//! let (_runtime, _resp) = handle.await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -110,17 +112,17 @@
 //! ```rust,no_run
 //! # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut gpt = AgentRuntime::<DeepSeekProvider>::builder()
+//! let gpt = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key("sk-...").model("gpt-4o").build()?;
 //!
-//! let mut claude = AgentRuntime::<DeepSeekProvider>::builder()
+//! let claude = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key("sk-ant-...").model("claude-3-opus").build()?;
 //!
 //! let agent = Agent::builder().build();
 //!
-//! agent.send("What is Rust?", &mut gpt).await?;     // session in gpt
-//! agent.fire("What is Python?", &claude).await?;     // session in claude
-//! agent.send("Tell me more", &mut gpt).await?;       // continues gpt session
+//! let (gpt, _) = agent.send("What is Rust?", gpt).await?.await?;     // session in gpt
+//! agent.fire("What is Python?", &claude).await?;     // temp session
+//! let (_gpt, _) = agent.send("Tell me more", gpt).await?.await?;       // continues gpt session
 //! # Ok(())
 //! # }
 //! ```
@@ -140,6 +142,7 @@ pub mod error;
 pub mod event;
 pub mod response;
 pub mod runtime;
+pub mod send_handle;
 
 #[cfg(feature = "middleware")]
 pub mod middleware_bundle;
@@ -153,7 +156,8 @@ pub use funera_core::provider::deepseek::DeepSeekProvider;
 #[cfg(feature = "openai")]
 pub use funera_core::provider::openai::OpenAIProvider;
 pub use response::{ChatResponse, ToolCallInfo};
-pub use runtime::{AgentRuntime, AgentRuntimeBuilder};
+pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
+pub use send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
 
 // Re-export core event types for direct access
 pub use funera_core::event_bus::env_state_bus::EnvStateEvent;

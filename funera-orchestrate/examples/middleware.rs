@@ -178,7 +178,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
     );
 
-    let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .with_middleware_bundle(bundle)
         .build()?;
@@ -188,11 +188,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     // 测试发送
-    let response = agent
+    let (_runtime, response) = agent
         .send(
             "Say hello! Also, my password is 'my_secret_123'.",
-            &mut runtime,
+            runtime,
         )
+        .await?
         .await?;
     println!("Response: {}", response.content);
 

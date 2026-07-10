@@ -323,7 +323,7 @@ impl AgentRuntimeBuilder {
 
         let session_tx = spawn_session_actor();
 
-        Ok(AgentRuntime {
+        Ok(AgentRuntime::<P> {
             env,
             env_watcher,
             tool_bus,
@@ -333,6 +333,7 @@ impl AgentRuntimeBuilder {
             env_state_tx,
             _executor_handle: handle,
             session_tx,
+            _state: PhantomData,
             _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain,
@@ -342,13 +343,17 @@ impl AgentRuntimeBuilder {
 
 /// A runtime context for executing agent interactions.
 ///
+pub struct Idle;
+pub struct Acquired;
+
 /// `AgentRuntime` owns the shared infrastructure (LLM client, tool registry,
 /// tool executor) and a persistent session (backed by a session actor).
 ///
-/// The session is always available — unlike `take_session()`/`store_session()`
-/// which temporarily surrendered ownership, the new actor model ensures you
-/// can query `session_context()` even when a ReAct loop is in progress.
-pub struct AgentRuntime<P: ChatProvider> {
+/// The generic parameter `S` is a type-state marker — [`Idle`] means
+/// no `send`/`send_stream` is in progress, [`Acquired``] means one is active.
+/// Send operations consume `AgentRuntime<P, Idle>` and return a handle that
+/// eventually yields back `AgentRuntime<P, Idle>`.
+pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     env: FuneraEnv,
     pub(crate) env_watcher: FuneraEnvWatcher,
     pub(crate) tool_bus: ToolBus,
@@ -358,12 +363,15 @@ pub struct AgentRuntime<P: ChatProvider> {
     env_state_tx: broadcast::Sender<EnvStateEvent>,
     _executor_handle: JoinHandle<()>,
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
-    _phantom: PhantomData<P>,
+    _state: PhantomData<S>,
+    _phantom: PhantomData<fn() -> P>,
     #[cfg(feature = "middleware")]
     middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
 }
 
-impl<P: ChatProvider> AgentRuntime<P> {
+// ── All state markers share these methods ─────────────────────
+
+impl<P: ChatProvider, S> AgentRuntime<P, S> {
     /// Create a new builder.
     pub fn builder() -> AgentRuntimeBuilder {
         AgentRuntimeBuilder::new()
@@ -426,6 +434,47 @@ impl<P: ChatProvider> AgentRuntime<P> {
     #[cfg(feature = "middleware")]
     pub fn middleware_chain(&self) -> Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>> {
         self.middleware_chain.clone()
+    }
+
+    /// Transform the runtime into `Acquired` state (internal use).
+    pub(crate) fn into_acquired(self) -> AgentRuntime<P, Acquired> {
+        AgentRuntime::<P, Acquired> {
+            env: self.env,
+            env_watcher: self.env_watcher,
+            tool_bus: self.tool_bus,
+            model: self.model,
+            max_iterations: self.max_iterations,
+            channel_buffer: self.channel_buffer,
+            env_state_tx: self.env_state_tx,
+            _executor_handle: self._executor_handle,
+            session_tx: self.session_tx,
+            _state: PhantomData,
+            _phantom: PhantomData,
+            #[cfg(feature = "middleware")]
+            middleware_chain: self.middleware_chain,
+        }
+    }
+}
+
+// ── Acquired → Idle ─────────────────────────────────────────
+
+impl<P: ChatProvider> AgentRuntime<P, Acquired> {
+    pub(crate) fn into_idle(self) -> AgentRuntime<P, Idle> {
+        AgentRuntime::<P, Idle> {
+            env: self.env,
+            env_watcher: self.env_watcher,
+            tool_bus: self.tool_bus,
+            model: self.model,
+            max_iterations: self.max_iterations,
+            channel_buffer: self.channel_buffer,
+            env_state_tx: self.env_state_tx,
+            _executor_handle: self._executor_handle,
+            session_tx: self.session_tx,
+            _state: PhantomData,
+            _phantom: PhantomData,
+            #[cfg(feature = "middleware")]
+            middleware_chain: self.middleware_chain,
+        }
     }
 }
 

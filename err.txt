@@ -1,0 +1,239 @@
+warning: unused import: `FinishReason`
+ --> funera_core\src\provider.rs:5:52
+  |
+5 |         chat::{CreateChatCompletionStreamResponse, FinishReason},
+  |                                                    ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ToolType`
+  --> funera_core\src\re_act.rs:21:42
+   |
+21 | use crate::re_act::tool::{ToolCallError, ToolType};
+   |                                          ^^^^^^^^
+
+warning: field `env_state_tx` is never read
+  --> funera_core\src\re_act.rs:63:5
+   |
+58 | pub struct ReActLoop<P: ChatProvider> {
+   |            --------- field in this struct
+...
+63 |     env_state_tx: broadcast::Sender<EnvStateEvent>,
+   |     ^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `funera_core` (lib) generated 3 warnings (run `cargo fix --lib -p funera_core` to apply 2 suggestions)
+    Checking funera-orchestrate v0.1.0 (D:\funera\funera-orchestrate)
+warning: unused import: `SessionCmd`
+ --> funera-orchestrate\src\agent.rs:6:49
+  |
+6 | use funera_core::chat::session::{FuneraSession, SessionCmd};
+  |                                                 ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `FuneraSession`
+ --> funera-orchestrate\src\runtime.rs:9:55
+  |
+9 | use funera_core::chat::session::{spawn_session_actor, FuneraSession, SessionCmd};
+  |                                                       ^^^^^^^^^^^^^
+
+error[E0392]: type parameter `P` is never used
+   --> funera-orchestrate\src\runtime.rs:355:25
+    |
+355 | pub struct AgentRuntime<P: ChatProvider, S = Idle> {
+    |                         ^ unused type parameter
+    |
+    = help: consider removing `P`, referring to it in a field, or using a marker such as `PhantomData`
+
+error[E0392]: type parameter `P` is never used
+  --> funera-orchestrate\src\send_handle.rs:41:23
+   |
+41 | pub struct SendHandle<P: ChatProvider> {
+   |                       ^ unused type parameter
+42 |     pub(crate) runtime: AgentRuntime<P, Acquired>,
+   |                                      - `P` is named here, but is likely unused in the containing type
+   |
+   = help: consider removing `P`, referring to it in a field, or using a marker such as `PhantomData`
+
+error[E0392]: type parameter `P` is never used
+  --> funera-orchestrate\src\send_handle.rs:90:29
+   |
+90 | pub struct SendStreamHandle<P: ChatProvider> {
+   |                             ^ unused type parameter
+91 |     pub(crate) runtime: AgentRuntime<P, Acquired>,
+   |                                      - `P` is named here, but is likely unused in the containing type
+   |
+   = help: consider removing `P`, referring to it in a field, or using a marker such as `PhantomData`
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\agent.rs:273:21
+    |
+273 |             runtime.channel_buffer(),
+    |                     ^^^^^^^^^^^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `AgentRuntime::<P, S>::channel_buffer`
+   --> funera-orchestrate\src\runtime.rs:372:9
+    |
+372 | impl<P: ChatProvider, S> AgentRuntime<P, S> {
+    |         ^^^^^^^^^^^^ required by this bound in `AgentRuntime::<P, S>::channel_buffer`
+...
+399 |     pub fn channel_buffer(&self) -> usize {
+    |            -------------- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\agent.rs:336:21
+    |
+336 |             runtime.channel_buffer(),
+    |                     ^^^^^^^^^^^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `AgentRuntime::<P, S>::channel_buffer`
+   --> funera-orchestrate\src\runtime.rs:372:9
+    |
+372 | impl<P: ChatProvider, S> AgentRuntime<P, S> {
+    |         ^^^^^^^^^^^^ required by this bound in `AgentRuntime::<P, S>::channel_buffer`
+...
+399 |     pub fn channel_buffer(&self) -> usize {
+    |            -------------- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\agent.rs:390:50
+    |
+390 |         let session = FuneraSession::new(runtime.session_tx());
+    |                                                  ^^^^^^^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `AgentRuntime::<P, S>::session_tx`
+   --> funera-orchestrate\src\runtime.rs:372:9
+    |
+372 | impl<P: ChatProvider, S> AgentRuntime<P, S> {
+    |         ^^^^^^^^^^^^ required by this bound in `AgentRuntime::<P, S>::session_tx`
+...
+384 |     pub fn session_tx(&self) -> mpsc::UnboundedSender<SessionCmd> {
+    |            ---------- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\agent.rs:460:50
+    |
+460 |         let session = FuneraSession::new(runtime.session_tx());
+    |                                                  ^^^^^^^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `AgentRuntime::<P, S>::session_tx`
+   --> funera-orchestrate\src\runtime.rs:372:9
+    |
+372 | impl<P: ChatProvider, S> AgentRuntime<P, S> {
+    |         ^^^^^^^^^^^^ required by this bound in `AgentRuntime::<P, S>::session_tx`
+...
+384 |     pub fn session_tx(&self) -> mpsc::UnboundedSender<SessionCmd> {
+    |            ---------- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\send_handle.rs:70:26
+    |
+ 70 |         Ok((self.runtime.into_idle(), resp))
+    |                          ^^^^^^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `AgentRuntime::<P, Acquired>::into_idle`
+   --> funera-orchestrate\src\runtime.rs:458:9
+    |
+458 | impl<P: ChatProvider> AgentRuntime<P, Acquired> {
+    |         ^^^^^^^^^^^^ required by this bound in `AgentRuntime::<P, Acquired>::into_idle`
+459 |     pub(crate) fn into_idle(self) -> AgentRuntime<P, Idle> {
+    |                   --------- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\send_handle.rs:120:26
+    |
+120 |         Ok((self.runtime.into_idle(), resp))
+    |                          ^^^^^^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `AgentRuntime::<P, Acquired>::into_idle`
+   --> funera-orchestrate\src\runtime.rs:458:9
+    |
+458 | impl<P: ChatProvider> AgentRuntime<P, Acquired> {
+    |         ^^^^^^^^^^^^ required by this bound in `AgentRuntime::<P, Acquired>::into_idle`
+459 |     pub(crate) fn into_idle(self) -> AgentRuntime<P, Idle> {
+    |                   --------- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+  --> funera-orchestrate\src\send_handle.rs:79:36
+   |
+79 |         Box::pin(async move { self.wait().await })
+   |                                    ^^^^ cannot infer type for type parameter `P`
+   |
+   = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+  --> funera_core\src\provider\deepseek.rs:95:1
+   |
+95 | impl ChatProvider for DeepSeekProvider {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `SendHandle::<P>::wait`
+  --> funera-orchestrate\src\send_handle.rs:48:9
+   |
+48 | impl<P: ChatProvider> SendHandle<P> {
+   |         ^^^^^^^^^^^^ required by this bound in `SendHandle::<P>::wait`
+...
+59 |     async fn wait(self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
+   |              ---- required by a bound in this associated function
+
+error[E0283]: type annotations needed
+   --> funera-orchestrate\src\send_handle.rs:129:36
+    |
+129 |         Box::pin(async move { self.wait().await })
+    |                                    ^^^^ cannot infer type for type parameter `P`
+    |
+    = note: cannot satisfy `_: ChatProvider`
+help: the trait `ChatProvider` is implemented for `DeepSeekProvider`
+   --> funera_core\src\provider\deepseek.rs:95:1
+    |
+ 95 | impl ChatProvider for DeepSeekProvider {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `SendStreamHandle::<P>::wait`
+   --> funera-orchestrate\src\send_handle.rs:98:9
+    |
+ 98 | impl<P: ChatProvider> SendStreamHandle<P> {
+    |         ^^^^^^^^^^^^ required by this bound in `SendStreamHandle::<P>::wait`
+...
+114 |     async fn wait(self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
+    |              ---- required by a bound in this associated function
+
+Some errors have detailed explanations: E0283, E0392.
+For more information about an error, try `rustc --explain E0283`.
+warning: `funera-orchestrate` (lib) generated 2 warnings
+error: could not compile `funera-orchestrate` (lib) due to 11 previous errors; 2 warnings emitted

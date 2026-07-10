@@ -60,7 +60,7 @@ impl Tool for WeatherTool {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()))
@@ -78,8 +78,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .build();
 
-    let resp = agent
-        .send("What's the weather in Tokyo?", &mut runtime)
+    let (runtime, resp) = agent
+        .send("What's the weather in Tokyo?", runtime)
+        .await?
         .await?;
     println!("\n{}", resp.content);
 

@@ -11,7 +11,7 @@ use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()))
@@ -22,8 +22,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     // Phase 1: chat about cats
-    agent.send("I love cats!", &mut runtime).await?;
-    agent.send("What's a good cat name?", &mut runtime).await?;
+    let (runtime, _resp) = agent.send("I love cats!", runtime).await?.await?;
+    let (runtime, _resp) = agent.send("What's a good cat name?", runtime).await?.await?;
     println!("(session has 2 messages — agent remembers cats)");
 
     // Reset — the runtime now behaves as if brand-new
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("(session reset)");
 
     // Phase 2: chat about something else
-    let resp = agent.send("What's the capital of France?", &mut runtime).await?;
+    let (_runtime, resp) = agent.send("What's the capital of France?", runtime).await?.await?;
     // The agent does NOT remember cats — session was empty
     println!("Agent >> {}", resp.content);
 

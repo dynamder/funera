@@ -15,7 +15,8 @@ use crate::dispatcher::{CallbackDispatcher, CallbackRegistry};
 use crate::error::OrchestrateError;
 use crate::event::{AgentEvent, RawAgentEvent};
 use crate::response::{ChatResponse, ToolCallInfo};
-use crate::runtime::AgentRuntime;
+use crate::runtime::{AgentRuntime, Idle};
+use crate::send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
 
 // ---------------------------------------------------------------------------
 // AgentBuilder
@@ -182,15 +183,15 @@ impl AgentBuilder {
 /// ```rust,no_run
 /// # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
+/// let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 ///     .api_key(std::env::var("OPENAI_API_KEY")?)
 ///     .build()?;
 ///
 /// let agent = Agent::builder().build();
 ///
-/// // send uses the runtime's session — runtime needs &
-/// agent.send("My name is Alice.", &runtime).await?;
-/// agent.send("What is my name?", &runtime).await?;
+/// // send consumes runtime, must unwrap via IntoFuture
+/// let (runtime, _) = agent.send("My name is Alice.", runtime).await?.await?;
+/// let (_runtime, _) = agent.send("What is my name?", runtime).await?.await?;
 /// // → "Alice"
 /// # Ok(())
 /// # }
@@ -235,10 +236,10 @@ impl Agent {
 
     /// One-shot query. Creates a temporary session, runs a single ReAct loop,
     /// and discards the session.
-    pub async fn fire<P: ChatProvider>(
+    pub async fn fire<P: ChatProvider, S>(
         &self,
         msg: impl Into<String>,
-        runtime: &AgentRuntime<P>,
+        runtime: &AgentRuntime<P, S>,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
         let mut event_rx = self.subscribe_events();
@@ -295,36 +296,20 @@ impl Agent {
 
     /// Streaming variant of [`fire`](Self::fire).
     ///
-    /// Returns a channel receiver that yields [`AgentEvent`] items as they
-    /// happen (tokens, tool calls, turn boundaries), ending with `Done`.
-    pub async fn fire_stream<P: ChatProvider>(
+    /// Returns a [`FireStreamHandle`] that provides `recv()` for per-event
+    /// streaming and `IntoFuture` / `wait()` for the final [`ChatResponse`].
+    pub async fn fire_stream<P: ChatProvider, S>(
         &self,
         msg: impl Into<String>,
-        runtime: &AgentRuntime<P>,
-    ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
-        let (relay_tx, rx) = mpsc::channel(256);
+        runtime: &AgentRuntime<P, S>,
+    ) -> Result<FireStreamHandle, OrchestrateError> {
+        let text = msg.into();
         let event_rx = self.subscribe_events();
 
-        tokio::spawn(async move {
-            relay_stream(event_rx, relay_tx).await;
-        });
-
-        let _ = self.fire::<P>(msg, runtime).await?;
-        Ok(rx)
-    }
-
-    // ── send (multi-turn, persistent session) ──────────────────────
-
-    /// Multi-turn message. Uses the runtime's persistent session (via channel).
-    ///
-    /// The runtime requires only `&` — session state never leaves the actor.
-    pub async fn send<P: ChatProvider>(
-        &self,
-        msg: impl Into<String>,
-        runtime: &AgentRuntime<P>,
-    ) -> Result<ChatResponse, OrchestrateError> {
-        let text = msg.into();
-        let mut event_rx = self.subscribe_events();
+        // Spawn relay: broadcast → mpsc
+        let (relay_tx, stream_rx) = mpsc::channel(256);
+        let relay_event_rx = self.subscribe_events();
+        tokio::spawn(async move { relay_broadcast_to_mpsc(relay_event_rx, relay_tx).await; });
 
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
@@ -333,7 +318,74 @@ impl Agent {
 
         let _dispatcher =
             CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
+        let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
+        let session_tx = funera_core::chat::session::spawn_session_actor();
+        let session = FuneraSession::new(session_tx);
+        if let Some(ref sys) = self.system_prompt {
+            session.push_message(FuneraMessage::new(
+                Role::System,
+                MsgVariant::Text(TextMessage { text: sys.clone().into(), reasoning_content: None }),
+            ));
+        }
+        let init_msg = FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+        );
+        let config = ReActLoopConfig::new(
+            runtime.channel_buffer(),
+            runtime.max_iterations(),
+            runtime.env_watcher(),
+            runtime.tool_bus.clone(),
+            env_state_tx.clone(),
+            turn_highway_handle,
+        );
+        let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
+
+        // Spawn react_loop as background task
+        let mw = middleware_opt(runtime);
+        let env_tx = env_state_tx.clone();
+        let handle = tokio::spawn(async move {
+            session
+                .react_loop::<P, AgentEvent>(
+                    init_msg,
+                    config,
+                    env_tx,
+                    mw,
+                    Some(event_sender),
+                )
+                .await
+        });
+
+        Ok(FireStreamHandle {
+            handle,
+            event_rx,
+            stream_rx,
+            env_state_tx,
+        })
+    }
+
+    // ── send (multi-turn, persistent session) ──────────────────────
+
+    /// Multi-turn message. Consumes `AgentRuntime<P, Idle>` and returns a
+    /// [`SendHandle`] that yields `(AgentRuntime<P, Idle>, ChatResponse)` on
+    /// completion. The react_loop runs in a background task — you can query
+    /// session context via the handle while it is in progress.
+    pub async fn send<P: ChatProvider>(
+        &self,
+        msg: impl Into<String>,
+        runtime: AgentRuntime<P, Idle>,
+    ) -> Result<SendHandle<P>, OrchestrateError> {
+        let text = msg.into();
+        let event_rx = self.subscribe_events();
+
+        let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
+        let env_state_tx = env_state_bus.env_state_tx.clone();
+        let env_state_rx = env_state_bus.subscribe();
+        env_state_bus.start_turn_highway();
+
+        let _dispatcher =
+            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
         let session = FuneraSession::new(runtime.session_tx());
@@ -349,12 +401,10 @@ impl Agent {
                 ));
             }
         }
-
         let init_msg = FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
         );
-
         let config = ReActLoopConfig::new(
             runtime.channel_buffer(),
             runtime.max_iterations(),
@@ -363,38 +413,101 @@ impl Agent {
             env_state_tx.clone(),
             turn_highway_handle,
         );
-
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
-        let result = session
-            .react_loop::<P, AgentEvent>(
-                init_msg,
-                config,
-                env_state_tx.clone(),
-                middleware_opt(runtime),
-                Some(event_sender),
-            )
-            .await;
+        let env_tx = env_state_tx.clone();
+        let mw = middleware_opt(&runtime);
+        let handle = tokio::spawn(async move {
+            session
+                .react_loop::<P, AgentEvent>(
+                    init_msg,
+                    config,
+                    env_tx,
+                    mw,
+                    Some(event_sender),
+                )
+                .await
+        });
 
-        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
-        aggregate_response(&mut event_rx, result).await
+        Ok(SendHandle {
+            runtime: runtime.into_acquired(),
+            handle,
+            event_rx,
+            env_state_tx,
+        })
     }
 
     /// Streaming variant of [`send`](Self::send).
     pub async fn send_stream<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &AgentRuntime<P>,
-    ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
-        let (relay_tx, rx) = mpsc::channel(256);
+        runtime: AgentRuntime<P, Idle>,
+    ) -> Result<SendStreamHandle<P>, OrchestrateError> {
+        let text = msg.into();
         let event_rx = self.subscribe_events();
 
-        tokio::spawn(async move {
-            relay_stream(event_rx, relay_tx).await;
+        // Spawn relay: broadcast → mpsc
+        let (relay_tx, stream_rx) = mpsc::channel(256);
+        let relay_event_rx = self.subscribe_events();
+        tokio::spawn(async move { relay_broadcast_to_mpsc(relay_event_rx, relay_tx).await; });
+
+        let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
+        let env_state_tx = env_state_bus.env_state_tx.clone();
+        let env_state_rx = env_state_bus.subscribe();
+        env_state_bus.start_turn_highway();
+
+        let _dispatcher =
+            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
+        let _ = env_state_tx.send(EnvStateEvent::SessionStart);
+
+        let session = FuneraSession::new(runtime.session_tx());
+        if let Some(ref sys) = self.system_prompt {
+            let msgs = session.session_context().await;
+            if msgs.is_empty() {
+                session.push_message(FuneraMessage::new(
+                    Role::System,
+                    MsgVariant::Text(TextMessage {
+                        text: sys.clone().into(),
+                        reasoning_content: None,
+                    }),
+                ));
+            }
+        }
+        let init_msg = FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+        );
+        let config = ReActLoopConfig::new(
+            runtime.channel_buffer(),
+            runtime.max_iterations(),
+            runtime.env_watcher(),
+            runtime.tool_bus.clone(),
+            env_state_tx.clone(),
+            turn_highway_handle,
+        );
+        let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
+
+        let env_tx = env_state_tx.clone();
+        let mw = middleware_opt(&runtime);
+        let handle = tokio::spawn(async move {
+            session
+                .react_loop::<P, AgentEvent>(
+                    init_msg,
+                    config,
+                    env_tx,
+                    mw,
+                    Some(event_sender),
+                )
+                .await
         });
 
-        let _ = self.send::<P>(msg, runtime).await?;
-        Ok(rx)
+        Ok(SendStreamHandle {
+            runtime: runtime.into_acquired(),
+            handle,
+            event_rx,
+            stream_rx,
+            env_state_tx,
+        })
     }
 }
 
@@ -415,15 +528,15 @@ fn build_event_sender(
 
 /// Return the middleware chain from runtime, or None.
 #[cfg(feature = "middleware")]
-fn middleware_opt<P: ChatProvider>(
-    runtime: &AgentRuntime<P>,
+fn middleware_opt<P: ChatProvider, S>(
+    runtime: &AgentRuntime<P, S>,
 ) -> Option<Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>> {
     Some(runtime.middleware_chain())
 }
 
 #[cfg(not(feature = "middleware"))]
-fn middleware_opt<P: ChatProvider>(
-    _runtime: &AgentRuntime<P>,
+fn middleware_opt<P: ChatProvider, S>(
+    _runtime: &AgentRuntime<P, S>,
 ) -> Option<
     Arc<
         funera_core::middleware::MiddlewareChain<
@@ -436,7 +549,7 @@ fn middleware_opt<P: ChatProvider>(
 }
 
 /// Relay events from a broadcast receiver to an mpsc sender.
-async fn relay_stream(
+async fn relay_broadcast_to_mpsc(
     mut event_rx: broadcast::Receiver<AgentEvent>,
     relay_tx: mpsc::Sender<AgentEvent>,
 ) {
