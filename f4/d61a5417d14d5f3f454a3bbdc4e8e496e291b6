@@ -1,0 +1,57 @@
+funera-orchestrate/src/runtime.rs
+  s_609ef491cfc030::t_25b7eb7bf667d3 13
+  s_609ef491cfc030::t_a620cc9525faff 6
+  s_609ef491cfc030::t_e305df5f9aea7e 662,669-677
+  s_609ef491cfc030::t_9bfedc56cac0dd 318
+  s_609ef491cfc030::t_1b8d97304bfa9a 660-661,663-668,678
+  s_609ef491cfc030::t_e01f1ca4c9ffb2 263,271
+  s_609ef491cfc030::t_2764cb49c2fea4 258-261,264-269,272-276,290
+  s_609ef491cfc030::t_07cce10c032eff 262,270
+  s_609ef491cfc030::t_69e4c05b29e417 374-386
+funera-orchestrate/src/lib.rs
+  s_609ef491cfc030::t_24ff22a1c2158c 137,144-148
+funera-orchestrate/src/event.rs
+  s_609ef491cfc030::t_b74d71b5aa589e 94-132
+  s_609ef491cfc030::t_a885c088307ad8 5-8
+  s_609ef491cfc030::t_f6df81e96643af 30-43
+funera-orchestrate/src/dispatcher.rs
+  s_609ef491cfc030::t_ff67bfd4579f37 248-250
+  s_609ef491cfc030::t_70d2cdf5a598fa 9
+  s_609ef491cfc030::t_34baaa8937494c 410,414,421-424
+  s_609ef491cfc030::t_75d8393d636f23 59,65,67
+  s_609ef491cfc030::t_b409151f53bcb7 160,163
+  s_609ef491cfc030::t_0ef6703c6e8067 352,356
+  s_609ef491cfc030::t_1aa72726b12cc4 146,161-162,165,167-169,171-172
+  s_609ef491cfc030::t_6bba70eb048cec 166,170
+  s_609ef491cfc030::t_409fba61911e30 184,192,198,204-205,209-210,213,227-232
+  s_609ef491cfc030::t_ab1c6e7ea0c86d 431,435
+  s_609ef491cfc030::t_2595816a05b7c4 105,107
+  s_609ef491cfc030::t_5b9779ae54cc53 135,462-469,471-494,496-516
+  s_609ef491cfc030::t_b629b9743ef729 379,383
+  s_609ef491cfc030::t_e70e8e7ea18f2d 81,97,99,104,108,110-118,121,131-134
+  s_609ef491cfc030::t_16e08652a99fa8 470,495
+funera-orchestrate/src/agent.rs
+  s_609ef491cfc030::t_943cf525a4e474 13
+  s_609ef491cfc030::t_eb76c912bdc715 199
+  s_609ef491cfc030::t_a9ce3c18762eae 138,143
+  s_609ef491cfc030::t_0f11e82df1b5e3 216-230
+  s_609ef491cfc030::t_f93b45342372da 253
+  s_609ef491cfc030::t_a556c4a82767b7 355
+  s_609ef491cfc030::t_7eebab99b5c096 633-648
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f4d61a5417d14d5f3f454a3bbdc4e8e496e291b6",
+  "prompts": {},
+  "sessions": {
+    "s_609ef491cfc030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b57e978cffeOFF50GW5Gkn1pk",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
