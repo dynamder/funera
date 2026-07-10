@@ -1,0 +1,31 @@
+funera-orchestrate/src/agent.rs
+  s_3aa55bc69c56ff::t_f9344db531869b 8-10
+funera-orchestrate/src/lib.rs
+  s_3aa55bc69c56ff::t_b67797a0226ee3 9-18
+funera_core/src/middleware.rs
+  s_3aa55bc69c56ff::t_88cfef224afe90 3-6,13-32,35-52,54-55,57,64
+  s_3aa55bc69c56ff::t_29160c5a3dfa50 694
+  s_3aa55bc69c56ff::t_9458996971d406 63
+funera_core/src/re_act.rs
+  s_3aa55bc69c56ff::t_947a3d62bb3723 606
+funera-orchestrate/examples/middleware.rs
+  s_3aa55bc69c56ff::t_3cd709e0f83f27 118
+.gitignore
+  s_3aa55bc69c56ff::t_9ba252a0f4da53 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "022b1a3c3099dc8559234a89e98fd365f46b6653",
+  "prompts": {},
+  "sessions": {
+    "s_3aa55bc69c56ff": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b52f9e1fffe2p1PfXILOV64gD",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
