@@ -1,0 +1,60 @@
+funera_core_tune/tests/env.rs
+  s_973ac375e72916::t_20fd806e3f0ce5 108-131,133-135,137-158,160-162,165
+  s_973ac375e72916::t_808aaa775caf01 132,136
+  s_973ac375e72916::t_9ba3125db8f3dd 60,63
+  s_973ac375e72916::t_255697204ffd27 159
+  s_973ac375e72916::t_58af5f6a1e58bb 163-164
+funera_core_tune/tests/session.rs
+  s_973ac375e72916::t_730945186f7135 3-11,43,55-120
+  s_973ac375e72916::t_3b9183a6b0ba6d 41,44
+builtin_tools/src/edit.rs
+  s_973ac375e72916::t_6e3b85db7b879b 651,653,656-657
+  s_973ac375e72916::t_a28283eb249772 652,654-655
+funera-orchestrate/tests/integration.rs
+  s_973ac375e72916::t_47ec4efebe6523 172-183
+funera_core_tune/tests/real_llm.rs
+  s_973ac375e72916::t_9557f3ee27351f 131-132
+funera_core_tune/tests/react_loop_mock.rs
+  s_973ac375e72916::t_3b08fbdb8bedda 105,107-112
+  s_973ac375e72916::t_3ddd01d4f86ee4 139,141
+funera_core_tune/src/utils/fixtures.rs
+  s_973ac375e72916::t_7495292b44de09 59-62
+builtin_tools/src/shell.rs
+  s_973ac375e72916::t_a8bbb0169a336a 165-172
+  s_973ac375e72916::t_d4b81e9fc51ba2 164
+funera_core/src/lib.rs
+  s_973ac375e72916::t_d9070eba07e4bc 8
+funera_core/Cargo.toml
+  s_973ac375e72916::t_d03d9af910aae3 30
+funera_core/src/re_act/skills.rs
+  s_973ac375e72916::t_100ccb09cf0788 395-456
+builtin_tools/src/hashline.rs
+  s_973ac375e72916::t_5e82ad06b6c047 117-131
+funera_core/src/re_act.rs
+  s_973ac375e72916::t_949a0874626f86 823,832-833
+  s_973ac375e72916::t_9f6d3939ff1e10 786-821,841,844-870
+  s_973ac375e72916::t_1d636f1d096201 410
+  s_973ac375e72916::t_fcf8bc21a35218 822,824-831,834-840,842-843
+funera_core/src/event_bus/token_bus.rs
+  s_973ac375e72916::t_ac228126ebdf21 70,72,75-77,80,84-86,90,95-97,100-101,107,116
+  s_973ac375e72916::t_58f6b3d2d21ae9 117-124
+  s_973ac375e72916::t_868965c04a65db 64-69,71,73-74,78-79,81-83,87-89,91-94,98-99,102-106,108-115,125-126
+funera_core/src/security/path_guard.rs
+  s_973ac375e72916::t_1e157f85d90dcf 114-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ebdf4c285e25090b3b4d5936f4329d12b0804322",
+  "prompts": {},
+  "sessions": {
+    "s_973ac375e72916": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b5d33916ffe6s4o0kTeG5EMac",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
