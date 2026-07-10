@@ -1,35 +1,64 @@
 //! # Middleware — agent 事件拦截与处理管道
 //!
-//! 提供对事件管道的可插拔拦截机制，分为两类：
+//! 提供对 ReAct 循环**内部**的可插拔拦截机制，作用于 `process_token_stream` 和
+//! `handle_turn_finish` 之后、数据写入 session 历史之前。
+//!
+//! 分为两类：
 //!
 //! | 类型 | 特征 | 执行方式 | 影响事件流 |
 //! |------|------|----------|------------|
 //! | [`InspectorMiddleware`] | 只读观察 | `tokio::spawn` 后台并行 | ❌ 不等待，不阻塞 |
 //! | [`MutatorMiddleware`] | 可变处理 | 同步顺序执行 | ✅ 可 Pass/Modify/Block |
 //!
-//! ## 快速使用
+//! ## 架构位置
+//!
+//! ```text
+//! LLM Stream → process_token_stream → 聚合结果
+//!                                         │
+//!                          create E events │
+//!                                         ▼
+//!                              [middleware chain]
+//!                           Pass / Modify / Block
+//!                                  │
+//!                         ┌────────┴────────┐
+//!                         ▼                 ▼
+//!                    session 历史         event_tx (通知/callback)
+//!                    (下一轮用)           (聚合生成 ChatResponse)
+//! ```
+//!
+//! Middleware 直接操作 session 写入前的数据，因此修改会**持久化**到下一轮
+//! ReAct 循环的历史上下文中。
+//!
+//! ## 快速使用 (在 `funera-orchestrate` 层)
 //!
 //! ```rust,no_run
-//! # use funera_core::middleware::{MiddlewareChain, InspectorMiddleware, MutatorMiddleware,
-//! #     MutatorAction, InspectorError, MiddlewareBlocked};
-//! # struct Logger;
-//! # impl InspectorMiddleware<String> for Logger {
-//! #     fn name(&self) -> &str { "logger" }
-//! #     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
-//! # }
-//! # struct Censor;
-//! # impl MutatorMiddleware<String> for Censor {
-//! #     fn name(&self) -> &str { "censor" }
-//! #     fn process(&self, s: String) -> MutatorAction<String> { MutatorAction::Pass }
-//! # }
-//! // 构建链
-//! let chain = MiddlewareChain::<String>::new()
-//!     .with_inspectors((Logger,))    // Inspector 层（并行）
-//!     .with_mutator(Censor);          // Mutator 层（顺序）
+//! # use funera_core::middleware::{MiddlewareChain, MiddlewareEvent, InspectorError, MutatorAction,
+//! #     ErrorsDisabled};
+//! # use funera_core::middleware as mw;
+//! // 1. 定义 Inspector
+//! struct Logger;
+//! impl InspectorMiddleware<String> for Logger {
+//!     fn name(&self) -> &str { "log" }
+//!     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
+//! }
 //!
-//! // 执行
+//! // 2. 定义 Mutator
+//! struct Censor;
+//! impl MutatorMiddleware<String> for Censor {
+//!     fn name(&self) -> &str { "censor" }
+//!     fn process(&self, s: String) -> MutatorAction<String> { MutatorAction::Pass }
+//! }
+//!
+//! // 3. 构建链
+//! let chain = MiddlewareChain::<String>::new()
+//!     .with_inspectors((Logger,))
+//!     .with_mutator(Censor);
+//!
+//! // 4. 执行（由 react_loop 内部调用）
 //! let result = chain.process("hello".into());
 //! ```
+//!
+//! ## Typestate 错误通道
 //!
 //! ## Typestate 错误通道
 //!
@@ -662,7 +691,7 @@ mod tests {
         fn name(&self) -> &str {
             "pass"
         }
-        fn process(&self, event: String) -> MutatorAction<String> {
+        fn process(&self, _event: String) -> MutatorAction<String> {
             MutatorAction::Pass
         }
     }

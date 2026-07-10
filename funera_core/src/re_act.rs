@@ -603,7 +603,7 @@ mod tests {
     async fn handle_finish_stop_with_content() {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = ToolBus::new();
-        let session_msgs = empty_session_msgs();
+        let _session_msgs = empty_session_msgs();
 
         let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::Stop),

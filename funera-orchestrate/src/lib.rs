@@ -6,6 +6,16 @@
 //! (`AgentRuntime`) that together let you integrate funera's LLM agent runtime
 //! into your own projects with minimal boilerplate.
 //!
+//! ## Features
+//!
+//! | Feature | Default | Description |
+//! |---------|---------|-------------|
+//! | `deepseek` | ✅ | DeepSeek provider |
+//! | `openai` | ❌ | OpenAI provider |
+//! | `builtin-tools` | ✅ | Built-in tools (Read, Write, Edit, Shell) |
+//! | `security` | ✅ | Tool policy enforcement |
+//! | `middleware` | ❌ | Event interception pipeline (Inspector + Mutator) |
+//!
 //! ---
 //!
 //! ## Quick Start

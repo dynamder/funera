@@ -5,7 +5,9 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::{FuneraSession, Idle};
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
-use funera_core::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain};
+#[cfg(feature = "middleware")]
+use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
+use funera_core::middleware::EventSenderFn;
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 

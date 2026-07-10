@@ -115,7 +115,7 @@ impl MutatorMiddleware<AgentEvent> for Censor {
                     MutatorAction::Pass
                 }
             }
-            e => MutatorAction::Pass,
+            _e => MutatorAction::Pass,
         }
     }
 }
