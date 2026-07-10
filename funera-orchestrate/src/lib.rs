@@ -65,7 +65,7 @@
 //!
 //! let mut rx = agent.fire_stream("Explain Rust's ownership model", &runtime).await?;
 //! while let Some(event) = rx.recv().await {
-//!     if let AgentEvent::Token(t) = event {
+//!     if let AgentEvent::Text(t) = event {
 //!         print!("{t}");
 //!     }
 //! }

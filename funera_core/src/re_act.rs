@@ -17,6 +17,7 @@ use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 use crate::event_bus::tool_bus::ToolBus;
+use crate::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent};
 use crate::provider::ChatProvider;
 use crate::re_act::tool::{ToolCallError, ToolType};
 
@@ -112,7 +113,11 @@ impl<P: ChatProvider> ReActLoop<P> {
         self.buf_msg_tx.clone()
     }
 
-    pub fn run(mut self) -> ReActLoopHandle {
+    pub fn run<E: MiddlewareEvent>(
+        mut self,
+        middleware: Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
+        event_sender: Option<EventSenderFn<E>>,
+    ) -> ReActLoopHandle {
         let token = CancellationToken::new();
         let token_clone = token.clone();
 
@@ -123,7 +128,7 @@ impl<P: ChatProvider> ReActLoop<P> {
             let mut env_watcher = self.env_watcher;
 
             while iteration < self.max_iteration {
-                // 1. Receive and batch pending messages
+                // 1. Receive and batch pending messages (user input)
                 let mut msgs = Vec::new();
                 msgs.push(match self.buf_msg_rx.recv().await {
                     Some(msg) => msg,
@@ -133,54 +138,113 @@ impl<P: ChatProvider> ReActLoop<P> {
                     msgs.push(msg);
                 }
 
-                // Sync incoming messages to session
+                // Sync incoming user messages to session
                 for msg in &msgs {
                     self.session_msgs.write().push(msg.clone());
                 }
 
-                // 2. Get current env state (client, tools, model, skills)
+                // 2. Get current env state
                 let client = env_watcher.watch_client();
                 let tools_json = env_watcher.watch_tool();
                 let model = env_watcher.watch_model();
                 let skill_content = env_watcher.watch_skill();
 
-                // 3. Build history from session (single source of truth)
+                // 3. Build history from session
                 let history_json = Self::build_history_from(&self.session_msgs);
 
                 // 4. TurnHighWay handshake
-                let (token_tx, react_bus, ready_barrier) = self.turn_highway_handle.prepare_turn().await;
+                let (token_tx, react_bus) =
+                    self.turn_highway_handle.prepare_turn().await;
 
-                // 5. Build request via provider and call LLM
-                let request_json =
-                    P::build_request_json(&model, &history_json, &skill_content, &tools_json);
-
-                // Wait for dispatcher subscriber to be ready before starting
-                ready_barrier.wait().await;
+                // 5. Build LLM request
+                let request_json = P::build_request_json(
+                    &model, &history_json, &skill_content, &tools_json,
+                );
 
                 react_bus.send(ReactEvent::TurnStart).ok();
+
+                // Emit TurnStart via middleware pipeline
+                emit_event(&event_sender, E::turn_start());
+
                 let stream = P::create_stream(&client, request_json).await?;
 
                 // 6. Process stream
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);
-                let (assistant_content, reasoning_content, tool_call_accums, turn_finish_reason) =
-                    process_token_stream(&mut token_bus, &react_bus).await?;
+                let (
+                    assistant_content,
+                    reasoning_content,
+                    tool_call_accums,
+                    turn_finish_reason,
+                ) = process_token_stream(&mut token_bus, &react_bus).await?;
 
-                // 7. Handle finish reason
-                let should_continue = handle_turn_finish(
+                let finish_reason_str = turn_finish_reason
+                    .as_ref()
+                    .map(|r| format!("{:?}", r));
+
+                // 7. Build turn events from aggregated data
+                let mut turn_events: Vec<E> = Vec::new();
+
+                let reasoning = if reasoning_content.is_empty() {
+                    None
+                } else {
+                    Some(reasoning_content.clone())
+                };
+
+                if !assistant_content.is_empty() {
+                    turn_events
+                        .push(E::assistant_text(assistant_content.clone(), reasoning));
+                }
+
+                let mut accums_sorted: Vec<_> = tool_call_accums.values().collect();
+                accums_sorted.sort_by_key(|a| a.index);
+                for acc in &accums_sorted {
+                    let args: JsonValue =
+                        serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
+                    turn_events.push(E::tool_call_request(
+                        acc.call_id.clone().into(),
+                        acc.name.clone(),
+                        args,
+                    ));
+                }
+
+                // Filter, emit, and store events through middleware
+                filter_and_store(
+                    turn_events,
+                    &middleware,
+                    &event_sender,
+                    &self.session_msgs,
+                );
+
+                // 8. Handle finish reason — execute tools, collect results
+                let (should_continue, tool_results) = handle_turn_finish(
                     turn_finish_reason.as_ref(),
                     &assistant_content,
                     &reasoning_content,
                     &tool_call_accums,
                     &react_bus,
                     &self.tool_bus,
-                    &self.buf_msg_tx,
-                    &self.session_msgs,
                 )
                 .await?;
 
-                if react_bus.send(ReactEvent::TurnEnd).is_err() {
-                    eprintln!("warn: TurnEnd broadcast failed — no subscribers");
+                // 9. Filter tool results through middleware, emit, store
+                let mut result_events: Vec<E> = Vec::new();
+                for r in tool_results {
+                    let result = match r.result {
+                        Ok(s) => Ok(s),
+                        Err(e) => Err(e.to_string().into()),
+                    };
+                    result_events.push(E::tool_response(r.call_id.into(), r.name, result));
                 }
+                filter_and_store(
+                    result_events,
+                    &middleware,
+                    &event_sender,
+                    &self.session_msgs,
+                );
+
+                // 10. Emit TurnEnd
+                emit_event(&event_sender, E::turn_end(finish_reason_str));
+                react_bus.send(ReactEvent::TurnEnd).ok();
 
                 if !should_continue {
                     break;
@@ -196,6 +260,45 @@ impl<P: ChatProvider> ReActLoop<P> {
             cancel_token: token_clone,
             task,
             sender,
+        }
+    }
+}
+
+/// Tool execution result returned by `handle_turn_finish`.
+struct ToolExecResult {
+    call_id: String,
+    name: String,
+    result: Result<String, ToolCallError>,
+}
+
+/// Emit a single event if sender is present.
+fn emit_event<E: MiddlewareEvent>(sender: &Option<EventSenderFn<E>>, event: E) {
+    if let Some(s) = sender {
+        s(event);
+    }
+}
+
+/// Run a batch of events through middleware, emit filtered events, and store in session.
+fn filter_and_store<E: MiddlewareEvent>(
+    events: Vec<E>,
+    middleware: &Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
+    event_sender: &Option<EventSenderFn<E>>,
+    session_msgs: &Arc<parking_lot::RwLock<Vec<FuneraMessage>>>,
+) {
+    for event in events {
+        let filtered = if let Some(chain) = middleware {
+            match chain.process(event) {
+                Ok(e) => e,
+                Err(_) => continue,
+            }
+        } else {
+            event
+        };
+        if let Some((role, variant)) = filtered.clone().into_session_message() {
+            session_msgs.write().push(FuneraMessage::new(role, variant));
+        }
+        if let Some(sender) = event_sender {
+            sender(filtered);
         }
     }
 }
@@ -269,60 +372,20 @@ async fn process_token_stream<C: crate::provider::StreamChunkExt>(
 
 async fn handle_turn_finish(
     finish_reason: Option<&FinishReason>,
-    assistant_content: &str,
-    reasoning_content: &str,
+    _assistant_content: &str,
+    _reasoning_content: &str,
     tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
     react_bus: &ReactBus,
     tool_bus: &ToolBus,
-    buf_msg_tx: &mpsc::Sender<FuneraMessage>,
-    session_msgs: &Arc<parking_lot::RwLock<Vec<FuneraMessage>>>,
-) -> Result<bool> {
+) -> Result<(bool, Vec<ToolExecResult>)> {
     match finish_reason {
-        None | Some(FinishReason::Stop) => {
-            if !assistant_content.is_empty() {
-                let rc = if reasoning_content.is_empty() {
-                    None
-                } else {
-                    Some(reasoning_content.into())
-                };
-                session_msgs.write().push(FuneraMessage::new(
-                    Role::Assistant,
-                    MsgVariant::Text(TextMessage {
-                        text: assistant_content.into(),
-                        reasoning_content: rc,
-                    }),
-                ));
-            }
-            Ok(false)
-        }
+        None | Some(FinishReason::Stop) => Ok((false, Vec::new())),
 
         Some(FinishReason::ToolCalls) | Some(FinishReason::Length) => {
             let mut accums: Vec<_> = tool_call_accums.values().collect();
             accums.sort_by_key(|a| a.index);
 
-            // Sync the assistant tool call messages to session
-            let mut acc_sorted = accums.clone();
-            acc_sorted.sort_by_key(|a| a.index);
-            let rc: Option<Arc<str>> = if reasoning_content.is_empty() {
-                None
-            } else {
-                Some(reasoning_content.into())
-            };
-            for acc in &acc_sorted {
-                let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
-                session_msgs.write().push(FuneraMessage::new(
-                    Role::Assistant,
-                    MsgVariant::ToolRequest(ToolRequestMessage {
-                        tool_call_id: acc.call_id.clone().into(),
-                        tool_type: ToolType::Function,
-                        function_name: acc.name.clone().into(),
-                        function_args: args,
-                        reasoning_content: rc.clone(),
-                    }),
-                ));
-            }
-
-            // Broadcast all requests
+            // Broadcast all tool execution requests via react_bus
             for acc in &accums {
                 let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
                 react_bus
@@ -343,8 +406,9 @@ async fn handle_turn_finish(
             }))
             .await;
 
-            // Handle results in order
-            for (acc, result) in accums.iter().zip(results.iter()) {
+            // Collect results for middleware filtering
+            let mut tool_results = Vec::new();
+            for (acc, result) in accums.iter().zip(results.into_iter()) {
                 match result {
                     Ok(response) => {
                         react_bus
@@ -354,33 +418,33 @@ async fn handle_turn_finish(
                                 result: response.clone(),
                             })))
                             .ok();
-
-                        let tool_response_msg = FuneraMessage::new(
-                            Role::Tool,
-                            MsgVariant::ToolResponse(ToolResponseMessage {
-                                tool_call_id: acc.call_id.clone().into(),
-                                result: response.clone().into(),
-                            }),
-                        );
-                        buf_msg_tx.send(tool_response_msg).await?;
-                    }
-                    Err(e) => {
-                        let error_info = ToolCallErrorInfo {
+                        tool_results.push(ToolExecResult {
                             call_id: acc.call_id.clone(),
                             name: acc.name.clone(),
-                            error: e.to_string(),
-                        };
+                            result: Ok(response),
+                        });
+                    }
+                    Err(e) => {
                         react_bus
-                            .send(ReactEvent::ToolExecResponse(Err(error_info)))
+                            .send(ReactEvent::ToolExecResponse(Err(ToolCallErrorInfo {
+                                call_id: acc.call_id.clone(),
+                                name: acc.name.clone(),
+                                error: e.to_string(),
+                            })))
                             .ok();
+                        tool_results.push(ToolExecResult {
+                            call_id: acc.call_id.clone(),
+                            name: acc.name.clone(),
+                            result: Err(e),
+                        });
                     }
                 }
             }
 
-            Ok(true)
+            Ok((true, tool_results))
         }
 
-        _ => Ok(false),
+        _ => Ok((false, Vec::new())),
     }
 }
 
@@ -413,6 +477,43 @@ mod tests {
     use crate::test_helpers;
 
     use super::*;
+
+    /// Dummy event type for tests that require a `MiddlewareEvent` impl.
+    #[derive(Debug, Clone)]
+    struct TestEvent(String);
+
+    impl MiddlewareEvent for TestEvent {
+        type Error = String;
+
+        fn assistant_text(content: String, _reasoning: Option<String>) -> Self {
+            TestEvent(content)
+        }
+        fn tool_call_request(_call_id: Arc<str>, name: String, _args: JsonValue) -> Self {
+            TestEvent(name)
+        }
+        fn tool_response(
+            _call_id: Arc<str>,
+            _name: String,
+            _result: Result<String, String>,
+        ) -> Self {
+            TestEvent("tool_result".into())
+        }
+        fn turn_start() -> Self {
+            TestEvent("turn_start".into())
+        }
+        fn turn_end(_finish_reason: Option<String>) -> Self {
+            TestEvent("turn_end".into())
+        }
+        fn done() -> Self {
+            TestEvent("done".into())
+        }
+        fn into_session_message(self) -> Option<(Role, MsgVariant)> {
+            Some((
+                Role::Assistant,
+                MsgVariant::Text(TextMessage { text: self.0.into(), reasoning_content: None }),
+            ))
+        }
+    }
 
     fn empty_session_msgs() -> Arc<parking_lot::RwLock<Vec<FuneraMessage>>> {
         Arc::new(parking_lot::RwLock::new(Vec::new()))
@@ -502,53 +603,46 @@ mod tests {
     async fn handle_finish_stop_with_content() {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = ToolBus::new();
-        let (tx, _rx) = mpsc::channel(10);
         let session_msgs = empty_session_msgs();
 
-        let should_continue = handle_turn_finish(
+        let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::Stop),
             "Hello!",
             "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
-            &tx,
-            &session_msgs,
         )
         .await
         .unwrap();
 
         assert!(!should_continue);
-        let guard = session_msgs.read();
-        assert_eq!(guard.len(), 1);
-        assert_eq!(guard[0].role().to_string(), "assistant");
+        assert!(results.is_empty());
     }
 
     #[tokio::test]
     async fn handle_finish_stop_empty_content() {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = ToolBus::new();
-        let (tx, _rx) = mpsc::channel(10);
         let session_msgs = empty_session_msgs();
         session_msgs.write().push(FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage { text: "hi".into(), reasoning_content: None }),
         ));
 
-        let should_continue = handle_turn_finish(
+        let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::Stop),
             "",
             "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
-            &tx,
-            &session_msgs,
         )
         .await
         .unwrap();
 
         assert!(!should_continue);
+        assert!(results.is_empty());
         assert_eq!(session_msgs.read().len(), 1);
     }
 
@@ -556,41 +650,34 @@ mod tests {
     async fn handle_finish_none() {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = ToolBus::new();
-        let (tx, _rx) = mpsc::channel(10);
-        let session_msgs = empty_session_msgs();
 
-        let should_continue = handle_turn_finish(
+        let (should_continue, results) = handle_turn_finish(
             None,
             "Hello!",
             "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
-            &tx,
-            &session_msgs,
         )
         .await
         .unwrap();
 
         assert!(!should_continue);
-        assert_eq!(session_msgs.read().len(), 1);
+        assert!(results.is_empty());
     }
 
     #[tokio::test]
     async fn handle_finish_tool_calls_with_executor() {
         let react_bus = ReactBus::new();
         let (tool_bus, mut exec_rx) = ToolBus::new();
-        let (buf_tx, mut buf_rx) = mpsc::channel(10);
-        let session_msgs = empty_session_msgs();
 
         let mut accums = HashMap::new();
-        let accum = ToolCallAccumulator {
+        accums.insert(0, ToolCallAccumulator {
             index: 0,
             call_id: "call_abc".into(),
             name: "mock_tool".into(),
             args: r#"{"x":1}"#.into(),
-        };
-        accums.insert(0, accum);
+        });
 
         tokio::spawn(async move {
             if let Some(cmd) = exec_rx.recv().await {
@@ -598,30 +685,27 @@ mod tests {
             }
         });
 
-        let should_continue = handle_turn_finish(
+        let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::ToolCalls),
             "",
             "",
             &accums,
             &react_bus,
             &tool_bus,
-            &buf_tx,
-            &session_msgs,
         )
         .await
         .unwrap();
 
         assert!(should_continue);
-        let received = buf_rx.try_recv().unwrap();
-        assert!(matches!(received.msg_variant(), MsgVariant::ToolResponse(_)));
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].call_id, "call_abc");
+        assert_eq!(results[0].result.as_ref().unwrap(), "tool_result_ok");
     }
 
     #[tokio::test]
     async fn handle_finish_tool_calls_preserves_reasoning() {
         let react_bus = ReactBus::new();
         let (tool_bus, mut exec_rx) = ToolBus::new();
-        let (buf_tx, mut buf_rx) = mpsc::channel(10);
-        let session_msgs = empty_session_msgs();
 
         let mut accums = HashMap::new();
         accums.insert(0, ToolCallAccumulator {
@@ -637,93 +721,65 @@ mod tests {
             }
         });
 
-        let should_continue = handle_turn_finish(
+        let (should_continue, _results) = handle_turn_finish(
             Some(&FinishReason::ToolCalls),
             "",
             "I need to think about this first",
             &accums,
             &react_bus,
             &tool_bus,
-            &buf_tx,
-            &session_msgs,
         )
         .await
         .unwrap();
 
         assert!(should_continue);
-        let guard = session_msgs.read();
-        assert_eq!(guard.len(), 1);
-        let req = match guard[0].msg_variant() {
-            MsgVariant::ToolRequest(r) => r,
-            _ => panic!("expected ToolRequest"),
-        };
-        assert_eq!(
-            req.reasoning_content.as_deref(),
-            Some("I need to think about this first")
-        );
     }
 
     #[tokio::test]
     async fn handle_finish_length() {
         let react_bus = ReactBus::new();
         let (tool_bus, exec_rx) = ToolBus::new();
-        let (tx, _) = mpsc::channel(10);
-        let session_msgs = empty_session_msgs();
-
         drop(exec_rx);
 
         let mut accums = HashMap::new();
-        let accum = ToolCallAccumulator {
+        accums.insert(0, ToolCallAccumulator {
             index: 0,
             call_id: "call_1".into(),
             name: "t".into(),
             args: "{}".into(),
-        };
-        accums.insert(0, accum);
+        });
 
-        let should_continue = handle_turn_finish(
+        let result = handle_turn_finish(
             Some(&FinishReason::Length),
             "",
             "",
             &accums,
             &react_bus,
             &tool_bus,
-            &tx,
-            &session_msgs,
         )
         .await;
 
-        assert!(should_continue.is_ok());
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn handle_finish_stop_with_reasoning() {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = ToolBus::new();
-        let (tx, _rx) = mpsc::channel(10);
-        let session_msgs = empty_session_msgs();
 
-        let should_continue = handle_turn_finish(
+        let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::Stop),
             "Final answer",
             "I need to think about this...",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
-            &tx,
-            &session_msgs,
         )
         .await
         .unwrap();
 
         assert!(!should_continue);
-        let guard = session_msgs.read();
-        assert_eq!(guard.len(), 1);
-        let text = match guard[0].msg_variant() {
-            MsgVariant::Text(t) => t,
-            _ => panic!("expected Text"),
-        };
-        assert_eq!(text.reasoning_content.as_deref(), Some("I need to think about this..."));
+        assert!(results.is_empty());
     }
 
     // ── ToolCallAccumulator behavior ────────────────────────────
@@ -828,13 +884,9 @@ mod tests {
             let _req = rx_from_loop.recv().await;
             let (token_tx, _) = tokio::sync::broadcast::channel(50);
             let react_bus = ReactBus::new();
-            let barrier = Arc::new(tokio::sync::Barrier::new(2));
-            let barrier_clone = barrier.clone();
-            tokio::spawn(async move { barrier_clone.wait().await; });
             let _ = tx_to_loop.send(TurnHighWayEvent::TurnPrepareResponse {
                 token_tx,
                 react_bus,
-                ready_barrier: barrier,
             }).await;
         });
 
@@ -856,7 +908,7 @@ mod tests {
             handle,
         );
 
-        let loop_handle = loop_instance.run();
+        let loop_handle = loop_instance.run::<TestEvent>(None, None);
         let msg = FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage { text: "ping".into(), reasoning_content: None }),

@@ -55,7 +55,7 @@ impl InspectorMiddleware<AgentEvent> for EventLogger {
                 eprintln!("[log] tool_result: {name} ({status})");
             }
             AgentEvent::TurnStart => eprintln!("[log] --- turn start ---"),
-            AgentEvent::TurnEnd => eprintln!("[log] --- turn end ---"),
+            AgentEvent::TurnEnd { .. } => eprintln!("[log] --- turn end ---"),
             AgentEvent::Done => eprintln!("[log] done"),
             AgentEvent::Error(e) => eprintln!("[log] error: {e}"),
         }

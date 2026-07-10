@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Err(e) => eprintln!("  {name} ❌ {e}"),
             },
             AgentEvent::TurnStart => eprintln!("\n── Turn ──"),
-            AgentEvent::TurnEnd => eprintln!(),
+            AgentEvent::TurnEnd { .. } => eprintln!(),
             AgentEvent::Done => eprintln!("\n── Done ──"),
             _ => {}
         }

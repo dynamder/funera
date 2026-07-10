@@ -5,13 +5,14 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::{FuneraSession, Idle};
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
+use funera_core::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain};
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 
 use crate::dispatcher::{CallbackDispatcher, CallbackRegistry};
 use crate::error::OrchestrateError;
 use crate::event::{AgentEvent, RawAgentEvent};
-use crate::response::ChatResponse;
+use crate::response::{ChatResponse, ToolCallInfo};
 use crate::runtime::AgentRuntime;
 
 // ---------------------------------------------------------------------------
@@ -116,7 +117,7 @@ impl AgentBuilder {
         F: Fn() + Send + Sync + 'static,
     {
         self.callbacks.add(Arc::new(move |event| {
-            if matches!(event, AgentEvent::TurnEnd) {
+            if matches!(event, AgentEvent::TurnEnd { .. }) {
                 f();
             }
         }));
@@ -241,48 +242,30 @@ impl Agent {
         runtime: &AgentRuntime<P>,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
+        let mut event_rx = self.subscribe_events();
 
-        // Create per-call plumbing
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        // Per-call dispatcher
-        let _dispatcher = CallbackDispatcher::new(
-            env_state_rx,
-            self.callbacks.clone(),
-            self.event_tx.clone(),
-            self.raw_event_tx.clone(),
-            #[cfg(feature = "middleware")]
-            runtime.middleware_chain(),
-        );
+        let _dispatcher =
+            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        // Fresh temp session — never stored back
         let session = FuneraSession::<Idle>::new();
-
-        // Inject system prompt
         if let Some(ref sys) = self.system_prompt {
-            let sys_msg = FuneraMessage::new(
+            session.push_message(FuneraMessage::new(
                 Role::System,
-                MsgVariant::Text(TextMessage {
-                    text: sys.clone().into(),
-                    reasoning_content: None,
-                }),
-            );
-            session.push_message(sys_msg);
+                MsgVariant::Text(TextMessage { text: sys.clone().into(), reasoning_content: None }),
+            ));
         }
 
         let mut running = session.run();
-
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage {
-                text: text.clone().into(),
-                reasoning_content: None,
-            }),
+            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
         );
 
         let config = ReActLoopConfig::new(
@@ -294,13 +277,20 @@ impl Agent {
             turn_highway_handle,
         );
 
-        let result = running
-            .react_loop::<P>(init_msg, config, env_state_tx.clone())
-            .await;
-        let idle_session = running.idle();
-        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
+        let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
-        Self::extract_response(result, idle_session)
+        let result = running
+            .react_loop::<P, AgentEvent>(
+                init_msg,
+                config,
+                env_state_tx.clone(),
+                middleware_opt(runtime),
+                Some(event_sender),
+            )
+            .await;
+
+        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
+        aggregate_response(&mut event_rx, result).await
     }
 
     /// Streaming variant of [`fire`](Self::fire).
@@ -313,24 +303,10 @@ impl Agent {
         runtime: &AgentRuntime<P>,
     ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
         let (relay_tx, rx) = mpsc::channel(256);
-        let tx = relay_tx.clone();
-        let event_rx = self.event_tx.subscribe();
+        let event_rx = self.subscribe_events();
 
         tokio::spawn(async move {
-            let mut rx = event_rx;
-            loop {
-                match rx.recv().await {
-                    Ok(event) => {
-                        if tx.send(event.clone()).await.is_err() {
-                            break;
-                        }
-                        if matches!(event, AgentEvent::Done) {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
+            relay_stream(event_rx, relay_tx).await;
         });
 
         let _ = self.fire::<P>(msg, runtime).await?;
@@ -349,51 +325,35 @@ impl Agent {
         runtime: &mut AgentRuntime<P>,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
+        let mut event_rx = self.subscribe_events();
 
-        // Per-call plumbing
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        // Per-call dispatcher
-        let _dispatcher = CallbackDispatcher::new(
-            env_state_rx,
-            self.callbacks.clone(),
-            self.event_tx.clone(),
-            self.raw_event_tx.clone(),
-            #[cfg(feature = "middleware")]
-            runtime.middleware_chain(),
-        );
+        let _dispatcher =
+            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        // Take or create session
         let session = runtime.take_session();
-
-        // Inject system prompt on first interaction (session is fresh)
         if let Some(ref sys) = self.system_prompt {
-            let msgs = session.session_context();
-            if msgs.is_empty() {
-                let sys_msg = FuneraMessage::new(
+            if session.session_context().is_empty() {
+                session.push_message(FuneraMessage::new(
                     Role::System,
                     MsgVariant::Text(TextMessage {
                         text: sys.clone().into(),
                         reasoning_content: None,
                     }),
-                );
-                session.push_message(sys_msg);
+                ));
             }
         }
 
         let mut running = session.run();
-
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage {
-                text: text.into(),
-                reasoning_content: None,
-            }),
+            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
         );
 
         let config = ReActLoopConfig::new(
@@ -405,48 +365,25 @@ impl Agent {
             turn_highway_handle,
         );
 
+        let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
+
         let result = running
-            .react_loop::<P>(init_msg, config, env_state_tx.clone())
+            .react_loop::<P, AgentEvent>(
+                init_msg,
+                config,
+                env_state_tx.clone(),
+                middleware_opt(runtime),
+                Some(event_sender),
+            )
             .await;
+
         let idle_session = running.idle();
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
 
-        // Extract context before consuming the session
-        let ctx = idle_session.session_context();
-
-        let response = match result {
-            Ok(()) => {
-                let assistant_msgs: Vec<&serde_json::Value> =
-                    ctx.iter().filter(|m| m["role"] == "assistant").collect();
-
-                let content = assistant_msgs
-                    .iter()
-                    .filter_map(|m| m["content"].as_str())
-                    .filter(|c| !c.is_empty())
-                    .last()
-                    .unwrap_or("")
-                    .to_string();
-
-                let finish_reason = assistant_msgs
-                    .last()
-                    .and_then(|m| m["finish_reason"].as_str())
-                    .map(|s| s.to_string());
-
-                Ok(ChatResponse {
-                    content,
-                    tool_calls: Vec::new(),
-                    iterations: assistant_msgs.len(),
-                    finish_reason,
-                })
-            }
-            Err(e) => Err(OrchestrateError::Session(e)),
-        };
-
-        // Store session back for multi-turn
+        let response = aggregate_response(&mut event_rx, result).await;
         if response.is_ok() {
             runtime.store_session(idle_session);
         }
-
         response
     }
 
@@ -457,66 +394,114 @@ impl Agent {
         runtime: &mut AgentRuntime<P>,
     ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
         let (relay_tx, rx) = mpsc::channel(256);
-        let tx = relay_tx.clone();
-        let event_rx = self.event_tx.subscribe();
+        let event_rx = self.subscribe_events();
 
         tokio::spawn(async move {
-            let mut rx = event_rx;
-            loop {
-                match rx.recv().await {
-                    Ok(event) => {
-                        if tx.send(event.clone()).await.is_err() {
-                            break;
-                        }
-                        if matches!(event, AgentEvent::Done) {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
+            relay_stream(event_rx, relay_tx).await;
         });
 
-        let _ = self.send(msg, runtime).await?;
-        let _ = relay_tx.send(AgentEvent::Done).await;
+        let _ = self.send::<P>(msg, runtime).await?;
         Ok(rx)
     }
+}
 
-    // ── internal helpers ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+// Free helper functions
+// ═══════════════════════════════════════════════════════════
 
-    fn extract_response(
-        result: Result<(), anyhow::Error>,
-        session: FuneraSession<Idle>,
-    ) -> Result<ChatResponse, OrchestrateError> {
-        match result {
-            Ok(()) => {
-                let ctx = session.session_context();
-                let assistant_msgs: Vec<&serde_json::Value> =
-                    ctx.iter().filter(|m| m["role"] == "assistant").collect();
+/// Build an event sender closure that dispatches to callbacks and broadcasts to event_tx.
+fn build_event_sender(
+    callbacks: Arc<CallbackRegistry>,
+    event_tx: broadcast::Sender<AgentEvent>,
+) -> EventSenderFn<AgentEvent> {
+    Box::new(move |event: AgentEvent| {
+        callbacks.dispatch(event.clone());
+        let _ = event_tx.send(event);
+    })
+}
 
-                let content = assistant_msgs
-                    .iter()
-                    .filter_map(|m| m["content"].as_str())
-                    .filter(|c| !c.is_empty())
-                    .last()
-                    .unwrap_or("")
-                    .to_string();
+/// Return the middleware chain from runtime, or None.
+#[cfg(feature = "middleware")]
+fn middleware_opt<P: ChatProvider>(
+    runtime: &AgentRuntime<P>,
+) -> Option<Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>> {
+    Some(runtime.middleware_chain())
+}
 
-                let finish_reason = assistant_msgs
-                    .last()
-                    .and_then(|m| m["finish_reason"].as_str())
-                    .map(|s| s.to_string());
+#[cfg(not(feature = "middleware"))]
+fn middleware_opt<P: ChatProvider>(
+    _runtime: &AgentRuntime<P>,
+) -> Option<
+    Arc<
+        funera_core::middleware::MiddlewareChain<
+            AgentEvent,
+            funera_core::middleware::ErrorsEnabled,
+        >,
+    >,
+> {
+    None
+}
 
-                Ok(ChatResponse {
-                    content,
-                    tool_calls: Vec::new(),
-                    iterations: assistant_msgs.len(),
-                    finish_reason,
-                })
+/// Relay events from a broadcast receiver to an mpsc sender.
+async fn relay_stream(
+    mut event_rx: broadcast::Receiver<AgentEvent>,
+    relay_tx: mpsc::Sender<AgentEvent>,
+) {
+    loop {
+        match event_rx.recv().await {
+            Ok(event) => {
+                let is_done = matches!(event, AgentEvent::Done);
+                if relay_tx.send(event).await.is_err() {
+                    break;
+                }
+                if is_done {
+                    break;
+                }
             }
-            Err(e) => Err(OrchestrateError::Session(e)),
+            Err(_) => break,
         }
     }
+}
+
+/// Aggregate middleware-filtered events from the event stream into a ChatResponse.
+async fn aggregate_response(
+    event_rx: &mut broadcast::Receiver<AgentEvent>,
+    react_result: Result<(), anyhow::Error>,
+) -> Result<ChatResponse, OrchestrateError> {
+    react_result.map_err(OrchestrateError::Session)?;
+
+    let mut content = String::new();
+    let mut tool_calls = Vec::new();
+    let mut iterations = 0usize;
+    let mut finish_reason: Option<String> = None;
+
+    // Track pending tool call requests to match with results
+    let mut pending_requests: Vec<(Arc<str>, String, serde_json::Value)> = Vec::new();
+
+    loop {
+        match event_rx.recv().await {
+            Ok(AgentEvent::Text(t)) => {
+                content = t;
+            }
+            Ok(AgentEvent::ToolCallRequest { call_id, name, args, .. }) => {
+                pending_requests.push((call_id, name, args));
+            }
+            Ok(AgentEvent::ToolCallResult { call_id, name: _, result }) => {
+                if let Some(pos) = pending_requests.iter().position(|(id, _, _)| *id == call_id) {
+                    let (_, name, args) = pending_requests.remove(pos);
+                    tool_calls.push(ToolCallInfo { name, args, result });
+                }
+            }
+            Ok(AgentEvent::TurnStart) => iterations += 1,
+            Ok(AgentEvent::TurnEnd { finish_reason: fr }) => finish_reason = fr,
+            Ok(AgentEvent::Done) => break,
+            Err(broadcast::error::RecvError::Closed) => break,
+            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            _ => {}
+        }
+    }
+
+    Ok(ChatResponse { content, tool_calls, iterations, finish_reason })
 }
 
 #[cfg(test)]

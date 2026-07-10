@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use tokio::sync::{broadcast, mpsc, Barrier};
+use tokio::sync::{broadcast, mpsc};
 
 use crate::event_bus::{
     react_bus::{ReactBus, ReactEvent},
@@ -22,7 +20,6 @@ pub enum EnvStateEvent {
     PerTurnBusReady {
         token_tx: broadcast::Sender<TokenEvent>,
         react_tx: broadcast::Sender<ReactEvent>,
-        ready_barrier: Arc<Barrier>,
     },
 }
 
@@ -31,7 +28,6 @@ pub enum TurnHighWayEvent {
     TurnPrepareResponse {
         token_tx: broadcast::Sender<TokenEvent>,
         react_bus: ReactBus,
-        ready_barrier: Arc<Barrier>,
     },
 }
 
@@ -43,7 +39,7 @@ pub struct TurnHighWayHandle {
 impl TurnHighWayHandle {
     pub async fn prepare_turn(
         &mut self,
-    ) -> (broadcast::Sender<TokenEvent>, ReactBus, Arc<Barrier>) {
+    ) -> (broadcast::Sender<TokenEvent>, ReactBus) {
         let _ = self
             .turn_high_way_tx
             .send(TurnHighWayEvent::TurnPrepareRequest)
@@ -53,12 +49,10 @@ impl TurnHighWayHandle {
             Some(TurnHighWayEvent::TurnPrepareResponse {
                 token_tx,
                 react_bus,
-                ready_barrier,
-            }) => (token_tx, react_bus, ready_barrier),
+            }) => (token_tx, react_bus),
             _ => {
                 let (token_tx, _) = broadcast::channel(50);
-                let barrier = Arc::new(Barrier::new(1));
-                (token_tx, ReactBus::new(), barrier)
+                (token_tx, ReactBus::new())
             }
         }
     }
@@ -101,19 +95,16 @@ impl EnvStateBus {
                         let (token_tx, _) = broadcast::channel(50);
                         let react_bus = ReactBus::new();
                         let react_tx = react_bus.sender();
-                        let barrier = Arc::new(Barrier::new(2));
                         let _ = self
                             .env_state_tx
                             .send(EnvStateEvent::PerTurnBusReady {
                                 token_tx: token_tx.clone(),
                                 react_tx,
-                                ready_barrier: barrier.clone(),
                             });
                         let _ = tx
                             .send(TurnHighWayEvent::TurnPrepareResponse {
                                 token_tx,
                                 react_bus,
-                                ready_barrier: barrier,
                             })
                             .await;
                     }
@@ -141,9 +132,7 @@ mod tests {
         let (bus, mut handle) = EnvStateBus::new();
         bus.start_turn_highway();
 
-        let (token_tx, react_bus, barrier) = handle.prepare_turn().await;
-        // In test, no dispatcher subscribes; wait self to unblock unit test
-        tokio::spawn(async move { barrier.wait().await; });
+        let (token_tx, react_bus) = handle.prepare_turn().await;
         assert!(token_tx.receiver_count() > 0 || token_tx.receiver_count() == 0);
         let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
     }
@@ -153,8 +142,8 @@ mod tests {
         let (bus, mut handle) = EnvStateBus::new();
         bus.start_turn_highway();
 
-        let (_tx1, _rb1, _b1) = handle.prepare_turn().await;
-        let (_tx2, _rb2, _b2) = handle.prepare_turn().await;
+        let (_tx1, _rb1) = handle.prepare_turn().await;
+        let (_tx2, _rb2) = handle.prepare_turn().await;
     }
 
     #[tokio::test]
@@ -162,7 +151,7 @@ mod tests {
         let (bus, mut handle) = EnvStateBus::new();
         drop(bus);
 
-        let (token_tx, react_bus, _barrier) = handle.prepare_turn().await;
+        let (token_tx, react_bus) = handle.prepare_turn().await;
         let _ = react_bus.send(crate::event_bus::react_bus::ReactEvent::TurnStart);
         let _ = token_tx;
     }

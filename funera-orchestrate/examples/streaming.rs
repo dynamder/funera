@@ -32,7 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match event {
             AgentEvent::Text(t) => eprint!("{t}"),
             AgentEvent::TurnStart => eprintln!("\n[Turn Start]"),
-            AgentEvent::TurnEnd => eprintln!("\n[Turn End]"),
+            AgentEvent::TurnEnd { .. } => eprintln!("\n[Turn End]"),
             AgentEvent::Done => eprintln!("\n[Done]"),
             _ => {}
         }

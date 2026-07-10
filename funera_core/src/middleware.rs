@@ -53,7 +53,10 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use serde_json::Value as JsonValue;
 use tokio::sync::mpsc;
+
+use crate::chat::message::{MsgVariant, Role};
 
 // ═══════════════════════════════════════════════════════════════
 // Inspector — 只读观察，后台并行，不等待
@@ -561,6 +564,57 @@ impl std::fmt::Display for MiddlewareBlocked {
             self.middleware_name, self.reason
         )
     }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MiddlewareEvent — ReAct loop 每轮产出的可过滤事件
+// ═══════════════════════════════════════════════════════════════
+
+/// 用于 `react_loop` 向上层通知事件的可调用对象。
+///
+/// 由 `funera-orchestrate` 提供实现（封装 callbacks + event_tx），
+/// `react_loop` 在每轮聚合数据后调用此函数发出已过滤的事件。
+pub type EventSenderFn<E> = Box<dyn Fn(E) + Send + Sync>;
+
+/// ReAct 循环每轮产出的中间件事件。
+///
+/// `react_loop` 在 `process_token_stream` 和 `handle_turn_finish` 后
+/// 将聚合结果转换为 `MiddlewareEvent`，经过 middleware chain 过滤后：
+/// - 发出到上层（`event_tx` + callbacks）
+/// - 转换为 `FuneraMessage` 存入 session 历史
+///
+/// 由 `AgentEvent`（`funera-orchestrate`）实现此 trait。
+pub trait MiddlewareEvent: Clone + Send + 'static {
+    /// 工具错误类型。
+    type Error: std::fmt::Display + Send + Sync + 'static + From<String>;
+
+    /// Factory：assistant 聚合文本回复。
+    fn assistant_text(content: String, reasoning: Option<String>) -> Self;
+
+    /// Factory：单个工具调用请求。
+    fn tool_call_request(call_id: Arc<str>, name: String, args: JsonValue) -> Self;
+
+    /// Factory：单个工具执行结果。
+    fn tool_response(
+        call_id: Arc<str>,
+        name: String,
+        result: Result<String, Self::Error>,
+    ) -> Self;
+
+    /// Factory：turn 开始。
+    fn turn_start() -> Self;
+
+    /// Factory：turn 结束，携带 finish_reason。
+    fn turn_end(finish_reason: Option<String>) -> Self;
+
+    /// Factory：会话结束。
+    fn done() -> Self;
+
+    /// 转换为 session 历史消息。
+    ///
+    /// 返回 `Some((role, variant))` 用于构造 `FuneraMessage`。
+    /// 不可转换的事件（如 `TurnStart`、`TurnEnd`、`Done`）返回 `None`。
+    fn into_session_message(self) -> Option<(Role, MsgVariant)>;
 }
 
 #[cfg(test)]

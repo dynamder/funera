@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::{
     chat::message::FuneraMessage,
     event_bus::env_state_bus::EnvStateEvent,
+    middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent},
     re_act::{ReActLoop, ReActLoopConfig, ReActLoopHandle},
 };
 use tokio::sync::broadcast;
@@ -74,11 +75,13 @@ impl FuneraSession<Idle> {
 }
 
 impl FuneraSession<Running> {
-    pub async fn react_loop<P: crate::provider::ChatProvider>(
+    pub async fn react_loop<P: crate::provider::ChatProvider, E: MiddlewareEvent>(
         &mut self,
         init_msg: FuneraMessage,
         mut config: ReActLoopConfig,
         env_state_tx: broadcast::Sender<EnvStateEvent>,
+        middleware: Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
+        event_sender: Option<EventSenderFn<E>>,
     ) -> Result<()> {
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
@@ -92,7 +95,7 @@ impl FuneraSession<Running> {
         let sender = react_loop.sender();
         sender.send(init_msg).await?;
 
-        let loop_handle = react_loop.run();
+        let loop_handle = react_loop.run::<E>(middleware, event_sender);
         self.current_loop = Some(loop_handle);
 
         if let Some(handle) = self.current_loop.take() {
