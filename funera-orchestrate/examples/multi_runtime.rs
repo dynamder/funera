@@ -22,16 +22,20 @@ fn make_runtime(model: &str) -> Result<AgentRuntime<DeepSeekProvider>, Box<dyn s
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Two runtimes, different models
-    let mut gpt4 = make_runtime("gpt-4o")?;
-    let mut gpt35 = make_runtime("gpt-4o-mini")?;
+    let mut gpt4 = make_runtime("deepseek-v4-pro")?;
+    let mut gpt35 = make_runtime("deepseek-v4-flash")?;
 
     let agent = Agent::builder()
         .system_prompt("You are a helpful assistant.")
         .build();
 
     // ── Talk to gpt-4o ──
-    agent.send("I need a detailed explanation of monads.", &mut gpt4).await?;
-    agent.send("Can you give me a code example?", &mut gpt4).await?;
+    agent
+        .send("I need a detailed explanation of monads.", &mut gpt4)
+        .await?;
+    agent
+        .send("Can you give me a code example?", &mut gpt4)
+        .await?;
     println!("(gpt-4o session has 2 messages)");
 
     // ── Talk to gpt-4o-mini on the side ──

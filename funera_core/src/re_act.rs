@@ -5,13 +5,12 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_openai::types::chat::FinishReason;
 use serde_json::Value as JsonValue;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
-use crate::chat::message::{
-    FuneraMessage, MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage,
-};
+use crate::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
+use crate::chat::session::SessionCmd;
 use crate::env::FuneraEnvWatcher;
 use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
@@ -32,7 +31,7 @@ pub struct ReActLoopConfig {
     pub tool_bus: ToolBus,
     pub env_state_tx: broadcast::Sender<EnvStateEvent>,
     pub turn_highway_handle: TurnHighWayHandle,
-    pub session_msgs: Option<Arc<parking_lot::RwLock<Vec<FuneraMessage>>>>,
+    pub session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
 }
 
 impl ReActLoopConfig {
@@ -51,15 +50,13 @@ impl ReActLoopConfig {
             tool_bus,
             env_state_tx,
             turn_highway_handle,
-            session_msgs: None,
+            session_tx: None,
         }
     }
 }
 
 pub struct ReActLoop<P: ChatProvider> {
-    buf_msg_rx: mpsc::Receiver<FuneraMessage>,
-    buf_msg_tx: mpsc::Sender<FuneraMessage>,
-    session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>>,
+    session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
     max_iteration: usize,
     env_watcher: FuneraEnvWatcher,
     tool_bus: ToolBus,
@@ -70,19 +67,15 @@ pub struct ReActLoop<P: ChatProvider> {
 
 impl<P: ChatProvider> ReActLoop<P> {
     pub fn new(
-        buffer: usize,
         max_iteration: usize,
-        session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>>,
+        session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
         env_watcher: FuneraEnvWatcher,
         tool_bus: ToolBus,
         env_state_tx: broadcast::Sender<EnvStateEvent>,
         turn_highway_handle: TurnHighWayHandle,
     ) -> Self {
-        let (tx, rx) = mpsc::channel(buffer);
         Self {
-            buf_msg_rx: rx,
-            buf_msg_tx: tx,
-            session_msgs,
+            session_tx,
             max_iteration,
             env_watcher,
             tool_bus,
@@ -93,11 +86,9 @@ impl<P: ChatProvider> ReActLoop<P> {
     }
 
     pub fn from_config(config: ReActLoopConfig) -> Self {
-        let session_msgs = config.session_msgs.unwrap_or_default();
         Self::new(
-            config.buffer,
             config.max_iteration,
-            session_msgs,
+            config.session_tx,
             config.env_watcher,
             config.tool_bus,
             config.env_state_tx,
@@ -105,12 +96,10 @@ impl<P: ChatProvider> ReActLoop<P> {
         )
     }
 
-    fn build_history_from(msgs: &Arc<parking_lot::RwLock<Vec<FuneraMessage>>>) -> Vec<JsonValue> {
-        msgs.read().iter().map(|msg| msg.format_json()).collect()
-    }
-
-    pub fn sender(&self) -> mpsc::Sender<FuneraMessage> {
-        self.buf_msg_tx.clone()
+    async fn build_history_from(tx: &mpsc::UnboundedSender<SessionCmd>) -> Vec<JsonValue> {
+        let (respond, rx) = oneshot::channel();
+        let _ = tx.send(SessionCmd::FetchContext { respond });
+        rx.await.unwrap_or_default()
     }
 
     pub fn run<E: MiddlewareEvent>(
@@ -121,42 +110,29 @@ impl<P: ChatProvider> ReActLoop<P> {
         let token = CancellationToken::new();
         let token_clone = token.clone();
 
-        let sender = self.sender();
-
         let task = tokio::spawn(async move {
             let mut iteration = 0;
             let mut env_watcher = self.env_watcher;
 
             while iteration < self.max_iteration {
-                // 1. Receive and batch pending messages (user input)
-                let mut msgs = Vec::new();
-                msgs.push(match self.buf_msg_rx.recv().await {
-                    Some(msg) => msg,
-                    None => break,
-                });
-                while let Ok(msg) = self.buf_msg_rx.try_recv() {
-                    msgs.push(msg);
-                }
-
-                // Sync incoming user messages to session
-                for msg in &msgs {
-                    self.session_msgs.write().push(msg.clone());
-                }
-
-                // 2. Get current env state
+                // Get current env state
                 let client = env_watcher.watch_client();
                 let tools_json = env_watcher.watch_tool();
                 let model = env_watcher.watch_model();
                 let skill_content = env_watcher.watch_skill();
 
-                // 3. Build history from session
-                let history_json = Self::build_history_from(&self.session_msgs);
+                // Build history from session actor (includes init msg + tool results)
+                let history_json = if let Some(ref tx) = self.session_tx {
+                    Self::build_history_from(tx).await
+                } else {
+                    Vec::new()
+                };
 
-                // 4. TurnHighWay handshake
+                // TurnHighWay handshake
                 let (token_tx, react_bus) =
                     self.turn_highway_handle.prepare_turn().await;
 
-                // 5. Build LLM request
+                // Build LLM request
                 let request_json = P::build_request_json(
                     &model, &history_json, &skill_content, &tools_json,
                 );
@@ -168,7 +144,7 @@ impl<P: ChatProvider> ReActLoop<P> {
 
                 let stream = P::create_stream(&client, request_json).await?;
 
-                // 6. Process stream
+                // Process stream
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);
                 let (
                     assistant_content,
@@ -212,7 +188,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                     turn_events,
                     &middleware,
                     &event_sender,
-                    &self.session_msgs,
+                    &self.session_tx,
                 );
 
                 // 8. Handle finish reason — execute tools, collect results
@@ -239,7 +215,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                     result_events,
                     &middleware,
                     &event_sender,
-                    &self.session_msgs,
+                    &self.session_tx,
                 );
 
                 // 10. Emit TurnEnd
@@ -259,7 +235,6 @@ impl<P: ChatProvider> ReActLoop<P> {
         ReActLoopHandle {
             cancel_token: token_clone,
             task,
-            sender,
         }
     }
 }
@@ -283,7 +258,7 @@ fn filter_and_store<E: MiddlewareEvent>(
     events: Vec<E>,
     middleware: &Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
     event_sender: &Option<EventSenderFn<E>>,
-    session_msgs: &Arc<parking_lot::RwLock<Vec<FuneraMessage>>>,
+    session_tx: &Option<mpsc::UnboundedSender<SessionCmd>>,
 ) {
     for event in events {
         let filtered = if let Some(chain) = middleware {
@@ -295,7 +270,11 @@ fn filter_and_store<E: MiddlewareEvent>(
             event
         };
         if let Some((role, variant)) = filtered.clone().into_session_message() {
-            session_msgs.write().push(FuneraMessage::new(role, variant));
+            if let Some(tx) = session_tx {
+                let _ = tx.send(SessionCmd::PushMessages {
+                    msgs: vec![FuneraMessage::new(role, variant)],
+                });
+            }
         }
         if let Some(sender) = event_sender {
             sender(filtered);
@@ -460,7 +439,6 @@ struct ToolCallAccumulator {
 pub struct ReActLoopHandle {
     pub cancel_token: CancellationToken,
     pub task: JoinHandle<Result<()>>,
-    pub sender: mpsc::Sender<FuneraMessage>,
 }
 
 #[cfg(test)]
@@ -895,14 +873,14 @@ mod tests {
             turn_high_way_rx: loop_rx,
         };
 
-        let session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>> = Arc::new(parking_lot::RwLock::new(Vec::new()));
+        let session_tx = crate::chat::session::spawn_session_actor();
         let loop_instance = ReActLoop::<MockProvider>::new(
-            10, 1, session_msgs.clone(),
+            1, Some(session_tx.clone()),
             crate::env::FuneraEnv::new(
                 crate::re_act::tool::ToolRegistry::new(),
                 async_openai::Client::new(),
                 "mock-model",
-            ).1, // env_watcher
+            ).1,
             tool_bus,
             env_state_tx,
             handle,
@@ -913,7 +891,9 @@ mod tests {
             Role::User,
             MsgVariant::Text(TextMessage { text: "ping".into(), reasoning_content: None }),
         );
-        loop_handle.sender.send(msg).await.unwrap();
+        let _ = session_tx.send(crate::chat::session::SessionCmd::PushMessages {
+            msgs: vec![msg],
+        });
 
         let result = loop_handle.task.await;
         assert!(result.is_ok(), "loop task should complete successfully");

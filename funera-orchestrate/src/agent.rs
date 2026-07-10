@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
-use funera_core::chat::session::{FuneraSession, Idle};
+use funera_core::chat::session::{FuneraSession, SessionCmd};
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
 #[cfg(feature = "middleware")]
 use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
@@ -188,9 +188,9 @@ impl AgentBuilder {
 ///
 /// let agent = Agent::builder().build();
 ///
-/// // send uses the runtime's session — runtime needs &mut
-/// agent.send("My name is Alice.", &mut runtime).await?;
-/// agent.send("What is my name?", &mut runtime).await?;
+/// // send uses the runtime's session — runtime needs &
+/// agent.send("My name is Alice.", &runtime).await?;
+/// agent.send("What is my name?", &runtime).await?;
 /// // → "Alice"
 /// # Ok(())
 /// # }
@@ -234,10 +234,7 @@ impl Agent {
     // ── fire (one-shot, no session) ────────────────────────────────
 
     /// One-shot query. Creates a temporary session, runs a single ReAct loop,
-    /// and discards the session.  The runtime is accessed via a shared `&`
-    /// reference — no session state is mutated.
-    ///
-    /// Use [`send`](Self::send) instead if you need multi-turn conversation.
+    /// and discards the session.
     pub async fn fire<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
@@ -256,7 +253,9 @@ impl Agent {
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        let session = FuneraSession::<Idle>::new();
+        // Temporary actor for one-shot — dropped after react_loop completes
+        let session_tx = funera_core::chat::session::spawn_session_actor();
+        let session = FuneraSession::new(session_tx);
         if let Some(ref sys) = self.system_prompt {
             session.push_message(FuneraMessage::new(
                 Role::System,
@@ -264,7 +263,6 @@ impl Agent {
             ));
         }
 
-        let mut running = session.run();
         let init_msg = FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
@@ -281,7 +279,7 @@ impl Agent {
 
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
-        let result = running
+        let result = session
             .react_loop::<P, AgentEvent>(
                 init_msg,
                 config,
@@ -317,14 +315,13 @@ impl Agent {
 
     // ── send (multi-turn, persistent session) ──────────────────────
 
-    /// Multi-turn message. Uses the runtime's persistent session, storing
-    /// the updated session back into the runtime on completion.
+    /// Multi-turn message. Uses the runtime's persistent session (via channel).
     ///
-    /// The runtime requires `&mut` because the session state is mutated.
+    /// The runtime requires only `&` — session state never leaves the actor.
     pub async fn send<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &mut AgentRuntime<P>,
+        runtime: &AgentRuntime<P>,
     ) -> Result<ChatResponse, OrchestrateError> {
         let text = msg.into();
         let mut event_rx = self.subscribe_events();
@@ -339,9 +336,10 @@ impl Agent {
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        let session = runtime.take_session();
+        let session = FuneraSession::new(runtime.session_tx());
         if let Some(ref sys) = self.system_prompt {
-            if session.session_context().is_empty() {
+            let msgs = session.session_context().await;
+            if msgs.is_empty() {
                 session.push_message(FuneraMessage::new(
                     Role::System,
                     MsgVariant::Text(TextMessage {
@@ -352,7 +350,6 @@ impl Agent {
             }
         }
 
-        let mut running = session.run();
         let init_msg = FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
@@ -369,7 +366,7 @@ impl Agent {
 
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
-        let result = running
+        let result = session
             .react_loop::<P, AgentEvent>(
                 init_msg,
                 config,
@@ -379,21 +376,15 @@ impl Agent {
             )
             .await;
 
-        let idle_session = running.idle();
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
-
-        let response = aggregate_response(&mut event_rx, result).await;
-        if response.is_ok() {
-            runtime.store_session(idle_session);
-        }
-        response
+        aggregate_response(&mut event_rx, result).await
     }
 
     /// Streaming variant of [`send`](Self::send).
     pub async fn send_stream<P: ChatProvider>(
         &self,
         msg: impl Into<String>,
-        runtime: &mut AgentRuntime<P>,
+        runtime: &AgentRuntime<P>,
     ) -> Result<mpsc::Receiver<AgentEvent>, OrchestrateError> {
         let (relay_tx, rx) = mpsc::channel(256);
         let event_rx = self.subscribe_events();

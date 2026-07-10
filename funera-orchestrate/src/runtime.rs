@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::task::JoinHandle;
 
-use funera_core::chat::session::{FuneraSession, Idle};
+use funera_core::chat::session::{spawn_session_actor, FuneraSession, SessionCmd};
 #[cfg(feature = "deepseek")]
 use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
@@ -321,6 +321,8 @@ impl AgentRuntimeBuilder {
             ToolExecutor::new(reg, exec_rx).run().await;
         });
 
+        let session_tx = spawn_session_actor();
+
         Ok(AgentRuntime {
             env,
             env_watcher,
@@ -330,7 +332,7 @@ impl AgentRuntimeBuilder {
             channel_buffer: self.channel_buffer,
             env_state_tx,
             _executor_handle: handle,
-            session: None,
+            session_tx,
             _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain,
@@ -341,16 +343,11 @@ impl AgentRuntimeBuilder {
 /// A runtime context for executing agent interactions.
 ///
 /// `AgentRuntime` owns the shared infrastructure (LLM client, tool registry,
-/// tool executor) and an optional persistent conversation session.
+/// tool executor) and a persistent session (backed by a session actor).
 ///
-/// Pass `&mut AgentRuntime` to [`Agent::send`](crate::Agent::send) /
-/// [`Agent::send_stream`](crate::Agent::send_stream) for multi-turn
-/// conversations, or `&AgentRuntime` to [`Agent::fire`](crate::Agent::fire) /
-/// [`Agent::fire_stream`](crate::Agent::fire_stream) for one-shot queries.
-///
-/// The generic parameter `P` selects the LLM provider — typically
-/// [`DeepSeekProvider`](funera_core::provider::deepseek::DeepSeekProvider) or
-/// [`OpenAIProvider`](funera_core::provider::openai::OpenAIProvider).
+/// The session is always available — unlike `take_session()`/`store_session()`
+/// which temporarily surrendered ownership, the new actor model ensures you
+/// can query `session_context()` even when a ReAct loop is in progress.
 pub struct AgentRuntime<P: ChatProvider> {
     env: FuneraEnv,
     pub(crate) env_watcher: FuneraEnvWatcher,
@@ -360,7 +357,7 @@ pub struct AgentRuntime<P: ChatProvider> {
     pub(crate) channel_buffer: usize,
     env_state_tx: broadcast::Sender<EnvStateEvent>,
     _executor_handle: JoinHandle<()>,
-    session: Option<FuneraSession<Idle>>,
+    pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
     _phantom: PhantomData<P>,
     #[cfg(feature = "middleware")]
     middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
@@ -373,18 +370,13 @@ impl<P: ChatProvider> AgentRuntime<P> {
     }
 
     /// Reset the conversation session (clear message history).
-    pub fn reset(&mut self) {
-        self.session = None;
+    pub fn reset(&self) {
+        let _ = self.session_tx.send(SessionCmd::Clear);
     }
 
-    /// Take the current session, or create a fresh one.
-    pub(crate) fn take_session(&mut self) -> FuneraSession<Idle> {
-        self.session.take().unwrap_or_else(FuneraSession::<Idle>::new)
-    }
-
-    /// Store a session back.
-    pub(crate) fn store_session(&mut self, session: FuneraSession<Idle>) {
-        self.session = Some(session);
+    /// Access the session control channel.
+    pub fn session_tx(&self) -> mpsc::UnboundedSender<SessionCmd> {
+        self.session_tx.clone()
     }
 
     /// The LLM model name configured for this runtime.
@@ -440,6 +432,7 @@ impl<P: ChatProvider> AgentRuntime<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
     use funera_core::re_act::tool::ToolCallError;
 
     // ── inline mock tool ───────────────────────────────────────────
@@ -631,67 +624,48 @@ mod tests {
     // ── session management ─────────────────────────────────────────
 
     #[tokio::test]
-    async fn session_take_empty_creates_new() {
-        let mut rt = AgentRuntimeBuilder::new()
+    async fn session_actor_is_alive() {
+        let rt = AgentRuntimeBuilder::new()
             .api_key("sk-test")
             .model("x")
             .build()
             .unwrap();
-        let s1 = rt.take_session();
-        let s2 = rt.take_session();
-        // Two different sessions
-        assert_ne!(s1.id(), s2.id());
+        let tx = rt.session_tx();
+        assert!(tx.send(SessionCmd::Clear).is_ok());
     }
 
     #[tokio::test]
-    async fn session_store_and_retrieve() {
-        let mut rt = AgentRuntimeBuilder::new()
+    async fn session_context_works_immediately() {
+        let rt = AgentRuntimeBuilder::new()
             .api_key("sk-test")
             .model("x")
             .build()
             .unwrap();
-        let s = rt.take_session();
-        let id = s.id();
-        rt.store_session(s);
-        let s2 = rt.take_session();
-        assert_eq!(s2.id(), id, "should retrieve the same session");
+        let ctx = FuneraSession::new(rt.session_tx())
+            .session_context()
+            .await;
+        assert!(ctx.is_empty());
     }
 
     #[tokio::test]
-    async fn session_reset_clears() {
-        let mut rt = AgentRuntimeBuilder::new()
+    async fn reset_clears_messages() {
+        let rt = AgentRuntimeBuilder::new()
             .api_key("sk-test")
             .model("x")
             .build()
             .unwrap();
-        let s = rt.take_session();
-        let id = s.id();
-        rt.store_session(s);
-        rt.reset();
-        let s2 = rt.take_session();
-        assert_ne!(s2.id(), id, "reset should create a new session");
-    }
+        let session = FuneraSession::new(rt.session_tx());
+        session.push_message(FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage { text: "hi".into(), reasoning_content: None }),
+        ));
+        let ctx_before = session.session_context().await;
+        assert_eq!(ctx_before.len(), 1);
 
-    #[tokio::test]
-    async fn session_multiple_store_take() {
-        let mut rt = AgentRuntimeBuilder::new()
-            .api_key("sk-test")
-            .model("x")
-            .build()
-            .unwrap();
-        let s1 = rt.take_session();
-        let id1 = s1.id();
-        rt.store_session(s1);
-
-        let s2 = rt.take_session();
-        assert_eq!(s2.id(), id1);
-
-        let id2 = s2.id();
-        rt.store_session(s2);
         rt.reset();
 
-        let s3 = rt.take_session();
-        assert_ne!(s3.id(), id2);
+        let ctx_after = session.session_context().await;
+        assert_eq!(ctx_after.len(), 0);
     }
 
     // ── accessors ──────────────────────────────────────────────────
