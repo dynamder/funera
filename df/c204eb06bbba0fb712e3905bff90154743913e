@@ -1,0 +1,19 @@
+funera-orchestrate/examples/raw_events.rs
+  s_609ef491cfc030::t_5a3b472ebc89dd 1-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dfc204eb06bbba0fb712e3905bff90154743913e",
+  "prompts": {},
+  "sessions": {
+    "s_609ef491cfc030": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b57e978cffeOFF50GW5Gkn1pk",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
