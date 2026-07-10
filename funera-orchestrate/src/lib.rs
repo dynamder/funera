@@ -134,10 +134,15 @@ pub mod runtime;
 pub use agent::{Agent, AgentBuilder};
 pub use dispatcher::CallbackRegistry;
 pub use error::OrchestrateError;
-pub use event::AgentEvent;
+pub use event::{AgentEvent, RawAgentEvent};
 #[cfg(feature = "deepseek")]
 pub use funera_core::provider::deepseek::DeepSeekProvider;
 #[cfg(feature = "openai")]
 pub use funera_core::provider::openai::OpenAIProvider;
 pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{AgentRuntime, AgentRuntimeBuilder};
+
+// Re-export core event types for direct access
+pub use funera_core::event_bus::env_state_bus::EnvStateEvent;
+pub use funera_core::event_bus::react_bus::{ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
+pub use funera_core::event_bus::token_bus::TokenEvent;

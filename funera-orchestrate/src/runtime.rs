@@ -3,13 +3,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
-use tokio::sync::RwLock;
+use tokio::sync::{broadcast, RwLock};
 use tokio::task::JoinHandle;
 
 use funera_core::chat::session::{FuneraSession, Idle};
 #[cfg(feature = "deepseek")]
 use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
+use funera_core::event_bus::env_state_bus::EnvStateEvent;
 use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::skills::{Skill, SkillRegistry};
@@ -254,6 +255,25 @@ impl AgentRuntimeBuilder {
         // Create env with pre-built skill registry (prompt is computed internally)
         let (env, env_watcher) = FuneraEnv::with_skills(registry, client, &model, skill_registry);
 
+        // Runtime-level env state event channel (persistent, not per-call)
+        let (env_state_tx, _) = broadcast::channel(32);
+
+        // Emit runtime-level events for pre-registered tools
+        if let Ok(guard) = env.tool_registry.try_read() {
+            let tools = guard.get_all_tools();
+            for name in tools.keys() {
+                let _ = env_state_tx.send(EnvStateEvent::ToolAdded(name.clone()));
+            }
+        }
+
+        // Emit runtime-level events for pre-registered skills
+        if let Ok(guard) = env.skill_registry.try_read() {
+            let skills = guard.all_skills();
+            for name in skills.keys() {
+                let _ = env_state_tx.send(EnvStateEvent::SkillAdded(name.clone()));
+            }
+        }
+
         let (tool_bus, exec_rx) = ToolBus::new();
         let reg = env.tool_registry.clone();
         let handle = tokio::spawn(async move {
@@ -267,6 +287,7 @@ impl AgentRuntimeBuilder {
             model,
             max_iterations: self.max_iterations,
             channel_buffer: self.channel_buffer,
+            env_state_tx,
             _executor_handle: handle,
             session: None,
             _phantom: PhantomData,
@@ -294,6 +315,7 @@ pub struct AgentRuntime<P: ChatProvider> {
     pub(crate) model: String,
     pub(crate) max_iterations: usize,
     pub(crate) channel_buffer: usize,
+    env_state_tx: broadcast::Sender<EnvStateEvent>,
     _executor_handle: JoinHandle<()>,
     session: Option<FuneraSession<Idle>>,
     _phantom: PhantomData<P>,
@@ -348,6 +370,19 @@ impl<P: ChatProvider> AgentRuntime<P> {
     /// Clone the env watcher for a session.
     pub(crate) fn env_watcher(&self) -> FuneraEnvWatcher {
         self.env_watcher.clone()
+    }
+
+    /// Subscribe to runtime-level environment state events.
+    ///
+    /// The returned receiver yields [`EnvStateEvent`] notifications about
+    /// tool/skill registration changes, LLM model changes, etc. that occur
+    /// during the runtime's lifetime.
+    ///
+    /// Unlike [`Agent::subscribe_raw_events`](crate::Agent::subscribe_raw_events)
+    /// which only delivers events during a `fire`/`send` call, this subscription
+    /// is persistent and independent of any agent call.
+    pub fn subscribe_env_state(&self) -> broadcast::Receiver<EnvStateEvent> {
+        self.env_state_tx.subscribe()
     }
 }
 
@@ -621,5 +656,24 @@ mod tests {
         let guard = reg.read().await;
         let tools = guard.get_all_tools();
         assert!(tools.is_empty());
+    }
+
+    #[tokio::test]
+    async fn subscribe_env_state_works() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let mut rx = rt.subscribe_env_state();
+        // Send an event after subscribing to verify the channel works
+        rt.env_state_tx
+            .send(EnvStateEvent::LlmChanged("new-model".into()))
+            .unwrap();
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(
+            got,
+            Ok(Ok(EnvStateEvent::LlmChanged(m))) if m == "new-model"
+        ));
     }
 }

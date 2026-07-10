@@ -6,7 +6,7 @@ use funera_core::event_bus::env_state_bus::EnvStateEvent;
 use funera_core::event_bus::react_bus::ReactEvent;
 use funera_core::event_bus::token_bus::TokenEvent;
 
-use crate::event::AgentEvent;
+use crate::event::{AgentEvent, RawAgentEvent};
 
 type CallbackFn = Arc<dyn Fn(AgentEvent) + Send + Sync>;
 
@@ -56,13 +56,15 @@ impl CallbackDispatcher {
         env_state_rx: broadcast::Receiver<EnvStateEvent>,
         registry: Arc<CallbackRegistry>,
         event_tx: broadcast::Sender<AgentEvent>,
+        raw_event_tx: broadcast::Sender<RawAgentEvent>,
     ) -> Self {
         let mut handles = Vec::new();
 
         let reg = registry.clone();
         let tx = event_tx.clone();
+        let raw_tx = raw_event_tx.clone();
         let handle = tokio::spawn(async move {
-            Self::listen_env_state(env_state_rx, reg, tx).await;
+            Self::listen_env_state(env_state_rx, reg, tx, raw_tx).await;
         });
         handles.push(handle);
 
@@ -76,6 +78,7 @@ impl CallbackDispatcher {
         mut rx: broadcast::Receiver<EnvStateEvent>,
         registry: Arc<CallbackRegistry>,
         event_tx: broadcast::Sender<AgentEvent>,
+        raw_event_tx: broadcast::Sender<RawAgentEvent>,
     ) {
         let mut token_handle: Option<tokio::task::JoinHandle<()>> = None;
         let mut react_handle: Option<tokio::task::JoinHandle<()>> = None;
@@ -91,18 +94,31 @@ impl CallbackDispatcher {
 
                     let reg = registry.clone();
                     let tx = event_tx.clone();
+                    let raw = raw_event_tx.clone();
                     token_handle = Some(tokio::spawn(async move {
-                        Self::listen_token_bus(token_rx, reg.clone(), tx.clone()).await;
+                        Self::listen_token_bus(token_rx, reg.clone(), tx.clone(), raw).await;
                     }));
 
                     let reg = registry.clone();
                     let tx = event_tx.clone();
+                    let raw = raw_event_tx.clone();
+                    let barrier_for_task = ready_barrier.clone();
                     react_handle = Some(tokio::spawn(async move {
-                        ready_barrier.wait().await;
-                        Self::listen_react_bus(react_rx, reg, tx).await;
+                        barrier_for_task.wait().await;
+                        Self::listen_react_bus(react_rx, reg, tx, raw).await;
                     }));
+
+                    // Forward the PerTurnBusReady event itself
+                    let _ = raw_event_tx.send(RawAgentEvent::EnvState(
+                        EnvStateEvent::PerTurnBusReady {
+                            token_tx,
+                            react_tx,
+                            ready_barrier,
+                        },
+                    ));
                 }
                 Ok(EnvStateEvent::SessionClosed) => {
+                    let _ = raw_event_tx.send(RawAgentEvent::EnvState(EnvStateEvent::SessionClosed));
                     if let Some(h) = token_handle.take() {
                         let _ = h.await;
                     }
@@ -112,9 +128,13 @@ impl CallbackDispatcher {
                     let _ = event_tx.send(AgentEvent::Done);
                     break;
                 }
+                Ok(other) => {
+                    // Forward all other EnvStateEvent (SessionStart, LlmChanged,
+                    // ToolAdded, etc.) to the raw channel
+                    let _ = raw_event_tx.send(RawAgentEvent::EnvState(other));
+                }
                 Err(broadcast::error::RecvError::Closed) => break,
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                _ => {}
             }
         }
     }
@@ -123,6 +143,7 @@ impl CallbackDispatcher {
         mut rx: broadcast::Receiver<TokenEvent>,
         registry: Arc<CallbackRegistry>,
         event_tx: broadcast::Sender<AgentEvent>,
+        raw_event_tx: broadcast::Sender<RawAgentEvent>,
     ) {
         loop {
             match rx.recv().await {
@@ -136,12 +157,19 @@ impl CallbackDispatcher {
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
                 }
-                Ok(TokenEvent::ToolDelta { .. }) => {
-                    // ToolDelta is raw stream data; ToolCallRequest is emitted
-                    // by listen_react_bus from ReactEvent::ToolExecRequest
+                Ok(raw @ TokenEvent::ToolDelta { .. }) => {
+                    // ToolDelta is not translated to AgentEvent (ToolCallRequest
+                    // comes from listen_react_bus), but forward the raw event.
+                    let _ = raw_event_tx.send(RawAgentEvent::Token(raw));
                 }
-                Ok(TokenEvent::Finish(_)) => {
-                    break;
+                Ok(raw) => {
+                    let is_finish = matches!(raw, TokenEvent::Finish(_));
+                    // Forward all TokenEvent variants (ToolDelta, Finish, etc.)
+                    // to the raw channel
+                    let _ = raw_event_tx.send(RawAgentEvent::Token(raw));
+                    if is_finish {
+                        break;
+                    }
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
@@ -153,6 +181,7 @@ impl CallbackDispatcher {
         mut rx: broadcast::Receiver<ReactEvent>,
         registry: Arc<CallbackRegistry>,
         event_tx: broadcast::Sender<AgentEvent>,
+        raw_event_tx: broadcast::Sender<RawAgentEvent>,
     ) {
         loop {
             match rx.recv().await {
@@ -160,24 +189,28 @@ impl CallbackDispatcher {
                     let event = AgentEvent::TurnStart;
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
+                    let _ = raw_event_tx.send(RawAgentEvent::React(ReactEvent::TurnStart));
                 }
                 Ok(ReactEvent::TurnEnd) => {
                     let event = AgentEvent::TurnEnd;
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
+                    let _ = raw_event_tx.send(RawAgentEvent::React(ReactEvent::TurnEnd));
                 }
                 Ok(ReactEvent::ToolExecRequest(req)) => {
                     let event = AgentEvent::ToolCallRequest {
                         index: req.index,
                         call_id: req.call_id.clone().into(),
-                        name: req.name,
-                        args: req.args,
+                        name: req.name.clone(),
+                        args: req.args.clone(),
                     };
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
+                    let _ = raw_event_tx
+                        .send(RawAgentEvent::React(ReactEvent::ToolExecRequest(req)));
                 }
                 Ok(ReactEvent::ToolExecResponse(res)) => {
-                    let event = match res {
+                    let event = match res.clone() {
                         Ok(response) => AgentEvent::ToolCallResult {
                             call_id: response.call_id.clone().into(),
                             name: response.name.clone(),
@@ -191,10 +224,15 @@ impl CallbackDispatcher {
                     };
                     registry.dispatch(event.clone());
                     let _ = event_tx.send(event);
+                    let _ = raw_event_tx
+                        .send(RawAgentEvent::React(ReactEvent::ToolExecResponse(res)));
+                }
+                Ok(other) => {
+                    // Forward MessageQueued and any future ReactEvent variants
+                    let _ = raw_event_tx.send(RawAgentEvent::React(other));
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                _ => {}
             }
         }
     }
@@ -207,6 +245,9 @@ impl CallbackDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::{AgentEvent, RawAgentEvent};
+    use funera_core::event_bus::env_state_bus::EnvStateEvent;
+    use funera_core::event_bus::token_bus::TokenEvent;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     // ── CallbackRegistry ───────────────────────────────────────────
@@ -308,10 +349,11 @@ mod tests {
     async fn dispatcher_token_reaches_event_tx() {
         let reg = Arc::new(CallbackRegistry::new());
         let (event_tx, mut event_rx) = broadcast::channel(32);
+        let (raw_event_tx, _raw_rx) = broadcast::channel(32);
 
         let (bus, mut handle) = funera_core::event_bus::env_state_bus::EnvStateBus::new();
         let rx = bus.subscribe();
-        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
+        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone(), raw_event_tx);
         bus.start_turn_highway();
 
         let (token_tx, _, barrier) = handle.prepare_turn().await;
@@ -334,10 +376,11 @@ mod tests {
     async fn dispatcher_tool_call_reaches_event_tx() {
         let reg = Arc::new(CallbackRegistry::new());
         let (event_tx, mut event_rx) = broadcast::channel(32);
+        let (raw_event_tx, _raw_rx) = broadcast::channel(32);
 
         let (bus, mut handle) = funera_core::event_bus::env_state_bus::EnvStateBus::new();
         let rx = bus.subscribe();
-        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
+        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone(), raw_event_tx);
         bus.start_turn_highway();
 
         let (token_tx, _, barrier) = handle.prepare_turn().await;
@@ -364,26 +407,32 @@ mod tests {
     async fn dispatcher_session_closed_stops_listener() {
         let reg = Arc::new(CallbackRegistry::new());
         let (event_tx, mut event_rx) = broadcast::channel(32);
+        let (raw_event_tx, mut raw_rx) = broadcast::channel(32);
 
         let (bus, _) = funera_core::event_bus::env_state_bus::EnvStateBus::new();
         let rx = bus.subscribe();
-        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
+        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone(), raw_event_tx);
 
         // Send SessionClosed — dispatcher should emit AgentEvent::Done
         bus.send(EnvStateEvent::SessionClosed).unwrap();
 
         let got = tokio::time::timeout(std::time::Duration::from_secs(1), event_rx.recv()).await;
         assert!(matches!(got, Ok(Ok(AgentEvent::Done))));
+
+        // Also verify raw_event_tx received SessionClosed
+        let raw = tokio::time::timeout(std::time::Duration::from_secs(1), raw_rx.recv()).await;
+        assert!(matches!(raw, Ok(Ok(RawAgentEvent::EnvState(EnvStateEvent::SessionClosed)))));
     }
 
     #[tokio::test]
     async fn dispatcher_multiple_tokens_delivered() {
         let reg = Arc::new(CallbackRegistry::new());
         let (event_tx, mut event_rx) = broadcast::channel(32);
+        let (raw_event_tx, _raw_rx) = broadcast::channel(32);
 
         let (bus, mut handle) = funera_core::event_bus::env_state_bus::EnvStateBus::new();
         let rx = bus.subscribe();
-        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone());
+        let _disp = CallbackDispatcher::new(rx, reg, event_tx.clone(), raw_event_tx);
         bus.start_turn_highway();
 
         let (token_tx, _, barrier) = handle.prepare_turn().await;
@@ -409,5 +458,60 @@ mod tests {
             }
         }
         assert_eq!(count, 2, "should have received two token events");
+    }
+
+    #[tokio::test]
+    async fn dispatcher_raw_channel_receives_tool_delta() {
+        let reg = Arc::new(CallbackRegistry::new());
+        let (_event_tx, _) = broadcast::channel(32);
+        let (raw_event_tx, mut raw_rx) = broadcast::channel(32);
+
+        let (bus, mut handle) = funera_core::event_bus::env_state_bus::EnvStateBus::new();
+        let env_state_tx = bus.env_state_tx.clone();
+        let rx = bus.subscribe();
+        let _disp = CallbackDispatcher::new(rx, reg, _event_tx, raw_event_tx);
+        bus.start_turn_highway();
+
+        let (token_tx, _, barrier) = handle.prepare_turn().await;
+        tokio::spawn(async move {
+            barrier.wait().await;
+        });
+
+        token_tx
+            .send(TokenEvent::ToolDelta {
+                index: 1,
+                call_id: "call_1".into(),
+                name: Some("weather".into()),
+                args_chunk: Some("{\"loc".into()),
+            })
+            .unwrap();
+        token_tx
+            .send(TokenEvent::Finish(
+                async_openai::types::chat::FinishReason::ToolCalls,
+            ))
+            .unwrap();
+
+        // Close the session so the dispatcher stops
+        env_state_tx.send(EnvStateEvent::SessionClosed).unwrap();
+
+        // Verify raw_event_tx received ToolDelta
+        let mut found_tool_delta = false;
+        while let Ok(event) =
+            tokio::time::timeout(std::time::Duration::from_secs(2), raw_rx.recv()).await
+        {
+            match event {
+                Ok(RawAgentEvent::Token(TokenEvent::ToolDelta {
+                    index: 1,
+                    name: Some(n),
+                    ..
+                })) if n == "weather" => {
+                    found_tool_delta = true;
+                }
+                Ok(RawAgentEvent::EnvState(EnvStateEvent::SessionClosed)) => break,
+                _ => continue,
+            }
+        }
+
+        assert!(found_tool_delta, "raw channel should have received ToolDelta");
     }
 }

@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
 
+use funera_core::event_bus::env_state_bus::EnvStateEvent;
+use funera_core::event_bus::react_bus::ReactEvent;
+use funera_core::event_bus::token_bus::TokenEvent;
+
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
     Token(String),
@@ -21,6 +25,20 @@ pub enum AgentEvent {
     TurnEnd,
     Error(String),
     Done,
+}
+
+/// Wraps a raw underlying event from the core event buses.
+///
+/// Returned by [`Agent::subscribe_raw_events`](crate::Agent::subscribe_raw_events).
+///
+/// Unlike [`AgentEvent`] which is a curated/translated view, this enum
+/// provides direct access to the original [`TokenEvent`], [`ReactEvent`],
+/// and [`EnvStateEvent`] as emitted by `funera_core`.
+#[derive(Debug, Clone)]
+pub enum RawAgentEvent {
+    Token(TokenEvent),
+    React(ReactEvent),
+    EnvState(EnvStateEvent),
 }
 
 #[cfg(test)]
@@ -72,5 +90,44 @@ mod tests {
         let e = AgentEvent::Token("hi".into());
         let cloned = e.clone();
         assert!(matches!(cloned, AgentEvent::Token(t) if t == "hi"));
+    }
+
+    // ── RawAgentEvent ──────────────────────────────────────────────
+
+    #[test]
+    fn raw_token_wraps_text() {
+        let raw = RawAgentEvent::Token(TokenEvent::Text("hello".into()));
+        assert!(matches!(
+            raw,
+            RawAgentEvent::Token(TokenEvent::Text(t)) if t == "hello"
+        ));
+    }
+
+    #[test]
+    fn raw_react_wraps_turn_start() {
+        let raw = RawAgentEvent::React(ReactEvent::TurnStart);
+        assert!(matches!(raw, RawAgentEvent::React(ReactEvent::TurnStart)));
+    }
+
+    #[test]
+    fn raw_env_state_wraps_session_start() {
+        let raw = RawAgentEvent::EnvState(EnvStateEvent::SessionStart);
+        assert!(matches!(
+            raw,
+            RawAgentEvent::EnvState(EnvStateEvent::SessionStart)
+        ));
+    }
+
+    #[test]
+    fn raw_clone() {
+        let raw = RawAgentEvent::Token(TokenEvent::Text("x".into()));
+        let cloned = raw.clone();
+        assert!(matches!(cloned, RawAgentEvent::Token(TokenEvent::Text(t)) if t == "x"));
+    }
+
+    #[test]
+    fn raw_debug() {
+        let raw = RawAgentEvent::Token(TokenEvent::Text("x".into()));
+        let _ = format!("{raw:?}");
     }
 }

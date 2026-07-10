@@ -10,7 +10,7 @@ use funera_core::re_act::ReActLoopConfig;
 
 use crate::dispatcher::{CallbackDispatcher, CallbackRegistry};
 use crate::error::OrchestrateError;
-use crate::event::AgentEvent;
+use crate::event::{AgentEvent, RawAgentEvent};
 use crate::response::ChatResponse;
 use crate::runtime::AgentRuntime;
 
@@ -135,10 +135,12 @@ impl AgentBuilder {
     /// Build the [`Agent`].
     pub fn build(self) -> Agent {
         let (event_tx, _) = broadcast::channel(256);
+        let (raw_event_tx, _) = broadcast::channel(256);
         Agent {
             system_prompt: self.system_prompt,
             callbacks: Arc::new(self.callbacks),
             event_tx,
+            raw_event_tx,
         }
     }
 }
@@ -194,6 +196,7 @@ pub struct Agent {
     pub(crate) system_prompt: Option<String>,
     pub(crate) callbacks: Arc<CallbackRegistry>,
     pub(crate) event_tx: broadcast::Sender<AgentEvent>,
+    pub(crate) raw_event_tx: broadcast::Sender<RawAgentEvent>,
 }
 
 impl Agent {
@@ -208,6 +211,21 @@ impl Agent {
     /// turn boundaries) dispatched during `fire`/`send`.
     pub fn subscribe_events(&self) -> broadcast::Receiver<AgentEvent> {
         self.event_tx.subscribe()
+    }
+
+    /// Subscribe to raw underlying events from the core event buses.
+    ///
+    /// The returned receiver yields [`RawAgentEvent`] variants that directly
+    /// wrap `funera_core`'s [`TokenEvent`](funera_core::event_bus::token_bus::TokenEvent),
+    /// [`ReactEvent`](funera_core::event_bus::react_bus::ReactEvent), and
+    /// [`EnvStateEvent`](funera_core::event_bus::env_state_bus::EnvStateEvent).
+    ///
+    /// Unlike [`subscribe_events`](Self::subscribe_events) which returns a
+    /// curated/translated [`AgentEvent`], this stream provides the original
+    /// events including [`TokenEvent::ToolDelta`], [`ReactEvent::MessageQueued`],
+    /// and all [`EnvStateEvent`] variants.
+    pub fn subscribe_raw_events(&self) -> broadcast::Receiver<RawAgentEvent> {
+        self.raw_event_tx.subscribe()
     }
 
     // ── fire (one-shot, no session) ────────────────────────────────
@@ -232,7 +250,7 @@ impl Agent {
 
         // Per-call dispatcher
         let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone());
+            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone(), self.raw_event_tx.clone());
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
@@ -334,7 +352,7 @@ impl Agent {
 
         // Per-call dispatcher
         let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone());
+            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone(), self.raw_event_tx.clone());
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
@@ -610,6 +628,22 @@ mod tests {
         let r2 = tokio::time::timeout(std::time::Duration::from_secs(1), rx2.recv()).await;
         assert!(r1.is_ok());
         assert!(r2.is_ok());
+    }
+
+    #[tokio::test]
+    async fn subscribe_raw_events_receives_raw_token() {
+        use funera_core::event_bus::token_bus::TokenEvent;
+        let agent = AgentBuilder::new().build();
+        let mut rx = agent.subscribe_raw_events();
+        agent
+            .raw_event_tx
+            .send(RawAgentEvent::Token(TokenEvent::Text("raw".into())))
+            .unwrap();
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(
+            got,
+            Ok(Ok(RawAgentEvent::Token(TokenEvent::Text(t)))) if t == "raw"
+        ));
     }
 
     // ── callback firing via dispatch ───────────────────────────────
