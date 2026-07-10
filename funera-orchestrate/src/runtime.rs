@@ -17,6 +17,13 @@ use funera_core::re_act::skills::{Skill, SkillRegistry};
 use funera_core::re_act::tool::{Tool, ToolRegistry};
 use funera_core::re_act::tool_executor::ToolExecutor;
 
+#[cfg(feature = "middleware")]
+use crate::event::AgentEvent;
+#[cfg(feature = "middleware")]
+use crate::middleware_bundle::MiddlewareBundle;
+#[cfg(feature = "middleware")]
+use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
+
 use crate::error::OrchestrateError;
 
 /// Builds an [`AgentRuntime`].
@@ -42,6 +49,8 @@ pub struct AgentRuntimeBuilder {
     skills: Vec<Skill>,
     skill_names_to_activate: Vec<String>,
     load_default_skills: bool,
+    #[cfg(feature = "middleware")]
+    middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
 }
 
 impl Default for AgentRuntimeBuilder {
@@ -63,6 +72,8 @@ impl AgentRuntimeBuilder {
             skills: Vec::new(),
             skill_names_to_activate: Vec::new(),
             load_default_skills: false,
+            #[cfg(feature = "middleware")]
+            middleware_bundle: None,
         }
     }
 
@@ -171,6 +182,15 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    /// Attach a middleware chain with error channel.
+    ///
+    /// The runtime will spawn a task to consume inspector errors via `tracing::warn`.
+    #[cfg(feature = "middleware")]
+    pub fn with_middleware_bundle(mut self, bundle: MiddlewareBundle<AgentEvent>) -> Self {
+        self.middleware_bundle = Some(bundle);
+        self
+    }
+
     /// Register all builtin tools (Read, Write, Edit, Shell).
     /// Requires the `builtin-tools` feature.
     #[cfg(feature = "builtin-tools")]
@@ -274,6 +294,27 @@ impl AgentRuntimeBuilder {
             }
         }
 
+        #[cfg(feature = "middleware")]
+        let middleware_chain = if let Some(bundle) = self.middleware_bundle.take() {
+            let MiddlewareBundle { chain, error_rx } = bundle;
+            tokio::spawn(async move {
+                let mut rx = error_rx;
+                while let Some((name, err)) = rx.recv().await {
+                    tracing::warn!("[middleware:{name}] inspector error: {err}");
+                }
+            });
+            Arc::new(chain)
+        } else {
+            let (chain, error_rx) = MiddlewareChain::<AgentEvent>::new().activate_error_channel();
+            tokio::spawn(async move {
+                let mut rx = error_rx;
+                while let Some((name, err)) = rx.recv().await {
+                    tracing::warn!("[middleware:{name}] inspector error: {err}");
+                }
+            });
+            Arc::new(chain)
+        };
+
         let (tool_bus, exec_rx) = ToolBus::new();
         let reg = env.tool_registry.clone();
         let handle = tokio::spawn(async move {
@@ -291,6 +332,8 @@ impl AgentRuntimeBuilder {
             _executor_handle: handle,
             session: None,
             _phantom: PhantomData,
+            #[cfg(feature = "middleware")]
+            middleware_chain,
         })
     }
 }
@@ -319,6 +362,8 @@ pub struct AgentRuntime<P: ChatProvider> {
     _executor_handle: JoinHandle<()>,
     session: Option<FuneraSession<Idle>>,
     _phantom: PhantomData<P>,
+    #[cfg(feature = "middleware")]
+    middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
 }
 
 impl<P: ChatProvider> AgentRuntime<P> {
@@ -383,6 +428,12 @@ impl<P: ChatProvider> AgentRuntime<P> {
     /// is persistent and independent of any agent call.
     pub fn subscribe_env_state(&self) -> broadcast::Receiver<EnvStateEvent> {
         self.env_state_tx.subscribe()
+    }
+
+    /// Access the middleware chain for event filtering.
+    #[cfg(feature = "middleware")]
+    pub fn middleware_chain(&self) -> Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>> {
+        self.middleware_chain.clone()
     }
 }
 

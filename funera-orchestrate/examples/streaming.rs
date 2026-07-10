@@ -24,11 +24,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── One-shot with streaming ──
     println!("=== Streaming: What is Rust? ===\n");
-    let mut rx = agent.fire_stream("What is Rust's ownership model in 3 sentences?", &runtime).await?;
+    let mut rx = agent
+        .fire_stream("What is Rust's ownership model in 3 sentences?", &runtime)
+        .await?;
 
     while let Some(event) = rx.recv().await {
         match event {
-            AgentEvent::Token(t) => eprint!("{t}"),
+            AgentEvent::Text(t) => eprint!("{t}"),
             AgentEvent::TurnStart => eprintln!("\n[Turn Start]"),
             AgentEvent::TurnEnd => eprintln!("\n[Turn End]"),
             AgentEvent::Done => eprintln!("\n[Done]"),

@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_skill(
             "concise",
             "Prefer very short answers",
-            "You must respond in 1-2 sentences maximum. Be direct and concise."
+            "You must respond in 1-2 sentences maximum. Be direct and concise. Output with a [concise] tag in the last line."
         )
 
         // Activate a skill by name. This causes its content to be

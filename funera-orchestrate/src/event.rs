@@ -8,7 +8,7 @@ use funera_core::event_bus::token_bus::TokenEvent;
 
 #[derive(Debug, Clone)]
 pub enum AgentEvent {
-    Token(String),
+    Text(String),
     Reasoning(String),
     ToolCallRequest {
         index: usize,
@@ -47,8 +47,8 @@ mod tests {
 
     #[test]
     fn agent_event_token() {
-        let e = AgentEvent::Token("hello".into());
-        assert!(matches!(e, AgentEvent::Token(t) if t == "hello"));
+        let e = AgentEvent::Text("hello".into());
+        assert!(matches!(e, AgentEvent::Text(t) if t == "hello"));
     }
 
     #[test]
@@ -87,9 +87,9 @@ mod tests {
 
     #[test]
     fn agent_event_clone() {
-        let e = AgentEvent::Token("hi".into());
+        let e = AgentEvent::Text("hi".into());
         let cloned = e.clone();
-        assert!(matches!(cloned, AgentEvent::Token(t) if t == "hi"));
+        assert!(matches!(cloned, AgentEvent::Text(t) if t == "hi"));
     }
 
     // ── RawAgentEvent ──────────────────────────────────────────────

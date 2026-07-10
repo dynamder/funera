@@ -17,8 +17,8 @@
 use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use funera_orchestrate::{
-    Agent, AgentEvent, AgentRuntime, DeepSeekProvider, EnvStateEvent,
-    RawAgentEvent, ReactEvent, TokenEvent,
+    Agent, AgentEvent, AgentRuntime, DeepSeekProvider, EnvStateEvent, RawAgentEvent, ReactEvent,
+    TokenEvent,
 };
 use serde_json::Value as JsonValue;
 
@@ -119,7 +119,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("  [react] message queued: {:?}", msg.role());
                 }
                 Ok(RawAgentEvent::React(ReactEvent::ToolExecRequest(req))) => {
-                    eprintln!("  [react] tool exec request: {} args={}", req.name, req.args);
+                    eprintln!(
+                        "  [react] tool exec request: {} args={}",
+                        req.name, req.args
+                    );
                 }
                 Ok(RawAgentEvent::React(ReactEvent::ToolExecResponse(res))) => match res {
                     Ok(r) => eprintln!("  [react] tool exec ok: {} => {}", r.name, r.result),
@@ -143,7 +146,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n── Agent stream (fire_stream) ──\n");
     while let Some(event) = stream.recv().await {
         match event {
-            AgentEvent::Token(t) => print!("{t}"),
+            AgentEvent::Text(t) => print!("{t}"),
             AgentEvent::ToolCallRequest { name, args, .. } => {
                 eprintln!("\n  [tool] {name}({args})");
             }

@@ -27,6 +27,7 @@ security = ["funera_core/security"]
 deepseek = ["funera_core/deepseek"]
 openai = ["funera_core/openai"]
 real-llm = []
+middleware = ["funera_core/middleware"]
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["full", "test-util"] }
@@ -38,3 +39,7 @@ path = "src/lib.rs"
 [[example]]
 name = "builtin_tools"
 required-features = ["builtin-tools"]
+
+[[example]]
+name = "middleware"
+required-features = ["middleware"]

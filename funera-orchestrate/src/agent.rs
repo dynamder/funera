@@ -64,7 +64,7 @@ impl AgentBuilder {
         F: Fn(String) + Send + Sync + 'static,
     {
         self.callbacks.add(Arc::new(move |event| {
-            if let AgentEvent::Token(t) = event {
+            if let AgentEvent::Text(t) = event {
                 f(t);
             }
         }));
@@ -249,8 +249,14 @@ impl Agent {
         env_state_bus.start_turn_highway();
 
         // Per-call dispatcher
-        let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone(), self.raw_event_tx.clone());
+        let _dispatcher = CallbackDispatcher::new(
+            env_state_rx,
+            self.callbacks.clone(),
+            self.event_tx.clone(),
+            self.raw_event_tx.clone(),
+            #[cfg(feature = "middleware")]
+            runtime.middleware_chain(),
+        );
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
@@ -351,8 +357,14 @@ impl Agent {
         env_state_bus.start_turn_highway();
 
         // Per-call dispatcher
-        let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.callbacks.clone(), self.event_tx.clone(), self.raw_event_tx.clone());
+        let _dispatcher = CallbackDispatcher::new(
+            env_state_rx,
+            self.callbacks.clone(),
+            self.event_tx.clone(),
+            self.raw_event_tx.clone(),
+            #[cfg(feature = "middleware")]
+            runtime.middleware_chain(),
+        );
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
@@ -594,10 +606,10 @@ mod tests {
         let mut rx = agent.subscribe_events();
         agent
             .event_tx
-            .send(AgentEvent::Token("hello".into()))
+            .send(AgentEvent::Text("hello".into()))
             .unwrap();
         let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
-        assert!(matches!(got, Ok(Ok(AgentEvent::Token(t))) if t == "hello"));
+        assert!(matches!(got, Ok(Ok(AgentEvent::Text(t))) if t == "hello"));
     }
 
     #[tokio::test]
@@ -683,7 +695,7 @@ mod tests {
             })
             .build();
 
-        agent.callbacks.dispatch(AgentEvent::Token("x".into()));
+        agent.callbacks.dispatch(AgentEvent::Text("x".into()));
         assert_eq!(token_hits.load(Ordering::SeqCst), 1);
         assert_eq!(tool_hits.load(Ordering::SeqCst), 0);
     }

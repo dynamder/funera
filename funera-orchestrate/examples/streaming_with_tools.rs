@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     while let Some(event) = rx.recv().await {
         match event {
-            AgentEvent::Token(t) => eprint!("{t}"),
+            AgentEvent::Text(t) => eprint!("{t}"),
             AgentEvent::ToolCallRequest {
                 call_id,
                 name,

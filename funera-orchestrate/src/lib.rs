@@ -131,6 +131,9 @@ pub mod event;
 pub mod response;
 pub mod runtime;
 
+#[cfg(feature = "middleware")]
+pub mod middleware_bundle;
+
 pub use agent::{Agent, AgentBuilder};
 pub use dispatcher::CallbackRegistry;
 pub use error::OrchestrateError;
@@ -146,3 +149,21 @@ pub use runtime::{AgentRuntime, AgentRuntimeBuilder};
 pub use funera_core::event_bus::env_state_bus::EnvStateEvent;
 pub use funera_core::event_bus::react_bus::{ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
 pub use funera_core::event_bus::token_bus::TokenEvent;
+
+/// Middleware 相关的类型和 trait。
+///
+/// 该模块提供了 [`InspectorMiddleware`]、[`MutatorMiddleware`] 等核心 trait，
+/// 以及 [`MiddlewareChain`]、[`MiddlewareBundle`] 等构建管道所需的类型。
+///
+/// ## Feature gate
+///
+/// 需要启用 `middleware` feature：
+///
+/// ```toml
+/// funera-orchestrate = { features = ["middleware"] }
+/// ```
+#[cfg(feature = "middleware")]
+pub mod middleware {
+    pub use funera_core::middleware::*;
+    pub use crate::middleware_bundle::MiddlewareBundle;
+}
