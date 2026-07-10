@@ -56,6 +56,10 @@ pub fn err_tool(name: &str, error: ToolCallError) -> MockTool {
     MockTool::new(name, default_schema(name)).with_result(Err(error))
 }
 
+pub fn create_client() -> async_openai::Client<async_openai::config::OpenAIConfig> {
+    async_openai::Client::new()
+}
+
 pub fn sample_history_messages() -> Vec<JsonValue> {
     vec![
         serde_json::json!({

@@ -392,4 +392,66 @@ mod tests {
         assert_eq!(skill.name, "ws");
         assert_eq!(skill.content, "body");
     }
+
+    #[test]
+    fn from_file_reads_skill() {
+        let dir = std::env::temp_dir().join(format!("skill_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let file_path = dir.join("test_skill.md");
+        let content = "---\nname: file-skill\ndescription: From file\n---\n\nFile content here";
+        std::fs::write(&file_path, content).unwrap();
+
+        let skill = Skill::from_file(&file_path).unwrap();
+        assert_eq!(skill.name, "file-skill");
+        assert_eq!(skill.description, "From file");
+        assert_eq!(skill.content, "File content here");
+        assert_eq!(skill.source_path, Some(file_path.clone()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn from_file_nonexistent_returns_error() {
+        let result = Skill::from_file("/nonexistent/path/skill.md");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn from_dir_reads_markdown_files() {
+        let dir = std::env::temp_dir().join(format!("skills_dir_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+
+        std::fs::write(dir.join("a.md"), "---\nname: skill-a\n---\n\nContent A").unwrap();
+        std::fs::write(dir.join("b.md"), "---\nname: skill-b\n---\n\nContent B").unwrap();
+        std::fs::write(dir.join("notes.txt"), "not a skill").unwrap();
+
+        let skills = Skill::from_dir(&dir).unwrap();
+        assert_eq!(skills.len(), 2, "only .md files should be loaded");
+        let names: Vec<&str> = skills.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"skill-a"));
+        assert!(names.contains(&"skill-b"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn from_dir_nonexistent_returns_error() {
+        let result = Skill::from_dir("/nonexistent/skills/dir");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn from_file_with_disable_model_invocation() {
+        let dir = std::env::temp_dir().join(format!("skill_cfg_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let file_path = dir.join("cfg_skill.md");
+        let content = "---\nname: cfg-skill\ndescription: Configured\ndisable-model-invocation: true\n---\n\nConfig content";
+        std::fs::write(&file_path, content).unwrap();
+
+        let skill = Skill::from_file(&file_path).unwrap();
+        assert!(skill.disable_model_invocation);
+        assert_eq!(skill.content, "Config content");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

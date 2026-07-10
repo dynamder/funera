@@ -68,13 +68,6 @@ mod tests {
     }
 
     #[test]
-    fn agent_event_turn_boundaries() {
-        assert!(matches!(AgentEvent::TurnStart, AgentEvent::TurnStart));
-        assert!(matches!(AgentEvent::TurnEnd, AgentEvent::TurnEnd));
-        assert!(matches!(AgentEvent::Done, AgentEvent::Done));
-    }
-
-    #[test]
     fn agent_event_clone() {
         let e = AgentEvent::Token("hi".into());
         let cloned = e.clone();

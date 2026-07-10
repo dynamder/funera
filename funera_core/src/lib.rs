@@ -5,5 +5,5 @@ pub mod provider;
 pub mod re_act;
 pub mod security;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_helpers;

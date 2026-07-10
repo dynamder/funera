@@ -128,10 +128,6 @@ async fn real_llm_with_tool_calling() {
         .react_loop(init_msg, config, _state_bus.env_state_tx.clone())
         .await;
 
-    // The ReAct loop may or may not complete depending on API availability
-    // We accept both Ok and Err here — the test validates the infrastructure works
-    match result {
-        Ok(()) => eprintln!("Real LLM tool-call session completed successfully"),
-        Err(e) => eprintln!("Real LLM tool-call session ended with (expected): {:#}", e),
-    }
+    assert!(result.is_ok(), "Real LLM tool-call session should complete: {:?}", result.err());
+    eprintln!("Real LLM tool-call session completed successfully");
 }

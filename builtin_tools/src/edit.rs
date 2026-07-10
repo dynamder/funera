@@ -648,6 +648,13 @@ mod tests {
         cleanup("append").await;
     }
 
+    #[test]
+    fn empty_edits_returns_unchanged() {
+        let result = EditTool::apply_ops("hello\nworld", &[]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "hello\nworld");
+    }
+
     #[tokio::test]
     async fn edit_execute_prepend() {
         let path = write_test_file("prepend", "prepend.txt", "b\nc\n").await;

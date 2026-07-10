@@ -111,4 +111,74 @@ mod tests {
         let guard = PathGuard::new([std::env::current_dir().unwrap()]);
         assert!(guard.verify(Path::new("Cargo.toml")).is_ok());
     }
+
+    #[test]
+    fn path_outside_root_is_blocked() {
+        let guard = PathGuard::new(["."]);
+        // Try to reference a file outside the current directory
+        let parent = Path::new("..").join("Cargo.lock");
+        let result = guard.verify(&parent);
+        assert!(
+            result.is_err(),
+            "paths outside allowed root should be blocked"
+        );
+        match result.unwrap_err() {
+            PathError::OutsideScope { .. } => {}
+            e => panic!("expected OutsideScope, got {e:?}"),
+        }
+    }
+
+    #[test]
+    fn path_guard_multiple_roots() {
+        let guard = PathGuard::new([".", "src"]);
+        assert!(guard.verify(Path::new("Cargo.toml")).is_ok());
+        assert!(guard.verify(Path::new("src/lib.rs")).is_ok());
+    }
+
+    #[test]
+    fn path_guard_is_path_allowed() {
+        let guard = PathGuard::new(["."]);
+        assert!(guard.is_path_allowed(Path::new("Cargo.toml")));
+        assert!(!guard.is_path_allowed(Path::new("nonexistent_file_xyz")));
+    }
+
+    #[test]
+    fn path_guard_add_root_increases_scope() {
+        let mut guard = PathGuard::new(["."]);
+        let file_outside = Path::new("..").join("Cargo.lock");
+        assert!(
+            guard.verify(&file_outside).is_err(),
+            "outside root should fail"
+        );
+
+        // Adding parent as a root should allow it
+        guard.add_root("..");
+        assert!(
+            guard.verify(&file_outside).is_ok(),
+            "after adding parent root, should be allowed"
+        );
+    }
+
+    #[test]
+    fn path_guard_from_trait() {
+        let guard: PathGuard = ".".into();
+        assert!(guard.verify(Path::new("Cargo.toml")).is_ok());
+    }
+
+    #[test]
+    fn path_guard_blocked_path_has_expected_error() {
+        let guard = PathGuard::new(["."]);
+        let result = guard.verify(Path::new("nonexistent_file_xyz"));
+        match result {
+            Err(PathError::NotExist { .. }) => {}
+            _ => panic!("expected NotExist error for nonexistent path"),
+        }
+    }
+
+    #[test]
+    fn path_guard_allowed_roots_accessible() {
+        let guard = PathGuard::new([".", "src"]);
+        let roots = guard.allowed_roots();
+        assert_eq!(roots.len(), 2);
+    }
 }

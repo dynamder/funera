@@ -162,6 +162,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn shell_long_command() {
+        let tool = ShellTool;
+        let result = tool.execute(json!({"command": "echo a b c d e f g h i j k l m n o p"})).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("a b c d e f g h i"));
+    }
+
+    #[tokio::test]
     async fn shell_workdir() {
         let tool = ShellTool;
         let dir = std::env::temp_dir().to_string_lossy().to_string();

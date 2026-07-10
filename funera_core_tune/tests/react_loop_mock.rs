@@ -102,11 +102,14 @@ async fn react_loop_run_handle() {
         funera_core::chat::message::MsgVariant::Text(funera_core::chat::message::TextMessage { text: "hello".into(), reasoning_content: None }),
     ));
     let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 2, session_msgs, env_watcher, bus, state_tx, handle);
-    let _handle = loop_instance.run();
+    let handle = loop_instance.run();
 
-    // _handle.cancel_token.cancel() is available
-    // _handle.sender can send messages
-    // _handle.task is the JoinHandle
+    // Verify the handle is populated
+    assert!(!handle.cancel_token.is_cancelled(), "loop should not be cancelled initially");
+    // Sender should work
+    let msg = text_message(Role::User, "ping");
+    let send_result = handle.sender.send(msg).await;
+    assert!(send_result.is_ok(), "should be able to send to the loop");
 }
 
 #[tokio::test]
@@ -133,7 +136,9 @@ async fn react_loop_cancel() {
     let loop_instance = ReActLoop::<DeepSeekProvider>::new(10, 3, session_msgs, env_watcher, bus, state_tx, handle);
     let handle = loop_instance.run();
 
+    assert!(!handle.cancel_token.is_cancelled(), "loop should not be cancelled before calling cancel()");
     handle.cancel_token.cancel();
+    assert!(handle.cancel_token.is_cancelled(), "loop should be cancelled after calling cancel()");
 }
 
 #[tokio::test]

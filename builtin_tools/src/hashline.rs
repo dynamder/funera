@@ -114,4 +114,19 @@ mod tests {
         let result = format_line_trimmed(3, "VR", "test");
         assert_eq!(result, "  3#VR:test");
     }
+
+    #[test]
+    fn compute_hash_all_empty() {
+        let hash = compute_hash("", "", "");
+        // Should not panic and produce a deterministic result
+        let again = compute_hash("", "", "");
+        assert_eq!(hash, again);
+    }
+
+    #[test]
+    fn compute_hash_unicode() {
+        let hash = compute_hash("日本語", "你好", "😊");
+        let again = compute_hash("日本語", "你好", "😊");
+        assert_eq!(hash, again);
+    }
 }

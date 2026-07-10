@@ -169,10 +169,17 @@ async fn switch_runtime_isolation() {
 
 #[tokio::test]
 async fn build_without_key_fails() {
-    let key = std::env::var("OPENAI_API_KEY");
-    if key.is_err() {
-        // Already no key — test passes implicitly
-        return;
+    let original_key = std::env::var("OPENAI_API_KEY").ok();
+    std::env::remove_var("OPENAI_API_KEY");
+
+    let result = AgentRuntime::builder()
+        .model("gpt-4o-mini")
+        .build();
+
+    assert!(result.is_err(), "building without API key should fail");
+
+    // Restore original key if it was set
+    if let Some(key) = original_key {
+        std::env::set_var("OPENAI_API_KEY", key);
     }
-    // If key IS set, we can't test this case, skip
 }

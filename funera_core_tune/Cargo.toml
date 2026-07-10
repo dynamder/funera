@@ -20,7 +20,6 @@ crossterm = "0.29.0"
 dotenvy = "0.15.7"
 funera_core = { path = "../funera_core" }
 futures = "0.3.32"
-mockall = "0.15.0"
 parking_lot = "0.12.5"
 ratatui = "0.30.2"
 serde = { version = "1.0.228", features = ["derive"] }

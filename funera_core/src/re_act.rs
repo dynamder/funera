@@ -407,6 +407,7 @@ mod tests {
     use serde_json::json;
     use tokio::sync::mpsc;
 
+    use crate::event_bus::env_state_bus::TurnHighWayEvent;
     use crate::event_bus::react_bus::ReactBus;
     use crate::event_bus::tool_bus::ToolBus;
     use crate::test_helpers;
@@ -781,5 +782,90 @@ mod tests {
             },
         );
         assert_eq!(map.len(), 2);
+    }
+
+    // ── end-to-end ReActLoop with MockProvider ──────────────────
+
+    struct MockProvider;
+
+    impl ChatProvider for MockProvider {
+        type Chunk = async_openai::types::chat::CreateChatCompletionStreamResponse;
+
+        fn build_request_json(
+            _model: &str,
+            messages: &[JsonValue],
+            _skill_content: &str,
+            _tools_json: &JsonValue,
+        ) -> JsonValue {
+            // Return minimal request shape so the plumbing works
+            serde_json::json!({
+                "model": "mock",
+                "messages": messages,
+                "stream": true,
+            })
+        }
+
+        async fn create_stream(
+            _client: &async_openai::Client<async_openai::config::OpenAIConfig>,
+            _request_json: JsonValue,
+        ) -> Result<async_openai::types::stream::StreamResponse<Self::Chunk>, async_openai::error::OpenAIError>
+        {
+            Ok(test_helpers::mock_text_stream(vec!["Mock response"]))
+        }
+    }
+
+    #[tokio::test]
+    async fn react_loop_mock_provider_completes() {
+        let (env_state_tx, _env_state_rx) = tokio::sync::broadcast::channel(20);
+        let (tool_bus, _exec_rx) = ToolBus::new();
+
+        // Set up a TurnHighWay with a simple dispatcher that responds to prepare_turn
+        let (loop_tx, mut rx_from_loop) = tokio::sync::mpsc::channel(5);
+        let (tx_to_loop, loop_rx) = tokio::sync::mpsc::channel(5);
+
+        // Spawn a mini-dispatcher that responds to TurnPrepareRequest
+        tokio::spawn(async move {
+            let _req = rx_from_loop.recv().await;
+            let (token_tx, _) = tokio::sync::broadcast::channel(50);
+            let react_bus = ReactBus::new();
+            let barrier = Arc::new(tokio::sync::Barrier::new(2));
+            let barrier_clone = barrier.clone();
+            tokio::spawn(async move { barrier_clone.wait().await; });
+            let _ = tx_to_loop.send(TurnHighWayEvent::TurnPrepareResponse {
+                token_tx,
+                react_bus,
+                ready_barrier: barrier,
+            }).await;
+        });
+
+        let handle = TurnHighWayHandle {
+            turn_high_way_tx: loop_tx,
+            turn_high_way_rx: loop_rx,
+        };
+
+        let session_msgs: Arc<parking_lot::RwLock<Vec<FuneraMessage>>> = Arc::new(parking_lot::RwLock::new(Vec::new()));
+        let loop_instance = ReActLoop::<MockProvider>::new(
+            10, 1, session_msgs.clone(),
+            crate::env::FuneraEnv::new(
+                crate::re_act::tool::ToolRegistry::new(),
+                async_openai::Client::new(),
+                "mock-model",
+            ).1, // env_watcher
+            tool_bus,
+            env_state_tx,
+            handle,
+        );
+
+        let loop_handle = loop_instance.run();
+        let msg = FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage { text: "ping".into(), reasoning_content: None }),
+        );
+        loop_handle.sender.send(msg).await.unwrap();
+
+        let result = loop_handle.task.await;
+        assert!(result.is_ok(), "loop task should complete successfully");
+        let inner = result.unwrap();
+        assert!(inner.is_ok(), "loop should return Ok(())");
     }
 }

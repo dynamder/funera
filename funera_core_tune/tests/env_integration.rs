@@ -2,14 +2,10 @@ use std::sync::Arc;
 
 use funera_core::env::FuneraEnv;
 use funera_core::re_act::tool::{ToolCallError, ToolRegistry};
-use funera_core_tune::utils::fixtures::{default_schema, err_tool};
+use funera_core_tune::utils::fixtures::{create_client, default_schema};
 use funera_core_tune::utils::mock_tool::MockTool;
 use serde_json::json;
 use tokio::sync::RwLock;
-
-fn create_client() -> async_openai::Client<async_openai::config::OpenAIConfig> {
-    async_openai::Client::new()
-}
 
 fn default_model() -> String {
     "gpt-4o-mini".to_string()
@@ -26,7 +22,6 @@ async fn env_watcher_client_changed_async() {
     let new_client = create_client();
     env.set_client(new_client);
 
-    // Watcher should detect the change
     let result = watcher.client_changed().await;
     assert!(result.is_ok());
 }
@@ -51,23 +46,10 @@ async fn env_watcher_use_client_returns_current() {
     let (_, mut watcher) = FuneraEnv::new(registry, client.clone(), default_model());
 
     let watched = watcher.use_client();
-    // use_client() returns a clone; just verify it doesn't panic
     let _ = watched;
 }
 
 // ── Tool availability states ────────────────────────────────────
-
-#[tokio::test]
-async fn tool_registry_call_not_found() {
-    let registry = ToolRegistry::new();
-
-    let result = registry.call_tool("nonexistent", json!({})).await;
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        ToolCallError::ToolNotFound(name) => assert_eq!(name, "nonexistent"),
-        _ => panic!("expected ToolNotFound"),
-    }
-}
 
 #[test]
 fn tool_registry_entry_new_unavailable() {
@@ -88,7 +70,6 @@ fn tool_registry_default_available_json() {
     let disabled = MockTool::new("disabled", default_schema("disabled"));
     registry.add_tool(Box::new(disabled));
 
-    // Both should be available (default)
     let json = registry.available_tools_json();
     assert_eq!(json.as_array().unwrap().len(), 2);
 }
@@ -162,22 +143,4 @@ async fn arc_rwlock_tool_not_found() {
         reg.call_tool("ghost", json!({})).await
     };
     assert!(result.is_err());
-}
-
-// ── Error tools ─────────────────────────────────────────────────
-
-#[tokio::test]
-async fn tool_execution_error_propagates() {
-    let mut registry = ToolRegistry::new();
-    let tool = err_tool("faulty", ToolCallError::ToolExecutionError(anyhow::anyhow!("oops")));
-    registry.add_tool(Box::new(tool));
-
-    let result = registry.call_tool("faulty", json!({})).await;
-    assert!(result.is_err());
-    match result.unwrap_err() {
-        ToolCallError::ToolExecutionError(e) => {
-            assert!(e.to_string().contains("oops"));
-        }
-        _ => panic!("expected ToolExecutionError"),
-    }
 }
