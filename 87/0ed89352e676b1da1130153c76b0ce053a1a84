@@ -1,0 +1,79 @@
+funera_core/Cargo.toml
+  s_97ed23e52078c7::t_8b98326a32d369 25-26,32-33
+builtin_tools/Cargo.toml
+  s_97ed23e52078c7::t_fb455804dd6c3a 9
+funera_core/src/re_act.rs
+  s_97ed23e52078c7::t_68c1ca7e0601e8 223
+  s_97ed23e52078c7::t_d9648fb2d5d519 782
+  s_97ed23e52078c7::t_cddd093a1db0e0 118-119
+  s_97ed23e52078c7::t_e490183bc95fb1 53-57
+  s_97ed23e52078c7::t_3231b5736d4174 96-100
+  s_97ed23e52078c7::t_169cb311fa3aa9 18,23,25,27,34,63-70,77,107-112,114-117,120-123,146,148-149,151,153-154,228-243,269,373,447-463,611,630,649,728,731,757,761,783-787,790,793
+  s_97ed23e52078c7::t_145d7a8086db9b 400,434
+  s_97ed23e52078c7::t_8183f8c30d4ad9 615,634,653
+funera-orchestrate/src/agent.rs
+  s_97ed23e52078c7::t_5ca1c5bd0026c4 434,441-444
+  s_97ed23e52078c7::t_01066d08def593 281,288-291
+  s_97ed23e52078c7::t_90d620f42a7cd0 511,518-521
+  s_97ed23e52078c7::t_7f4636f2ca3595 358,365-368
+funera-orchestrate/Cargo.toml
+  s_97ed23e52078c7::t_ced50dcb0e3b89 48-51
+  s_97ed23e52078c7::t_0c31ebcc8b46bd 24-25,31-32
+funera_core/src/re_act/skills.rs
+  s_97ed23e52078c7::t_b1f19f204512a9 1-2
+funera-orchestrate/src/event.rs
+  s_97ed23e52078c7::t_203f6a3ac9faec 5-7,12
+  s_97ed23e52078c7::t_8233ce57ed3316 83,99
+funera_core/src/re_act/tool.rs
+  s_97ed23e52078c7::t_def62dadc90233 1-2
+funera_core/src/env.rs
+  s_97ed23e52078c7::t_f821b7b138b2fc 5,7-8,16,18,22,26
+  s_97ed23e52078c7::t_b925d3ea25b5e4 77,80,82-85,90,93,95-98
+  s_97ed23e52078c7::t_13aae846b1c462 36,38-41,43-46,48,51,53-54,57,61,65,69,75-76,78-79,81,86-89,91-92,94,99,101,108,115,132,139,146,156,166,171,179,183,188,201,206,219,228,241
+  s_97ed23e52078c7::t_74cd22e6b16a2d 42,47
+  s_97ed23e52078c7::t_3975a08ea9a517 100
+funera-orchestrate/src/runtime.rs
+  s_97ed23e52078c7::t_eb3c286baf510d 14,17,19,21
+  s_97ed23e52078c7::t_322c7d2f6c896f 132,147,160,173,181,188,532-635
+  s_97ed23e52078c7::t_3812f953b92f36 342,344,346,356,362
+  s_97ed23e52078c7::t_6c8308eb28196b 198
+  s_97ed23e52078c7::t_e1a578b349d64c 266-273,275-288,290-292,296,298-301,305,313
+  s_97ed23e52078c7::t_24893dd0754107 388,394
+  s_97ed23e52078c7::t_b6d4ad448a92a5 79,81,83,85
+  s_97ed23e52078c7::t_f8e216515b0417 52,54,56,58
+  s_97ed23e52078c7::t_342ff69a6e17bd 465,471,480-491,501,507
+funera_core/src/re_act/tool_executor.rs
+  s_97ed23e52078c7::t_cc53f3e510712d 1-2
+funera_core/src/chat/message.rs
+  s_97ed23e52078c7::t_f880cd8eb44973 56,66,79,89
+  s_97ed23e52078c7::t_476b087039032b 103,105
+  s_97ed23e52078c7::t_07786f1b53f262 36,38
+  s_97ed23e52078c7::t_126f793f1dd951 8
+  s_97ed23e52078c7::t_94f3f4195f5c5c 151,173
+Cargo.toml
+  s_8ed6ea876f9466::t_c2ce3c37c898b9 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "870ed89352e676b1da1130153c76b0ce053a1a84",
+  "prompts": {},
+  "sessions": {
+    "s_8ed6ea876f9466": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c99a833dffetAIErcXyS7u7kN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_97ed23e52078c7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0b11c2d1dffe3Wb6zM2eRJdEjJ",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
