@@ -5,9 +5,9 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::{FuneraSession, SessionCmd};
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
+use funera_core::middleware::EventSenderFn;
 #[cfg(feature = "middleware")]
 use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
-use funera_core::middleware::EventSenderFn;
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 
@@ -249,8 +249,11 @@ impl Agent {
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
+        let _dispatcher = CallbackDispatcher::new(
+            env_state_rx,
+            self.event_tx.clone(),
+            self.raw_event_tx.clone(),
+        );
 
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
@@ -260,23 +263,32 @@ impl Agent {
         if let Some(ref sys) = self.system_prompt {
             session.push_message(FuneraMessage::new(
                 Role::System,
-                MsgVariant::Text(TextMessage { text: sys.clone().into(), reasoning_content: None }),
+                MsgVariant::Text(TextMessage {
+                    text: sys.clone().into(),
+                    reasoning_content: None,
+                }),
             ));
         }
 
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: text.into(),
+                reasoning_content: None,
+            }),
         );
 
-        let config = ReActLoopConfig::new(
+        let mut config = ReActLoopConfig::new(
             runtime.channel_buffer(),
             runtime.max_iterations(),
             runtime.env_watcher(),
-            runtime.tool_bus.clone(),
             env_state_tx.clone(),
             turn_highway_handle,
         );
+        #[cfg(feature = "tool")]
+        {
+            config = config.with_tool_bus(runtime.tool_bus.clone());
+        }
 
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
@@ -309,15 +321,20 @@ impl Agent {
         // Spawn relay: broadcast → mpsc
         let (relay_tx, stream_rx) = mpsc::channel(256);
         let relay_event_rx = self.subscribe_events();
-        tokio::spawn(async move { relay_broadcast_to_mpsc(relay_event_rx, relay_tx).await; });
+        tokio::spawn(async move {
+            relay_broadcast_to_mpsc(relay_event_rx, relay_tx).await;
+        });
 
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
+        let _dispatcher = CallbackDispatcher::new(
+            env_state_rx,
+            self.event_tx.clone(),
+            self.raw_event_tx.clone(),
+        );
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
         let session_tx = funera_core::chat::session::spawn_session_actor();
@@ -325,21 +342,30 @@ impl Agent {
         if let Some(ref sys) = self.system_prompt {
             session.push_message(FuneraMessage::new(
                 Role::System,
-                MsgVariant::Text(TextMessage { text: sys.clone().into(), reasoning_content: None }),
+                MsgVariant::Text(TextMessage {
+                    text: sys.clone().into(),
+                    reasoning_content: None,
+                }),
             ));
         }
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: text.into(),
+                reasoning_content: None,
+            }),
         );
-        let config = ReActLoopConfig::new(
+        let mut config = ReActLoopConfig::new(
             runtime.channel_buffer(),
             runtime.max_iterations(),
             runtime.env_watcher(),
-            runtime.tool_bus.clone(),
             env_state_tx.clone(),
             turn_highway_handle,
         );
+        #[cfg(feature = "tool")]
+        {
+            config = config.with_tool_bus(runtime.tool_bus.clone());
+        }
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
         // Spawn react_loop as background task
@@ -347,13 +373,7 @@ impl Agent {
         let env_tx = env_state_tx.clone();
         let handle = tokio::spawn(async move {
             session
-                .react_loop::<P, AgentEvent>(
-                    init_msg,
-                    config,
-                    env_tx,
-                    mw,
-                    Some(event_sender),
-                )
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
                 .await
         });
 
@@ -384,8 +404,11 @@ impl Agent {
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
+        let _dispatcher = CallbackDispatcher::new(
+            env_state_rx,
+            self.event_tx.clone(),
+            self.raw_event_tx.clone(),
+        );
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
         let session = FuneraSession::new(runtime.session_tx());
@@ -403,29 +426,29 @@ impl Agent {
         }
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: text.into(),
+                reasoning_content: None,
+            }),
         );
-        let config = ReActLoopConfig::new(
+        let mut config = ReActLoopConfig::new(
             runtime.channel_buffer(),
             runtime.max_iterations(),
             runtime.env_watcher(),
-            runtime.tool_bus.clone(),
             env_state_tx.clone(),
             turn_highway_handle,
         );
+        #[cfg(feature = "tool")]
+        {
+            config = config.with_tool_bus(runtime.tool_bus.clone());
+        }
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
         let env_tx = env_state_tx.clone();
         let mw = middleware_opt(&runtime);
         let handle = tokio::spawn(async move {
             session
-                .react_loop::<P, AgentEvent>(
-                    init_msg,
-                    config,
-                    env_tx,
-                    mw,
-                    Some(event_sender),
-                )
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
                 .await
         });
 
@@ -449,15 +472,20 @@ impl Agent {
         // Spawn relay: broadcast → mpsc
         let (relay_tx, stream_rx) = mpsc::channel(256);
         let relay_event_rx = self.subscribe_events();
-        tokio::spawn(async move { relay_broadcast_to_mpsc(relay_event_rx, relay_tx).await; });
+        tokio::spawn(async move {
+            relay_broadcast_to_mpsc(relay_event_rx, relay_tx).await;
+        });
 
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
         let env_state_rx = env_state_bus.subscribe();
         env_state_bus.start_turn_highway();
 
-        let _dispatcher =
-            CallbackDispatcher::new(env_state_rx, self.event_tx.clone(), self.raw_event_tx.clone());
+        let _dispatcher = CallbackDispatcher::new(
+            env_state_rx,
+            self.event_tx.clone(),
+            self.raw_event_tx.clone(),
+        );
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
         let session = FuneraSession::new(runtime.session_tx());
@@ -475,29 +503,29 @@ impl Agent {
         }
         let init_msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: text.into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: text.into(),
+                reasoning_content: None,
+            }),
         );
-        let config = ReActLoopConfig::new(
+        let mut config = ReActLoopConfig::new(
             runtime.channel_buffer(),
             runtime.max_iterations(),
             runtime.env_watcher(),
-            runtime.tool_bus.clone(),
             env_state_tx.clone(),
             turn_highway_handle,
         );
+        #[cfg(feature = "tool")]
+        {
+            config = config.with_tool_bus(runtime.tool_bus.clone());
+        }
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
         let env_tx = env_state_tx.clone();
         let mw = middleware_opt(&runtime);
         let handle = tokio::spawn(async move {
             session
-                .react_loop::<P, AgentEvent>(
-                    init_msg,
-                    config,
-                    env_tx,
-                    mw,
-                    Some(event_sender),
-                )
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
                 .await
         });
 
@@ -589,11 +617,23 @@ async fn aggregate_response(
             Ok(AgentEvent::Text(t)) => {
                 content = t;
             }
-            Ok(AgentEvent::ToolCallRequest { call_id, name, args, .. }) => {
+            Ok(AgentEvent::ToolCallRequest {
+                call_id,
+                name,
+                args,
+                ..
+            }) => {
                 pending_requests.push((call_id, name, args));
             }
-            Ok(AgentEvent::ToolCallResult { call_id, name: _, result }) => {
-                if let Some(pos) = pending_requests.iter().position(|(id, _, _)| *id == call_id) {
+            Ok(AgentEvent::ToolCallResult {
+                call_id,
+                name: _,
+                result,
+            }) => {
+                if let Some(pos) = pending_requests
+                    .iter()
+                    .position(|(id, _, _)| *id == call_id)
+                {
                     let (_, name, args) = pending_requests.remove(pos);
                     tool_calls.push(ToolCallInfo { name, args, result });
                 }
@@ -607,7 +647,12 @@ async fn aggregate_response(
         }
     }
 
-    Ok(ChatResponse { content, tool_calls, iterations, finish_reason })
+    Ok(ChatResponse {
+        content,
+        tool_calls,
+        iterations,
+        finish_reason,
+    })
 }
 
 #[cfg(test)]

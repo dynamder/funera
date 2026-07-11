@@ -26,7 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     // fire() shares the runtime (&) — no session state is mutated
-    let resp = agent.fire("Tell me about Rust programming.", &runtime).await?;
+    let resp = agent
+        .fire("Tell me about Rust programming.", &runtime)
+        .await?;
 
     println!("=== Response ===");
     println!("{}", resp.content);

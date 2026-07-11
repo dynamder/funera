@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as JsonValue};
 use uuid::Uuid;
 
+#[cfg(feature = "tool")]
 use crate::re_act::tool::ToolType;
 
 pub trait Message {
@@ -32,7 +33,9 @@ impl fmt::Display for Role {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MsgVariant {
     Text(TextMessage),
+    #[cfg(feature = "tool")]
     ToolRequest(ToolRequestMessage),
+    #[cfg(feature = "tool")]
     ToolResponse(ToolResponseMessage),
 }
 
@@ -50,6 +53,7 @@ pub struct TextMessage {
     pub reasoning_content: Option<Arc<str>>,
 }
 
+#[cfg(feature = "tool")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolRequestMessage {
     pub tool_call_id: Arc<str>,
@@ -59,6 +63,7 @@ pub struct ToolRequestMessage {
     pub reasoning_content: Option<Arc<str>>,
 }
 
+#[cfg(feature = "tool")]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ToolResponseMessage {
     pub tool_call_id: Arc<str>,
@@ -71,6 +76,7 @@ impl Message for TextMessage {
     }
 }
 
+#[cfg(feature = "tool")]
 impl Message for ToolRequestMessage {
     fn to_prompt_content(&self) -> String {
         format!(
@@ -80,6 +86,7 @@ impl Message for ToolRequestMessage {
     }
 }
 
+#[cfg(feature = "tool")]
 impl Message for ToolResponseMessage {
     fn to_prompt_content(&self) -> String {
         format!(
@@ -93,7 +100,9 @@ impl Message for FuneraMessage {
     fn to_prompt_content(&self) -> String {
         match &self.msg_variant {
             MsgVariant::Text(text_msg) => text_msg.to_prompt_content(),
+            #[cfg(feature = "tool")]
             MsgVariant::ToolRequest(tool_requet_msg) => tool_requet_msg.to_prompt_content(),
+            #[cfg(feature = "tool")]
             MsgVariant::ToolResponse(tool_response_msg) => tool_response_msg.to_prompt_content(),
         }
     }
@@ -139,6 +148,7 @@ impl FuneraMessage {
                 }
                 obj
             }
+            #[cfg(feature = "tool")]
             MsgVariant::ToolRequest(tool_request_msg) => {
                 let mut obj = json!({
                     "role": self.role.to_string(),
@@ -160,6 +170,7 @@ impl FuneraMessage {
                 }
                 obj
             }
+            #[cfg(feature = "tool")]
             MsgVariant::ToolResponse(tool_response_msg) => {
                 json!({
                     "role": self.role.to_string(),

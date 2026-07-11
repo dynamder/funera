@@ -21,13 +21,15 @@ futures = "0.3.32"
 tracing = "0.1"
 
 [features]
-default = ["deepseek"]
-builtin-tools = ["dep:builtin_tools"]
+default = ["deepseek", "tool"]
+builtin-tools = ["dep:builtin_tools", "funera_core/tool"]
 security = ["funera_core/security"]
 deepseek = ["funera_core/deepseek"]
 openai = ["funera_core/openai"]
 real-llm = []
 middleware = ["funera_core/middleware"]
+tool = ["funera_core/tool"]
+skill = ["funera_core/skill"]
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["full", "test-util"] }
@@ -43,3 +45,7 @@ required-features = ["builtin-tools"]
 [[example]]
 name = "middleware"
 required-features = ["middleware"]
+
+[[example]]
+name = "skills"
+required-features = ["skill"]

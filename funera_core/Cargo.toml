@@ -22,10 +22,12 @@ uuid = { version = "1.23.4", features = ["serde", "v4"] }
 serde_yaml = "0.9.34"
 
 [features]
-default = ["security", "deepseek"]
-security = []
+default = ["security", "deepseek", "tool"]
+security = ["tool"]
 deepseek = []
 openai = []
 regex = ["dep:regex", "security"]
 test-utils = []
 middleware = []
+tool = []
+skill = []

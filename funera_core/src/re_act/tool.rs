@@ -1,3 +1,5 @@
+#![cfg(feature = "tool")]
+
 use std::{collections::HashMap, fmt::Display};
 
 use anyhow::Result;

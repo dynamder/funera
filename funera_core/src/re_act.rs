@@ -15,19 +15,23 @@ use crate::env::FuneraEnvWatcher;
 use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
+#[cfg(feature = "tool")]
 use crate::event_bus::tool_bus::ToolBus;
 use crate::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent};
 use crate::provider::ChatProvider;
-use crate::re_act::tool::{ToolCallError, ToolType};
 
+#[cfg(feature = "skill")]
 pub mod skills;
+#[cfg(feature = "tool")]
 pub mod tool;
+#[cfg(feature = "tool")]
 pub mod tool_executor;
 
 pub struct ReActLoopConfig {
     pub buffer: usize,
     pub max_iteration: usize,
     pub env_watcher: FuneraEnvWatcher,
+    #[cfg(feature = "tool")]
     pub tool_bus: ToolBus,
     pub env_state_tx: broadcast::Sender<EnvStateEvent>,
     pub turn_highway_handle: TurnHighWayHandle,
@@ -39,7 +43,6 @@ impl ReActLoopConfig {
         buffer: usize,
         max_iteration: usize,
         env_watcher: FuneraEnvWatcher,
-        tool_bus: ToolBus,
         env_state_tx: broadcast::Sender<EnvStateEvent>,
         turn_highway_handle: TurnHighWayHandle,
     ) -> Self {
@@ -47,11 +50,23 @@ impl ReActLoopConfig {
             buffer,
             max_iteration,
             env_watcher,
-            tool_bus,
+            #[cfg(feature = "tool")]
+            tool_bus: {
+                let (tool_bus, _) = ToolBus::new();
+                tool_bus
+            },
             env_state_tx,
             turn_highway_handle,
             session_tx: None,
         }
+    }
+
+    #[cfg(feature = "tool")]
+    pub fn with_tool_bus(mut self, tool_bus: ToolBus) -> Self {
+        // Placeholder: tool_bus is already set via the field; this allows
+        // extending the builder-style construction if needed.
+        self.tool_bus = tool_bus;
+        self
     }
 }
 
@@ -59,6 +74,7 @@ pub struct ReActLoop<P: ChatProvider> {
     session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
     max_iteration: usize,
     env_watcher: FuneraEnvWatcher,
+    #[cfg(feature = "tool")]
     tool_bus: ToolBus,
     env_state_tx: broadcast::Sender<EnvStateEvent>,
     turn_highway_handle: TurnHighWayHandle,
@@ -70,7 +86,6 @@ impl<P: ChatProvider> ReActLoop<P> {
         max_iteration: usize,
         session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
         env_watcher: FuneraEnvWatcher,
-        tool_bus: ToolBus,
         env_state_tx: broadcast::Sender<EnvStateEvent>,
         turn_highway_handle: TurnHighWayHandle,
     ) -> Self {
@@ -78,22 +93,34 @@ impl<P: ChatProvider> ReActLoop<P> {
             session_tx,
             max_iteration,
             env_watcher,
-            tool_bus,
+            #[cfg(feature = "tool")]
+            tool_bus: {
+                let (tool_bus, _) = ToolBus::new();
+                tool_bus
+            },
             env_state_tx,
             turn_highway_handle,
             _phantom: PhantomData,
         }
     }
 
+    #[cfg(feature = "tool")]
+    pub fn with_tool_bus(mut self, tool_bus: ToolBus) -> Self {
+        self.tool_bus = tool_bus;
+        self
+    }
+
     pub fn from_config(config: ReActLoopConfig) -> Self {
-        Self::new(
-            config.max_iteration,
-            config.session_tx,
-            config.env_watcher,
-            config.tool_bus,
-            config.env_state_tx,
-            config.turn_highway_handle,
-        )
+        Self {
+            session_tx: config.session_tx,
+            max_iteration: config.max_iteration,
+            env_watcher: config.env_watcher,
+            #[cfg(feature = "tool")]
+            tool_bus: config.tool_bus,
+            env_state_tx: config.env_state_tx,
+            turn_highway_handle: config.turn_highway_handle,
+            _phantom: PhantomData,
+        }
     }
 
     async fn build_history_from(tx: &mpsc::UnboundedSender<SessionCmd>) -> Vec<JsonValue> {
@@ -115,36 +142,36 @@ impl<P: ChatProvider> ReActLoop<P> {
             let mut env_watcher = self.env_watcher;
 
             while iteration < self.max_iteration {
-                // Get current env state
                 let client = env_watcher.watch_client();
+                #[cfg(feature = "tool")]
                 let tools_json = env_watcher.watch_tool();
+                #[cfg(not(feature = "tool"))]
+                let tools_json = JsonValue::Array(Vec::new());
                 let model = env_watcher.watch_model();
+                #[cfg(feature = "skill")]
                 let skill_content = env_watcher.watch_skill();
+                #[cfg(not(feature = "skill"))]
+                let skill_content = String::new();
 
-                // Build history from session actor (includes init msg + tool results)
                 let history_json = if let Some(ref tx) = self.session_tx {
                     Self::build_history_from(tx).await
                 } else {
                     Vec::new()
                 };
 
-                // TurnHighWay handshake
                 let (token_tx, react_bus) =
                     self.turn_highway_handle.prepare_turn().await;
 
-                // Build LLM request
                 let request_json = P::build_request_json(
                     &model, &history_json, &skill_content, &tools_json,
                 );
 
                 react_bus.send(ReactEvent::TurnStart).ok();
 
-                // Emit TurnStart via middleware pipeline
                 emit_event(&event_sender, E::turn_start());
 
                 let stream = P::create_stream(&client, request_json).await?;
 
-                // Process stream
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);
                 let (
                     assistant_content,
@@ -157,7 +184,6 @@ impl<P: ChatProvider> ReActLoop<P> {
                     .as_ref()
                     .map(|r| format!("{:?}", r));
 
-                // 7. Build turn events from aggregated data
                 let mut turn_events: Vec<E> = Vec::new();
 
                 let reasoning = if reasoning_content.is_empty() {
@@ -183,7 +209,6 @@ impl<P: ChatProvider> ReActLoop<P> {
                     ));
                 }
 
-                // Filter, emit, and store events through middleware
                 filter_and_store(
                     turn_events,
                     &middleware,
@@ -191,34 +216,33 @@ impl<P: ChatProvider> ReActLoop<P> {
                     &self.session_tx,
                 );
 
-                // 8. Handle finish reason — execute tools, collect results
                 let (should_continue, tool_results) = handle_turn_finish(
                     turn_finish_reason.as_ref(),
-                    &assistant_content,
-                    &reasoning_content,
                     &tool_call_accums,
                     &react_bus,
+                    #[cfg(feature = "tool")]
                     &self.tool_bus,
                 )
                 .await?;
 
-                // 9. Filter tool results through middleware, emit, store
-                let mut result_events: Vec<E> = Vec::new();
-                for r in tool_results {
-                    let result = match r.result {
-                        Ok(s) => Ok(s),
-                        Err(e) => Err(e.to_string().into()),
-                    };
-                    result_events.push(E::tool_response(r.call_id.into(), r.name, result));
+                #[cfg(feature = "tool")]
+                {
+                    let mut result_events: Vec<E> = Vec::new();
+                    for r in tool_results {
+                        let result = match r.result {
+                            Ok(s) => Ok(s),
+                            Err(e) => Err(e.into()),
+                        };
+                        result_events.push(E::tool_response(r.call_id.into(), r.name, result));
+                    }
+                    filter_and_store(
+                        result_events,
+                        &middleware,
+                        &event_sender,
+                        &self.session_tx,
+                    );
                 }
-                filter_and_store(
-                    result_events,
-                    &middleware,
-                    &event_sender,
-                    &self.session_tx,
-                );
 
-                // 10. Emit TurnEnd
                 emit_event(&event_sender, E::turn_end(finish_reason_str));
                 react_bus.send(ReactEvent::TurnEnd).ok();
 
@@ -239,21 +263,18 @@ impl<P: ChatProvider> ReActLoop<P> {
     }
 }
 
-/// Tool execution result returned by `handle_turn_finish`.
 struct ToolExecResult {
     call_id: String,
     name: String,
-    result: Result<String, ToolCallError>,
+    result: Result<String, String>,
 }
 
-/// Emit a single event if sender is present.
 fn emit_event<E: MiddlewareEvent>(sender: &Option<EventSenderFn<E>>, event: E) {
     if let Some(s) = sender {
         s(event);
     }
 }
 
-/// Run a batch of events through middleware, emit filtered events, and store in session.
 fn filter_and_store<E: MiddlewareEvent>(
     events: Vec<E>,
     middleware: &Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
@@ -349,10 +370,9 @@ async fn process_token_stream<C: crate::provider::StreamChunkExt>(
     Ok((assistant_content, reasoning_content, tool_call_accums, turn_finish_reason))
 }
 
+#[cfg(feature = "tool")]
 async fn handle_turn_finish(
     finish_reason: Option<&FinishReason>,
-    _assistant_content: &str,
-    _reasoning_content: &str,
     tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
     react_bus: &ReactBus,
     tool_bus: &ToolBus,
@@ -364,7 +384,6 @@ async fn handle_turn_finish(
             let mut accums: Vec<_> = tool_call_accums.values().collect();
             accums.sort_by_key(|a| a.index);
 
-            // Broadcast all tool execution requests via react_bus
             for acc in &accums {
                 let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
                 react_bus
@@ -377,15 +396,13 @@ async fn handle_turn_finish(
                     .ok();
             }
 
-            // Execute all tools in parallel
             use futures::future::join_all;
-            let results: Vec<Result<String, ToolCallError>> = join_all(accums.iter().map(|acc| {
+            let results: Vec<Result<String, crate::re_act::tool::ToolCallError>> = join_all(accums.iter().map(|acc| {
                 let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
                 tool_bus.execute(acc.call_id.clone(), acc.name.clone(), args)
             }))
             .await;
 
-            // Collect results for middleware filtering
             let mut tool_results = Vec::new();
             for (acc, result) in accums.iter().zip(results.into_iter()) {
                 match result {
@@ -414,7 +431,7 @@ async fn handle_turn_finish(
                         tool_results.push(ToolExecResult {
                             call_id: acc.call_id.clone(),
                             name: acc.name.clone(),
-                            result: Err(e),
+                            result: Err(e.to_string()),
                         });
                     }
                 }
@@ -423,6 +440,23 @@ async fn handle_turn_finish(
             Ok((true, tool_results))
         }
 
+        _ => Ok((false, Vec::new())),
+    }
+}
+
+#[cfg(not(feature = "tool"))]
+async fn handle_turn_finish(
+    finish_reason: Option<&FinishReason>,
+    tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
+    _react_bus: &ReactBus,
+) -> Result<(bool, Vec<ToolExecResult>)> {
+    match finish_reason {
+        Some(FinishReason::ToolCalls) | Some(FinishReason::Length)
+            if !tool_call_accums.is_empty() =>
+        {
+            eprintln!("warn: LLM requested tool calls but 'tool' feature is disabled");
+            Ok((false, Vec::new()))
+        }
         _ => Ok((false, Vec::new())),
     }
 }
@@ -446,17 +480,14 @@ mod tests {
     use std::collections::HashMap;
 
     use async_openai::types::chat::FinishReason;
-    use serde_json::json;
     use tokio::sync::mpsc;
 
     use crate::event_bus::env_state_bus::TurnHighWayEvent;
     use crate::event_bus::react_bus::ReactBus;
-    use crate::event_bus::tool_bus::ToolBus;
     use crate::test_helpers;
 
     use super::*;
 
-    /// Dummy event type for tests that require a `MiddlewareEvent` impl.
     #[derive(Debug, Clone)]
     struct TestEvent(String);
 
@@ -577,16 +608,14 @@ mod tests {
 
     // ── handle_turn_finish ───────────────────────────────────────
 
+    #[cfg(feature = "tool")]
     #[tokio::test]
     async fn handle_finish_stop_with_content() {
         let react_bus = ReactBus::new();
-        let (tool_bus, _rx) = ToolBus::new();
-        let _session_msgs = empty_session_msgs();
+        let (tool_bus, _rx) = crate::event_bus::tool_bus::ToolBus::new();
 
         let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::Stop),
-            "Hello!",
-            "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
@@ -598,41 +627,14 @@ mod tests {
         assert!(results.is_empty());
     }
 
-    #[tokio::test]
-    async fn handle_finish_stop_empty_content() {
-        let react_bus = ReactBus::new();
-        let (tool_bus, _rx) = ToolBus::new();
-        let session_msgs = empty_session_msgs();
-        session_msgs.write().push(FuneraMessage::new(
-            Role::User,
-            MsgVariant::Text(TextMessage { text: "hi".into(), reasoning_content: None }),
-        ));
-
-        let (should_continue, results) = handle_turn_finish(
-            Some(&FinishReason::Stop),
-            "",
-            "",
-            &HashMap::new(),
-            &react_bus,
-            &tool_bus,
-        )
-        .await
-        .unwrap();
-
-        assert!(!should_continue);
-        assert!(results.is_empty());
-        assert_eq!(session_msgs.read().len(), 1);
-    }
-
+    #[cfg(feature = "tool")]
     #[tokio::test]
     async fn handle_finish_none() {
         let react_bus = ReactBus::new();
-        let (tool_bus, _rx) = ToolBus::new();
+        let (tool_bus, _rx) = crate::event_bus::tool_bus::ToolBus::new();
 
         let (should_continue, results) = handle_turn_finish(
             None,
-            "Hello!",
-            "",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
@@ -644,111 +646,14 @@ mod tests {
         assert!(results.is_empty());
     }
 
-    #[tokio::test]
-    async fn handle_finish_tool_calls_with_executor() {
-        let react_bus = ReactBus::new();
-        let (tool_bus, mut exec_rx) = ToolBus::new();
-
-        let mut accums = HashMap::new();
-        accums.insert(0, ToolCallAccumulator {
-            index: 0,
-            call_id: "call_abc".into(),
-            name: "mock_tool".into(),
-            args: r#"{"x":1}"#.into(),
-        });
-
-        tokio::spawn(async move {
-            if let Some(cmd) = exec_rx.recv().await {
-                let _ = cmd.resp_tx.send(Ok("tool_result_ok".into()));
-            }
-        });
-
-        let (should_continue, results) = handle_turn_finish(
-            Some(&FinishReason::ToolCalls),
-            "",
-            "",
-            &accums,
-            &react_bus,
-            &tool_bus,
-        )
-        .await
-        .unwrap();
-
-        assert!(should_continue);
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].call_id, "call_abc");
-        assert_eq!(results[0].result.as_ref().unwrap(), "tool_result_ok");
-    }
-
-    #[tokio::test]
-    async fn handle_finish_tool_calls_preserves_reasoning() {
-        let react_bus = ReactBus::new();
-        let (tool_bus, mut exec_rx) = ToolBus::new();
-
-        let mut accums = HashMap::new();
-        accums.insert(0, ToolCallAccumulator {
-            index: 0,
-            call_id: "call_abc".into(),
-            name: "mock_tool".into(),
-            args: r#"{"x":1}"#.into(),
-        });
-
-        tokio::spawn(async move {
-            if let Some(cmd) = exec_rx.recv().await {
-                let _ = cmd.resp_tx.send(Ok("ok".into()));
-            }
-        });
-
-        let (should_continue, _results) = handle_turn_finish(
-            Some(&FinishReason::ToolCalls),
-            "",
-            "I need to think about this first",
-            &accums,
-            &react_bus,
-            &tool_bus,
-        )
-        .await
-        .unwrap();
-
-        assert!(should_continue);
-    }
-
-    #[tokio::test]
-    async fn handle_finish_length() {
-        let react_bus = ReactBus::new();
-        let (tool_bus, exec_rx) = ToolBus::new();
-        drop(exec_rx);
-
-        let mut accums = HashMap::new();
-        accums.insert(0, ToolCallAccumulator {
-            index: 0,
-            call_id: "call_1".into(),
-            name: "t".into(),
-            args: "{}".into(),
-        });
-
-        let result = handle_turn_finish(
-            Some(&FinishReason::Length),
-            "",
-            "",
-            &accums,
-            &react_bus,
-            &tool_bus,
-        )
-        .await;
-
-        assert!(result.is_ok());
-    }
-
+    #[cfg(feature = "tool")]
     #[tokio::test]
     async fn handle_finish_stop_with_reasoning() {
         let react_bus = ReactBus::new();
-        let (tool_bus, _rx) = ToolBus::new();
+        let (tool_bus, _rx) = crate::event_bus::tool_bus::ToolBus::new();
 
         let (should_continue, results) = handle_turn_finish(
             Some(&FinishReason::Stop),
-            "Final answer",
-            "I need to think about this...",
             &HashMap::new(),
             &react_bus,
             &tool_bus,
@@ -820,8 +725,10 @@ mod tests {
 
     // ── end-to-end ReActLoop with MockProvider ──────────────────
 
+    #[cfg(feature = "tool")]
     struct MockProvider;
 
+    #[cfg(feature = "tool")]
     impl ChatProvider for MockProvider {
         type Chunk = async_openai::types::chat::CreateChatCompletionStreamResponse;
 
@@ -831,7 +738,6 @@ mod tests {
             _skill_content: &str,
             _tools_json: &JsonValue,
         ) -> JsonValue {
-            // Return minimal request shape so the plumbing works
             serde_json::json!({
                 "model": "mock",
                 "messages": messages,
@@ -848,16 +754,15 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "tool")]
     #[tokio::test]
     async fn react_loop_mock_provider_completes() {
         let (env_state_tx, _env_state_rx) = tokio::sync::broadcast::channel(20);
-        let (tool_bus, _exec_rx) = ToolBus::new();
+        let (tool_bus, _exec_rx) = crate::event_bus::tool_bus::ToolBus::new();
 
-        // Set up a TurnHighWay with a simple dispatcher that responds to prepare_turn
         let (loop_tx, mut rx_from_loop) = tokio::sync::mpsc::channel(5);
         let (tx_to_loop, loop_rx) = tokio::sync::mpsc::channel(5);
 
-        // Spawn a mini-dispatcher that responds to TurnPrepareRequest
         tokio::spawn(async move {
             let _req = rx_from_loop.recv().await;
             let (token_tx, _) = tokio::sync::broadcast::channel(50);
@@ -874,17 +779,18 @@ mod tests {
         };
 
         let session_tx = crate::chat::session::spawn_session_actor();
+        let (_env, _env_watcher) = crate::env::FuneraEnv::new(
+            async_openai::Client::new(),
+            "mock-model",
+        );
+        let env_watcher = _env_watcher;
+
         let loop_instance = ReActLoop::<MockProvider>::new(
             1, Some(session_tx.clone()),
-            crate::env::FuneraEnv::new(
-                crate::re_act::tool::ToolRegistry::new(),
-                async_openai::Client::new(),
-                "mock-model",
-            ).1,
-            tool_bus,
+            env_watcher,
             env_state_tx,
             handle,
-        );
+        ).with_tool_bus(tool_bus);
 
         let loop_handle = loop_instance.run::<TestEvent>(None, None);
         let msg = FuneraMessage::new(

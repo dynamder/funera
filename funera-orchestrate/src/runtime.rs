@@ -11,10 +11,14 @@ use funera_core::chat::session::{spawn_session_actor, FuneraSession, SessionCmd}
 use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
+#[cfg(feature = "tool")]
 use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::provider::ChatProvider;
+#[cfg(feature = "skill")]
 use funera_core::re_act::skills::{Skill, SkillRegistry};
+#[cfg(feature = "tool")]
 use funera_core::re_act::tool::{Tool, ToolRegistry};
+#[cfg(feature = "tool")]
 use funera_core::re_act::tool_executor::ToolExecutor;
 
 #[cfg(feature = "middleware")]
@@ -45,9 +49,13 @@ pub struct AgentRuntimeBuilder {
     model: Option<String>,
     max_iterations: usize,
     channel_buffer: usize,
+    #[cfg(feature = "tool")]
     tools: Vec<Box<dyn Tool>>,
+    #[cfg(feature = "skill")]
     skills: Vec<Skill>,
+    #[cfg(feature = "skill")]
     skill_names_to_activate: Vec<String>,
+    #[cfg(feature = "skill")]
     load_default_skills: bool,
     #[cfg(feature = "middleware")]
     middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
@@ -68,9 +76,13 @@ impl AgentRuntimeBuilder {
             model: None,
             max_iterations: 10,
             channel_buffer: 32,
+            #[cfg(feature = "tool")]
             tools: Vec::new(),
+            #[cfg(feature = "skill")]
             skills: Vec::new(),
+            #[cfg(feature = "skill")]
             skill_names_to_activate: Vec::new(),
+            #[cfg(feature = "skill")]
             load_default_skills: false,
             #[cfg(feature = "middleware")]
             middleware_bundle: None,
@@ -117,6 +129,7 @@ impl AgentRuntimeBuilder {
     }
 
     /// Load a skill from a SKILL.md file.
+    #[cfg(feature = "skill")]
     pub fn with_skill_file(mut self, path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         match Skill::from_file(&path) {
@@ -131,6 +144,7 @@ impl AgentRuntimeBuilder {
     }
 
     /// Load all SKILL.md files from a directory.
+    #[cfg(feature = "skill")]
     pub fn with_skills_dir(mut self, path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         match Skill::from_dir(&path) {
@@ -143,6 +157,7 @@ impl AgentRuntimeBuilder {
     }
 
     /// Register an inline skill definition.
+    #[cfg(feature = "skill")]
     pub fn with_skill(
         mut self,
         name: impl Into<String>,
@@ -155,6 +170,7 @@ impl AgentRuntimeBuilder {
 
     /// Activate a previously loaded skill by name.
     /// If the skill does not exist, the call is silently ignored.
+    #[cfg(feature = "skill")]
     pub fn with_skill_active(mut self, name: impl Into<String>) -> Self {
         self.skill_names_to_activate.push(name.into());
         self
@@ -162,12 +178,14 @@ impl AgentRuntimeBuilder {
 
     /// Auto-discover and load skills from default paths
     /// (`$SKILLS_HOME` or `~/.agents/skills/`), then activate them.
+    #[cfg(feature = "skill")]
     pub fn with_skills_default_path(mut self) -> Self {
         self.load_default_skills = true;
         self
     }
 
     /// Register a tool by its type (requires `Tool + Default`).
+    #[cfg(feature = "tool")]
     pub fn with_tool<T: Tool + 'static>(mut self) -> Self
     where
         T: Default,
@@ -177,6 +195,7 @@ impl AgentRuntimeBuilder {
     }
 
     /// Register a pre-constructed tool.
+    #[cfg(feature = "tool")]
     pub fn with_tool_instance(mut self, tool: Box<dyn Tool>) -> Self {
         self.tools.push(tool);
         self
@@ -244,41 +263,46 @@ impl AgentRuntimeBuilder {
             }
         };
 
-        let mut registry = ToolRegistry::new();
-        for t in self.tools {
-            registry.add_tool(t);
-        }
+        #[cfg(feature = "tool")]
+        let registry = {
+            let mut reg = ToolRegistry::new();
+            for t in self.tools {
+                reg.add_tool(t);
+            }
+            reg
+        };
 
-        // Pre-build SkillRegistry synchronously (no locks needed yet)
-        let mut skill_registry = funera_core::re_act::skills::SkillRegistry::new();
+        #[cfg(feature = "skill")]
+        let mut skill_registry = SkillRegistry::new();
 
-        // Load default skills if requested (auto-discover from $SKILLS_HOME / ~/.agents/skills/)
-        if self.load_default_skills {
-            let default_skills = Skill::from_default_path();
-            for skill in default_skills {
-                let name = skill.name.clone();
+        #[cfg(feature = "skill")]
+        {
+            if self.load_default_skills {
+                let default_skills = Skill::from_default_path();
+                for skill in default_skills {
+                    let name = skill.name.clone();
+                    skill_registry.add(skill);
+                    self.skill_names_to_activate.push(name);
+                }
+            }
+            for skill in self.skills {
                 skill_registry.add(skill);
-                self.skill_names_to_activate.push(name);
+            }
+            for name in &self.skill_names_to_activate {
+                skill_registry.activate(name);
             }
         }
 
-        // Add all explicitly registered skills
-        for skill in self.skills {
-            skill_registry.add(skill);
-        }
+        let (env, env_watcher) = FuneraEnv::new(client, &model);
 
-        // Activate specified skills
-        for name in &self.skill_names_to_activate {
-            skill_registry.activate(&name);
-        }
+        #[cfg(feature = "tool")]
+        let env = env.with_tool_registry(registry);
+        #[cfg(feature = "skill")]
+        let env = env.with_skill_registry(skill_registry);
 
-        // Create env with pre-built skill registry (prompt is computed internally)
-        let (env, env_watcher) = FuneraEnv::with_skills(registry, client, &model, skill_registry);
-
-        // Runtime-level env state event channel (persistent, not per-call)
         let (env_state_tx, _) = broadcast::channel(32);
 
-        // Emit runtime-level events for pre-registered tools
+        #[cfg(feature = "tool")]
         if let Ok(guard) = env.tool_registry.try_read() {
             let tools = guard.get_all_tools();
             for name in tools.keys() {
@@ -286,7 +310,7 @@ impl AgentRuntimeBuilder {
             }
         }
 
-        // Emit runtime-level events for pre-registered skills
+        #[cfg(feature = "skill")]
         if let Ok(guard) = env.skill_registry.try_read() {
             let skills = guard.all_skills();
             for name in skills.keys() {
@@ -315,8 +339,11 @@ impl AgentRuntimeBuilder {
             Arc::new(chain)
         };
 
+        #[cfg(feature = "tool")]
         let (tool_bus, exec_rx) = ToolBus::new();
+        #[cfg(feature = "tool")]
         let reg = env.tool_registry.clone();
+        #[cfg(feature = "tool")]
         let handle = tokio::spawn(async move {
             ToolExecutor::new(reg, exec_rx).run().await;
         });
@@ -326,11 +353,13 @@ impl AgentRuntimeBuilder {
         Ok(AgentRuntime::<P> {
             env,
             env_watcher,
+            #[cfg(feature = "tool")]
             tool_bus,
             model,
             max_iterations: self.max_iterations,
             channel_buffer: self.channel_buffer,
             env_state_tx,
+            #[cfg(feature = "tool")]
             _executor_handle: handle,
             session_tx,
             _state: PhantomData,
@@ -356,11 +385,13 @@ pub struct Acquired;
 pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     env: FuneraEnv,
     pub(crate) env_watcher: FuneraEnvWatcher,
+    #[cfg(feature = "tool")]
     pub(crate) tool_bus: ToolBus,
     pub(crate) model: String,
     pub(crate) max_iterations: usize,
     pub(crate) channel_buffer: usize,
     env_state_tx: broadcast::Sender<EnvStateEvent>,
+    #[cfg(feature = "tool")]
     _executor_handle: JoinHandle<()>,
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
     _state: PhantomData<S>,
@@ -402,16 +433,6 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         self.channel_buffer
     }
 
-    /// The tool registry (for dynamic tool management).
-    pub fn tool_registry(&self) -> Arc<RwLock<ToolRegistry>> {
-        self.env.tool_registry.clone()
-    }
-
-    /// The skill registry (for dynamic skill management).
-    pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
-        self.env.skill_registry.clone()
-    }
-
     /// Clone the env watcher for a session.
     pub(crate) fn env_watcher(&self) -> FuneraEnvWatcher {
         self.env_watcher.clone()
@@ -441,11 +462,13 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         AgentRuntime::<P, Acquired> {
             env: self.env,
             env_watcher: self.env_watcher,
+            #[cfg(feature = "tool")]
             tool_bus: self.tool_bus,
             model: self.model,
             max_iterations: self.max_iterations,
             channel_buffer: self.channel_buffer,
             env_state_tx: self.env_state_tx,
+            #[cfg(feature = "tool")]
             _executor_handle: self._executor_handle,
             session_tx: self.session_tx,
             _state: PhantomData,
@@ -453,6 +476,18 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
         }
+    }
+
+    /// The tool registry (for dynamic tool management).
+    #[cfg(feature = "tool")]
+    pub fn tool_registry(&self) -> Arc<RwLock<ToolRegistry>> {
+        self.env.tool_registry.clone()
+    }
+
+    /// The skill registry (for dynamic skill management).
+    #[cfg(feature = "skill")]
+    pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
+        self.env.skill_registry.clone()
     }
 }
 
@@ -463,11 +498,13 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
         AgentRuntime::<P, Idle> {
             env: self.env,
             env_watcher: self.env_watcher,
+            #[cfg(feature = "tool")]
             tool_bus: self.tool_bus,
             model: self.model,
             max_iterations: self.max_iterations,
             channel_buffer: self.channel_buffer,
             env_state_tx: self.env_state_tx,
+            #[cfg(feature = "tool")]
             _executor_handle: self._executor_handle,
             session_tx: self.session_tx,
             _state: PhantomData,
@@ -482,28 +519,6 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
 mod tests {
     use super::*;
     use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
-    use funera_core::re_act::tool::ToolCallError;
-
-    // ── inline mock tool ───────────────────────────────────────────
-
-    #[derive(Default)]
-    struct MockTool;
-
-    #[async_trait::async_trait]
-    impl Tool for MockTool {
-        fn name(&self) -> &str {
-            "mock_tool"
-        }
-        fn description(&self) -> &str {
-            "A mock tool for testing"
-        }
-        fn schema(&self) -> serde_json::Value {
-            serde_json::json!({})
-        }
-        async fn execute(&self, _args: serde_json::Value) -> Result<String, ToolCallError> {
-            Ok("ok".into())
-        }
-    }
 
     // ── builder defaults ───────────────────────────────────────────
 
@@ -514,7 +529,110 @@ mod tests {
         assert_eq!(b.channel_buffer, 32);
         assert!(b.api_key.is_none());
         assert!(b.model.is_none());
-        assert!(b.tools.is_empty());
+    }
+
+    #[cfg(feature = "tool")]
+    mod tool_tests {
+        use super::*;
+        use funera_core::re_act::tool::ToolCallError;
+
+        #[derive(Default)]
+        struct MockTool;
+
+        #[async_trait::async_trait]
+        impl Tool for MockTool {
+            fn name(&self) -> &str {
+                "mock_tool"
+            }
+            fn description(&self) -> &str {
+                "A mock tool for testing"
+            }
+            fn schema(&self) -> serde_json::Value {
+                serde_json::json!({})
+            }
+            async fn execute(&self, _args: serde_json::Value) -> Result<String, ToolCallError> {
+                Ok("ok".into())
+            }
+        }
+
+        #[test]
+        fn builder_defaults_tools_empty() {
+            let b = AgentRuntimeBuilder::new();
+            assert!(b.tools.is_empty());
+        }
+
+        #[test]
+        fn builder_with_tool_instance() {
+            let b = AgentRuntimeBuilder::new()
+                .with_tool_instance(Box::new(MockTool));
+            assert_eq!(b.tools.len(), 1);
+        }
+
+        #[tokio::test]
+        async fn build_with_tool_adds_to_registry() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .with_tool::<MockTool>()
+                .build()
+                .unwrap();
+            let registry = rt.tool_registry();
+            let guard = registry.read().await;
+            let tools = guard.get_all_tools();
+            assert!(tools.contains_key("mock_tool"));
+        }
+
+        #[tokio::test]
+        async fn tool_registry_accessor() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+            let reg = rt.tool_registry();
+            let guard = reg.read().await;
+            let tools = guard.get_all_tools();
+            assert!(tools.is_empty());
+        }
+    }
+
+    #[cfg(feature = "skill")]
+    mod skill_tests {
+        use super::*;
+
+        #[test]
+        fn builder_with_skill_inline() {
+            let b = AgentRuntimeBuilder::new()
+                .with_skill("s1", "desc", "content");
+            assert_eq!(b.skills.len(), 1);
+            assert_eq!(b.skills[0].name, "s1");
+            assert_eq!(b.skills[0].description, "desc");
+            assert_eq!(b.skills[0].content, "content");
+        }
+
+        #[test]
+        fn builder_with_skill_active_adds_to_list() {
+            let b = AgentRuntimeBuilder::new()
+                .with_skill_active("s1")
+                .with_skill_active("s2");
+            assert_eq!(b.skill_names_to_activate, vec!["s1", "s2"]);
+        }
+
+        #[test]
+        fn builder_with_skills_default_path_sets_flag() {
+            let b = AgentRuntimeBuilder::new().with_skills_default_path();
+            assert!(b.load_default_skills);
+        }
+
+        #[test]
+        fn builder_skills_combined() {
+            let b = AgentRuntimeBuilder::new()
+                .with_skill("a", "", "aaa")
+                .with_skill("b", "", "bbb")
+                .with_skill_active("a");
+            assert_eq!(b.skills.len(), 2);
+            assert_eq!(b.skill_names_to_activate, vec!["a"]);
+        }
     }
 
     #[test]
@@ -561,49 +679,6 @@ mod tests {
         assert!(b.client.is_some());
     }
 
-    #[test]
-    fn builder_with_tool_instance() {
-        let b = AgentRuntimeBuilder::new()
-            .with_tool_instance(Box::new(MockTool));
-        assert_eq!(b.tools.len(), 1);
-    }
-
-    // ── skill builder methods ───────────────────────────────────────
-
-    #[test]
-    fn builder_with_skill_inline() {
-        let b = AgentRuntimeBuilder::new()
-            .with_skill("s1", "desc", "content");
-        assert_eq!(b.skills.len(), 1);
-        assert_eq!(b.skills[0].name, "s1");
-        assert_eq!(b.skills[0].description, "desc");
-        assert_eq!(b.skills[0].content, "content");
-    }
-
-    #[test]
-    fn builder_with_skill_active_adds_to_list() {
-        let b = AgentRuntimeBuilder::new()
-            .with_skill_active("s1")
-            .with_skill_active("s2");
-        assert_eq!(b.skill_names_to_activate, vec!["s1", "s2"]);
-    }
-
-    #[test]
-    fn builder_with_skills_default_path_sets_flag() {
-        let b = AgentRuntimeBuilder::new().with_skills_default_path();
-        assert!(b.load_default_skills);
-    }
-
-    #[test]
-    fn builder_skills_combined() {
-        let b = AgentRuntimeBuilder::new()
-            .with_skill("a", "", "aaa")
-            .with_skill("b", "", "bbb")
-            .with_skill_active("a");
-        assert_eq!(b.skills.len(), 2);
-        assert_eq!(b.skill_names_to_activate, vec!["a"]);
-    }
-
     // ── build ──────────────────────────────────────────────────────
 
     #[tokio::test]
@@ -641,20 +716,6 @@ mod tests {
         }
         let result = AgentRuntimeBuilder::new().model("x").build();
         assert!(matches!(result, Err(OrchestrateError::Config(_))));
-    }
-
-    #[tokio::test]
-    async fn build_with_tool_adds_to_registry() {
-        let rt = AgentRuntimeBuilder::new()
-            .api_key("sk-test")
-            .model("x")
-            .with_tool::<MockTool>()
-            .build()
-            .unwrap();
-        let registry = rt.tool_registry();
-        let guard = registry.read().await;
-        let tools = guard.get_all_tools();
-        assert!(tools.contains_key("mock_tool"));
     }
 
     #[tokio::test]
@@ -715,21 +776,6 @@ mod tests {
 
         let ctx_after = session.session_context().await;
         assert_eq!(ctx_after.len(), 0);
-    }
-
-    // ── accessors ──────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn tool_registry_accessor() {
-        let rt = AgentRuntimeBuilder::new()
-            .api_key("sk-test")
-            .model("x")
-            .build()
-            .unwrap();
-        let reg = rt.tool_registry();
-        let guard = reg.read().await;
-        let tools = guard.get_all_tools();
-        assert!(tools.is_empty());
     }
 
     #[tokio::test]

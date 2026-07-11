@@ -5,9 +5,8 @@ edition = "2024"
 
 [workspace]
 resolver = "3"
-members = ["builtin_tools","funera_core", "funera_core_tune", "tui", "funera-orchestrate"]
+members = ["builtin_tools","funera_core", "tui", "funera-orchestrate"]
 
 
 [dependencies]
 parking_lot = { version = "0.12.5", features = ["send_guard", "serde"] }
-

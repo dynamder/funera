@@ -2,13 +2,14 @@ use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
 
-use funera_core::chat::message::{
-    MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage,
-};
+use funera_core::chat::message::{MsgVariant, Role, TextMessage};
+#[cfg(feature = "tool")]
+use funera_core::chat::message::{ToolRequestMessage, ToolResponseMessage};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 use funera_core::event_bus::react_bus::ReactEvent;
 use funera_core::event_bus::token_bus::TokenEvent;
 use funera_core::middleware::MiddlewareEvent;
+#[cfg(feature = "tool")]
 use funera_core::re_act::tool::ToolType;
 
 #[derive(Debug, Clone)]
@@ -79,6 +80,7 @@ impl MiddlewareEvent for AgentEvent {
                     reasoning_content: None,
                 }),
             )),
+            #[cfg(feature = "tool")]
             AgentEvent::ToolCallRequest {
                 call_id,
                 name,
@@ -94,6 +96,7 @@ impl MiddlewareEvent for AgentEvent {
                     reasoning_content: None,
                 }),
             )),
+            #[cfg(feature = "tool")]
             AgentEvent::ToolCallResult {
                 call_id,
                 name: _,
