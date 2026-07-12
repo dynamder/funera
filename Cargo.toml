@@ -15,7 +15,7 @@ funera-orchestrate = { path = "./funera-orchestrate" }
 funera_core = { path = "./funera_core" }
 
 [features]
-default = ["builtin-tools"]
+default = ["tool", "deepseek"]
 builtin-tools = ["funera-orchestrate/builtin-tools"]
 openai = ["funera-orchestrate/openai"]
 middleware = ["funera-orchestrate/middleware"]

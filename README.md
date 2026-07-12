@@ -39,17 +39,17 @@ Add the root crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-funera = { git = "https://github.com/anomalyco/funera" }
+funera = { git = "https://github.com/dynamder/Funera" }
 ```
 
 ### Features
 
 | Feature | Default | Description |
 |---------|:-------:|-------------|
-| `builtin-tools` | ✅ | Bundled Read, Write, Edit, Shell tools |
+| `builtin-tools` | ❌ | Bundled Read, Write, Edit, Shell tools |
 | `deepseek` | ✅ | DeepSeek provider |
 | `openai` | ❌ | OpenAI provider |
-| `security` | ✅ | Tool policy enforcement, path guards, audit logging |
+| `security` | ❌ | Tool policy enforcement, path guards, audit logging |
 | `middleware` | ❌ | Event interception pipeline |
 | `skill` | ❌ | Skill loading and prompt injection |
 
@@ -63,8 +63,8 @@ use funera::{Agent, AgentRuntime, DeepSeekProvider};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-        .api_key(std::env::var("OPENAI_API_KEY")?)
-        .model("gpt-4o")
+        .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+        .model("deepseek-v4-flash")
         .build()?;
 
     let agent = Agent::builder()
@@ -83,8 +83,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 use funera::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 
 let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-    .api_key(std::env::var("OPENAI_API_KEY")?)
-    .model("gpt-4o")
+    .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+    .model("deepseek-v4-flash")
     .build()?;
 
 let agent = Agent::builder()
@@ -103,8 +103,8 @@ while let Some(event) = rx.recv().await {
 
 ```rust
 let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
-    .api_key(std::env::var("OPENAI_API_KEY")?)
-    .model("gpt-4o")
+    .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+    .model("deepseek-v4-flash")
     .build()?;
 
 let agent = Agent::builder()
@@ -117,22 +117,6 @@ let handle = agent.send("What's my name?", runtime).await?;
 let (_runtime, _resp) = handle.await?;
 ```
 
-### Using built-in tools
-
-```rust
-let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-    .api_key(std::env::var("OPENAI_API_KEY")?)
-    .model("gpt-4o")
-    .with_builtin_tools()   // registers Read, Write, Edit, Shell
-    .build()?;
-
-let agent = Agent::builder()
-    .system_prompt("You can read and write files.")
-    .on_tool_call(|name, _args| eprintln!("[tool] {name}"))
-    .build();
-
-let resp = agent.fire("Read Cargo.toml and summarize it", &runtime).await?;
-```
 
 ### Custom tool
 
@@ -170,8 +154,8 @@ impl Tool for Calculator {
 
 // Register it:
 let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-    .api_key(std::env::var("OPENAI_API_KEY")?)
-    .model("gpt-4o")
+    .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+    .model("deepseek-v4-flash")
     .with_tool_instance(Box::new(Calculator))
     .build()?;
 ```
@@ -208,4 +192,4 @@ funera/
 
 ## License
 
-MIT — see the [repository](https://github.com/anomalyco/funera) for details.
+MIT — see the [repository](https://github.com/dynamder/Funera) for details.
