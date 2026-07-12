@@ -1,0 +1,27 @@
+README.md
+  s_9a4855ece189e4::t_8fdebd37cffff7 49
+  s_9a4855ece189e4::t_4376cdc77c1672 141
+  s_9a4855ece189e4::t_a8652c75f694f0 83
+  s_9a4855ece189e4::t_cb742f3aa78738 38,42
+Cargo.toml
+  s_9a4855ece189e4::t_ca6a29650b5823 5-7,11,14-25
+src/lib.rs
+  s_9a4855ece189e4::t_6a5821df5e2700 1-7,9-10,15,22-43
+  s_9a4855ece189e4::t_220b9ec7a9819b 8,11-14,16-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "3a3982ff494287a0b602766eec56cb10b620dbe1",
+  "prompts": {},
+  "sessions": {
+    "s_9a4855ece189e4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ae3baa9fffeaxiLsqhXFjzw7B",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
