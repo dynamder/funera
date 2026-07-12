@@ -372,14 +372,17 @@ impl AgentRuntimeBuilder {
 
 /// A runtime context for executing agent interactions.
 ///
+/// Marker type-state: the runtime is available for a `send`/`send_stream` call.
 pub struct Idle;
+
+/// Marker type-state: a `send`/`send_stream` call is in progress.
 pub struct Acquired;
 
 /// `AgentRuntime` owns the shared infrastructure (LLM client, tool registry,
 /// tool executor) and a persistent session (backed by a session actor).
 ///
 /// The generic parameter `S` is a type-state marker — [`Idle`] means
-/// no `send`/`send_stream` is in progress, [`Acquired``] means one is active.
+/// no `send`/`send_stream` is in progress, [`Acquired`] means one is active.
 /// Send operations consume `AgentRuntime<P, Idle>` and return a handle that
 /// eventually yields back `AgentRuntime<P, Idle>`.
 pub struct AgentRuntime<P: ChatProvider, S = Idle> {

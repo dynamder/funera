@@ -32,9 +32,8 @@
 //! ## 快速使用 (在 `funera-orchestrate` 层)
 //!
 //! ```rust,no_run
-//! # use funera_core::middleware::{MiddlewareChain, MiddlewareEvent, InspectorError, MutatorAction,
-//! #     ErrorsDisabled};
-//! # use funera_core::middleware as mw;
+//! # use funera_core::middleware::{MiddlewareChain, InspectorMiddleware, MutatorMiddleware,
+//! #     InspectorError, MutatorAction, ErrorsDisabled};
 //! // 1. 定义 Inspector
 //! struct Logger;
 //! impl InspectorMiddleware<String> for Logger {
@@ -60,10 +59,8 @@
 //!
 //! ## Typestate 错误通道
 //!
-//! ## Typestate 错误通道
-//!
 //! 错误通道通过 typestate 管理：默认 `ErrorsDisabled`，调用
-//! [`activate_error_channel`] 后变为 `ErrorsEnabled`，编译期防止重复激活。
+//! [`MiddlewareChain::activate_error_channel`] 后变为 `ErrorsEnabled`，编译期防止重复激活。
 //!
 //! ```rust,no_run
 //! # use funera_core::middleware::{MiddlewareChain, ErrorsEnabled, InspectorMiddleware, InspectorError};
@@ -106,7 +103,6 @@ pub type InspectorError = Box<dyn std::error::Error + Send + Sync + 'static>;
 ///
 /// ```rust,no_run
 /// # use funera_core::middleware::{InspectorMiddleware, InspectorError};
-/// # use funera_core::event_bus::token_bus::TokenEvent;
 /// struct TokenLogger;
 /// impl InspectorMiddleware<String> for TokenLogger {
 ///     fn name(&self) -> &str { "token_logger" }

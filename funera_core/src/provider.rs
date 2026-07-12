@@ -18,13 +18,29 @@ pub mod deepseek;
 #[cfg(feature = "openai")]
 pub mod openai;
 
+/// Extension trait for deserializing raw LLM stream chunks into [`TokenEvent`]s.
+///
+/// Each provider's chunk type implements this trait to convert its native
+/// response structure into the framework's unified token event model.
 pub trait StreamChunkExt: DeserializeOwned + Send + 'static {
+    /// Extract token-level events (text, tool deltas, finish) from this chunk.
     fn extract_events(&self) -> Vec<TokenEvent>;
 }
 
+/// Abstraction over an LLM backend.
+///
+/// Implementations handle provider-specific request construction and stream
+/// deserialization. Two built-in implementations exist: `OpenAIProvider`
+/// (requires `openai` feature) and `DeepSeekProvider` (requires `deepseek`
+/// feature).
 pub trait ChatProvider: Send + Sync + 'static {
+    /// The deserialized stream chunk type for this provider.
     type Chunk: StreamChunkExt;
 
+    /// Build the JSON request body sent to the LLM API.
+    ///
+    /// Merges conversation messages, active skill content (as a system
+    /// message), and tool definitions into the provider's expected format.
     fn build_request_json(
         model: &str,
         messages: &[JsonValue],
@@ -32,6 +48,10 @@ pub trait ChatProvider: Send + Sync + 'static {
         tools_json: &JsonValue,
     ) -> JsonValue;
 
+    /// Create a streaming completion request.
+    ///
+    /// Returns a [`StreamResponse`] of provider-specific chunks that will be
+    /// consumed by the ReAct loop.
     fn create_stream(
         client: &Client<OpenAIConfig>,
         request_json: JsonValue,

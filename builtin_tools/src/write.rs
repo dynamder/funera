@@ -4,6 +4,10 @@ use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use serde_json::{Value as JsonValue, json};
 
+/// Tool for writing content to files.
+///
+/// Overwrites existing files and creates parent directories as needed.
+/// Requires `filePath` and `content` parameters.
 pub struct WriteTool;
 
 #[async_trait]

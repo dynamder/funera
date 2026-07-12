@@ -6,6 +6,11 @@ use serde_json::{json, Value as JsonValue};
 
 use crate::hashline;
 
+/// Tool for reading files and directories.
+///
+/// Returns content with `LINE#HASH: content` prefixes for use with the
+/// `EditTool`'s hashline-anchored editing. Supports offset/limit pagination
+/// and a raw mode that omits hashline prefixes.
 pub struct ReadTool;
 
 #[async_trait]

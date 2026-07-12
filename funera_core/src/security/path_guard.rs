@@ -3,12 +3,21 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
+/// Enforces that file-system paths reside within a set of allowed root directories.
+///
+/// Paths are canonicalized and checked against the allowed roots using prefix
+/// matching. This prevents tools from reading or writing files outside authorized
+/// locations.
 #[derive(Debug, Clone)]
 pub struct PathGuard {
     allowed_roots: HashSet<PathBuf>,
 }
 
 impl PathGuard {
+    /// Create a new [`PathGuard`] with the given root paths.
+    ///
+    /// Each root is canonicalized immediately; paths that fail to canonicalize
+    /// are kept as-is.
     pub fn new(roots: impl IntoIterator<Item = impl Into<PathBuf>>) -> Self {
         let allowed_roots: HashSet<PathBuf> = roots
             .into_iter()
@@ -20,12 +29,17 @@ impl PathGuard {
         Self { allowed_roots }
     }
 
+    /// Add another root directory (canonicalized on insertion).
     pub fn add_root(&mut self, root: impl Into<PathBuf>) {
         let p = root.into();
         let canonical = p.canonicalize().unwrap_or(p);
         self.allowed_roots.insert(canonical);
     }
 
+    /// Verify that a path is within the allowed roots.
+    ///
+    /// Returns the canonicalized path on success, or a [`PathError`] if the
+    /// path doesn't exist, can't be resolved, or is outside allowed scope.
     pub fn verify(&self, path: &Path) -> Result<PathBuf, PathError> {
         if !path.exists() {
             return Err(PathError::NotExist {
@@ -58,10 +72,12 @@ impl PathGuard {
         Ok(canonical)
     }
 
+    /// Returns `true` if the path passes verification.
     pub fn is_path_allowed(&self, path: &Path) -> bool {
         self.verify(path).is_ok()
     }
 
+    /// Return the set of allowed root paths.
     pub fn allowed_roots(&self) -> &HashSet<PathBuf> {
         &self.allowed_roots
     }
@@ -73,6 +89,7 @@ impl<T: Into<PathBuf>> From<T> for PathGuard {
     }
 }
 
+/// Errors returned by [`PathGuard`] verification.
 #[derive(Debug, Error)]
 pub enum PathError {
     #[error("path '{path}' is outside allowed scope (allowed: {allowed})")]

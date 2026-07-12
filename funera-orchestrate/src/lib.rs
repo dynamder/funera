@@ -50,13 +50,6 @@
 //! | **Multi-turn** | [`Agent::send`] | Persistent session across calls |
 //! | **Streaming** | [`fire_stream`](Agent::fire_stream) / [`send_stream`](Agent::send_stream) | Token-by-token streaming |
 //!
-//! ## Features
-//!
-//! | Feature | Description |
-//! |---------|-------------|
-//! | `builtin-tools` | Bundles Read, Write, Edit, Shell tools (requires `builtin_tools` crate) |
-//! | `security` | Enables tool security policies, path guards, and audit logging |
-//!
 //! ## Examples
 //!
 //! ### One-shot query with stream

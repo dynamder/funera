@@ -7,15 +7,21 @@ use serde_json::{json, Value as JsonValue};
 
 use crate::hashline;
 
+/// Operations supported by the edit tool.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EditOp {
+    /// Replace lines between `pos` and `end` anchors.
     Replace,
+    /// Append lines after `pos` anchor.
     Append,
+    /// Prepend lines before `pos` anchor.
     Prepend,
+    /// Find and replace text by unique content match.
     ReplaceText,
 }
 
+/// A single edit operation on a file.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Edit {
@@ -33,6 +39,11 @@ pub struct Edit {
     pub new_text: Option<String>,
 }
 
+/// Tool for editing files using hashline-anchored operations.
+///
+/// Works with anchors produced by the [`ReadTool`](crate::read::ReadTool).
+/// Supports replace, append, prepend, and replace_text operations with
+/// stale anchor detection and no-op loop prevention.
 pub struct EditTool;
 
 impl EditTool {

@@ -1,3 +1,26 @@
+//! # builtin_tools
+//!
+//! Default tool implementations for the funera agent framework.
+//!
+//! Provides four built-in tools that implement the funera_core `Tool` trait:
+//!
+//! | Tool | Description |
+//! |------|-------------|
+//! | [`ReadTool`] | Read files and directories with hashline-anchored output |
+//! | [`WriteTool`] | Write content to files, auto-creating parent directories |
+//! | [`EditTool`] | Edit files using hashline-anchored replace/append/prepend operations |
+//! | [`ShellTool`] | Execute shell commands cross-platform with timeout |
+//!
+//! ## Quick start
+//!
+//! ```rust,ignore
+//! use builtin_tools::register_all_tools;
+//! use funera_core::re_act::tool::ToolRegistry;
+//!
+//! let mut registry = ToolRegistry::new();
+//! register_all_tools(&mut registry);
+//! ```
+
 pub mod edit;
 pub mod hashline;
 pub mod read;
@@ -11,6 +34,7 @@ pub use write::WriteTool;
 
 use funera_core::re_act::tool::ToolRegistry;
 
+/// Register all four built-in tools (read, write, edit, shell) in the given registry.
 pub fn register_all_tools(registry: &mut ToolRegistry) {
     registry.add_tool(Box::new(ReadTool));
     registry.add_tool(Box::new(WriteTool));

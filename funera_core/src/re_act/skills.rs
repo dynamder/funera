@@ -6,6 +6,24 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+/// A skill — a prompt template loaded from a Markdown file with YAML frontmatter.
+///
+/// Skills augment the system prompt sent to the LLM with domain-specific
+/// instructions. They are loaded from `.md` files in directories such as
+/// `$SKILLS_HOME` or `~/.agents/skills/`.
+///
+/// ## File format
+///
+/// ```markdown
+/// ---
+/// name: my-skill
+/// description: What this skill does
+/// disable-model-invocation: false
+/// ---
+///
+/// # Instructions
+/// ...
+/// ```
 #[derive(Debug, Clone)]
 pub struct Skill {
     pub name: String,
@@ -24,6 +42,7 @@ struct SkillFrontmatter {
 }
 
 impl Skill {
+    /// Create a new skill from name, description, and content strings.
     pub fn new(
         name: impl Into<String>,
         description: impl Into<String>,
@@ -38,6 +57,7 @@ impl Skill {
         }
     }
 
+    /// Create a new skill with explicit `disable_model_invocation` flag.
     pub fn new_with_config(
         name: impl Into<String>,
         description: impl Into<String>,
@@ -53,6 +73,7 @@ impl Skill {
         }
     }
 
+    /// Parse a skill from a Markdown string with YAML frontmatter.
     pub fn from_str(s: &str) -> Result<Self, SkillParseError> {
         let s = s.trim();
         if !s.starts_with("---") {
@@ -79,6 +100,7 @@ impl Skill {
         })
     }
 
+    /// Load a skill from a Markdown file on disk.
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, SkillParseError> {
         let path = path.as_ref();
         let content = fs::read_to_string(path).map_err(SkillParseError::IoError)?;
@@ -87,6 +109,7 @@ impl Skill {
         Ok(skill)
     }
 
+    /// Load all `.md` skills from a directory (non-recursive).
     pub fn from_dir(path: impl AsRef<Path>) -> Result<Vec<Self>, SkillParseError> {
         let path = path.as_ref();
         let mut skills = Vec::new();
@@ -112,6 +135,7 @@ impl Skill {
         Ok(skills)
     }
 
+    /// Load skills from the default paths: `$SKILLS_HOME` and `~/.agents/skills/`.
     pub fn from_default_path() -> Vec<Self> {
         let candidates = [
             std::env::var("SKILLS_HOME").ok().map(PathBuf::from),
@@ -145,6 +169,7 @@ fn dirs_home_dir() -> Option<PathBuf> {
     }
 }
 
+/// Errors that can occur when parsing or loading a skill.
 #[derive(Debug, thiserror::Error)]
 pub enum SkillParseError {
     #[error("missing YAML frontmatter (---)")]
@@ -159,6 +184,12 @@ pub enum SkillParseError {
     NotADirectory(PathBuf),
 }
 
+/// A registry of loaded skills with activation tracking.
+///
+/// Skills are added via [`add`](SkillRegistry::add) and individually activated
+/// via [`activate`](SkillRegistry::activate). Only active skills contribute
+/// their content to the system prompt via
+/// [`get_active_skills_prompt`](SkillRegistry::get_active_skills_prompt).
 #[derive(Debug, Clone)]
 pub struct SkillRegistry {
     skills: HashMap<String, Skill>,
@@ -166,6 +197,7 @@ pub struct SkillRegistry {
 }
 
 impl SkillRegistry {
+    /// Create an empty skill registry.
     pub fn new() -> Self {
         Self {
             skills: HashMap::new(),
@@ -173,27 +205,33 @@ impl SkillRegistry {
         }
     }
 
+    /// Add a skill to the registry.
     pub fn add(&mut self, skill: Skill) {
         self.skills.insert(skill.name.clone(), skill);
     }
 
+    /// Remove a skill by name, returning it if it existed.
     pub fn remove(&mut self, name: &str) -> Option<Skill> {
         self.active.remove(name);
         self.skills.remove(name)
     }
 
+    /// Look up a skill by name.
     pub fn get(&self, name: &str) -> Option<&Skill> {
         self.skills.get(name)
     }
 
+    /// Check whether a skill is registered.
     pub fn contains(&self, name: &str) -> bool {
         self.skills.contains_key(name)
     }
 
+    /// Check whether a skill is currently active.
     pub fn is_active(&self, name: &str) -> bool {
         self.active.contains(name)
     }
 
+    /// Activate a skill by name. Returns `true` if the skill exists.
     pub fn activate(&mut self, name: &str) -> bool {
         if self.skills.contains_key(name) {
             self.active.insert(name.to_string());
@@ -203,26 +241,34 @@ impl SkillRegistry {
         }
     }
 
+    /// Deactivate a skill by name. Returns `true` if it was active.
     pub fn deactivate(&mut self, name: &str) -> bool {
         self.active.remove(name)
     }
 
+    /// All registered skills (active and inactive).
     pub fn all_skills(&self) -> &HashMap<String, Skill> {
         &self.skills
     }
 
+    /// Iterate over currently active skills.
     pub fn active_skills(&self) -> impl Iterator<Item = &Skill> {
         self.active.iter().filter_map(|name| self.skills.get(name))
     }
 
+    /// Number of active skills.
     pub fn active_count(&self) -> usize {
         self.active.len()
     }
 
+    /// Total number of registered skills.
     pub fn total_count(&self) -> usize {
         self.skills.len()
     }
 
+    /// Build the combined prompt from all active skills' content.
+    ///
+    /// Skills with `disable_model_invocation` are excluded.
     pub fn get_active_skills_prompt(&self) -> String {
         let mut parts = Vec::new();
         for skill in self.active_skills() {
@@ -235,6 +281,7 @@ impl SkillRegistry {
         parts.join("\n\n")
     }
 
+    /// Get (name, description) pairs for all active skills.
     pub fn get_active_skills_metadata(&self) -> Vec<(&str, &str)> {
         self.active_skills()
             .filter(|s| !s.disable_model_invocation)

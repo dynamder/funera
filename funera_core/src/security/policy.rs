@@ -7,13 +7,29 @@ use thiserror::Error;
 #[cfg(feature = "regex")]
 use regex::Regex;
 
+/// Policy configuration for tool execution.
+///
+/// Controls which tools are allowed or denied, enforces argument size limits,
+/// timeout bounds, working directory restrictions, and delegates shell-command
+/// scrutiny to an optional [`ShellPolicy`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolPolicy {
+    /// If set, only tools in this set are allowed.
     pub allowed_tools: Option<HashSet<String>>,
+
+    /// Tools in this set are always denied.
     pub denied_tools: HashSet<String>,
+
+    /// Maximum size (in bytes) of a tool's JSON arguments.
     pub max_args_size: usize,
+
+    /// Maximum allowed timeout in seconds.
     pub max_timeout_secs: f64,
+
+    /// Shell command policy (applies to shell/bash/sh/cmd/powershell tools).
     pub shell_policy: Option<ShellPolicy>,
+
+    /// Allowed working directories for shell tools.
     pub allowed_workdirs: HashSet<String>,
 }
 
@@ -31,10 +47,12 @@ impl Default for ToolPolicy {
 }
 
 impl ToolPolicy {
+    /// A fully permissive policy — all tools allowed, no restrictions.
     pub fn permissive() -> Self {
         Self::default()
     }
 
+    /// A strict policy — no tools allowed by default, dangerous shell commands blocked.
     pub fn strict() -> Self {
         Self {
             allowed_tools: Some(HashSet::new()),
@@ -46,6 +64,7 @@ impl ToolPolicy {
         }
     }
 
+    /// Check whether a tool is allowed by the allow/deny lists.
     pub fn check_tool_allowed(&self, name: &str) -> Result<(), PolicyError> {
         if self.denied_tools.contains(name) {
             return Err(PolicyError::ToolDenied(name.to_string()));
@@ -58,6 +77,7 @@ impl ToolPolicy {
         Ok(())
     }
 
+    /// Check that tool arguments do not exceed the maximum size.
     pub fn check_args(&self, args: &JsonValue) -> Result<(), PolicyError> {
         let size = serde_json::to_vec(args).map(|v| v.len()).unwrap_or(0);
         if size > self.max_args_size {
@@ -66,6 +86,10 @@ impl ToolPolicy {
         Ok(())
     }
 
+    /// Check a shell command against the configured shell policy.
+    ///
+    /// Only applies if the tool is recognized as a shell tool and a
+    /// [`ShellPolicy`] is configured.
     pub fn check_shell_command(
         &self,
         tool_name: &str,
@@ -85,6 +109,7 @@ impl ToolPolicy {
         policy.check_command(command)
     }
 
+    /// Check that a timeout value does not exceed the maximum.
     pub fn check_timeout(&self, timeout: f64) -> Result<(), PolicyError> {
         if timeout > self.max_timeout_secs {
             return Err(PolicyError::TimeoutExceeded(timeout, self.max_timeout_secs));
@@ -92,6 +117,7 @@ impl ToolPolicy {
         Ok(())
     }
 
+    /// Check that a working directory is within the allowed paths.
     pub fn check_workdir(&self, workdir: &str) -> Result<(), PolicyError> {
         if self.allowed_workdirs.is_empty() {
             return Ok(());
@@ -107,14 +133,24 @@ impl ToolPolicy {
     }
 }
 
+/// Policy for shell command execution.
+///
+/// Controls which commands are allowed or denied, with built-in detection of
+/// dangerous patterns (e.g., `rm -rf`, `diskpart`, `reg add`, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShellPolicy {
+    /// Commands matching these prefixes are allowed.
     pub allow_commands: Vec<String>,
+
+    /// Patterns (substring or regex) that cause commands to be denied.
     pub deny_patterns: Vec<String>,
+
+    /// Block common dangerous commands automatically.
     pub block_builtin_dangerous: bool,
 }
 
 impl ShellPolicy {
+    /// A permissive shell policy — no restrictions.
     pub fn permissive() -> Self {
         Self {
             allow_commands: vec![],
@@ -123,6 +159,7 @@ impl ShellPolicy {
         }
     }
 
+    /// A strict policy — blocks built-in dangerous commands.
     pub fn strict() -> Self {
         Self {
             allow_commands: vec![],
@@ -131,6 +168,7 @@ impl ShellPolicy {
         }
     }
 
+    /// Allow only the given commands (prefix match) and block built-in dangerous ones.
     pub fn with_allowed(commands: Vec<String>) -> Self {
         Self {
             allow_commands: commands,
@@ -143,6 +181,7 @@ impl ShellPolicy {
         matches!(tool_name, "shell" | "bash" | "sh" | "cmd" | "powershell")
     }
 
+    /// Evaluate a shell command against all allow/deny rules.
     pub fn check_command(&self, command: &str) -> Result<(), PolicyError> {
         if !self.allow_commands.is_empty() {
             let allowed = self.allow_commands.iter().any(|prefix| {
@@ -277,6 +316,7 @@ impl ShellPolicy {
     }
 }
 
+/// Errors returned by policy checks.
 #[derive(Debug, Error)]
 pub enum PolicyError {
     #[error("tool '{0}' is denied by policy")]

@@ -6,6 +6,11 @@ use serde_json::{json, Value as JsonValue};
 use tokio::process::Command;
 use tokio::time::timeout;
 
+/// Tool for executing shell commands.
+///
+/// Cross-platform: uses `cmd /c` on Windows, `sh -c` on Unix.
+/// Supports working directory override and configurable timeout (default 30s,
+/// clamped to 1–300s).
 pub struct ShellTool;
 
 #[async_trait]
