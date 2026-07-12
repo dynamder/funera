@@ -35,23 +35,22 @@ LLM backends — all with multi-layered security.
 
 ## Installation
 
-Add the orchestration crate to your `Cargo.toml`:
+Add the root crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-funera-orchestrate = { git = "https://github.com/anomalyco/funera" }
+funera = { git = "https://github.com/anomalyco/funera" }
 ```
 
 ### Features
 
 | Feature | Default | Description |
 |---------|:-------:|-------------|
+| `builtin-tools` | ✅ | Bundled Read, Write, Edit, Shell tools |
 | `deepseek` | ✅ | DeepSeek provider |
 | `openai` | ❌ | OpenAI provider |
-| `builtin-tools` | ❌ | Bundled Read, Write, Edit, Shell tools |
 | `security` | ✅ | Tool policy enforcement, path guards, audit logging |
 | `middleware` | ❌ | Event interception pipeline |
-| `tool` | ✅ | Tool execution support |
 | `skill` | ❌ | Skill loading and prompt injection |
 
 ## Quick Start
@@ -59,7 +58,7 @@ funera-orchestrate = { git = "https://github.com/anomalyco/funera" }
 ### One-shot query
 
 ```rust
-use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
+use funera::{Agent, AgentRuntime, DeepSeekProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -81,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Streaming with callbacks
 
 ```rust
-use funera_orchestrate::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
+use funera::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 
 let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .api_key(std::env::var("OPENAI_API_KEY")?)
@@ -139,7 +138,7 @@ let resp = agent.fire("Read Cargo.toml and summarize it", &runtime).await?;
 
 ```rust
 use async_trait::async_trait;
-use funera_core::re_act::tool::{Tool, ToolCallError};
+use funera::core::re_act::tool::{Tool, ToolCallError};
 use serde_json::{json, Value as JsonValue};
 
 struct Calculator;

@@ -2,11 +2,24 @@
 name = "funera"
 version = "0.1.0"
 edition = "2024"
+description = "LLM agent framework for Rust — ReAct loop, tools, skills, middleware, security"
+license = "MIT"
+repository = "https://github.com/anomalyco/funera"
 
 [workspace]
 resolver = "3"
-members = ["builtin_tools","funera_core", "tui", "funera-orchestrate"]
-
+members = ["builtin_tools", "funera_core", "tui", "funera-orchestrate"]
 
 [dependencies]
-parking_lot = { version = "0.12.5", features = ["send_guard", "serde"] }
+funera-orchestrate = { path = "./funera-orchestrate" }
+funera_core = { path = "./funera_core" }
+
+[features]
+default = ["builtin-tools"]
+builtin-tools = ["funera-orchestrate/builtin-tools"]
+openai = ["funera-orchestrate/openai"]
+middleware = ["funera-orchestrate/middleware"]
+security = ["funera-orchestrate/security"]
+skill = ["funera-orchestrate/skill"]
+tool = ["funera-orchestrate/tool"]
+deepseek = ["funera-orchestrate/deepseek"]
