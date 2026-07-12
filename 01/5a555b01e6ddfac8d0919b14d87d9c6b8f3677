@@ -1,0 +1,61 @@
+builtin_tools/src/shell.rs
+  s_9a4855ece189e4::t_a2d773de67ebe3 9-13
+funera_core/src/middleware.rs
+  s_9a4855ece189e4::t_e9d5eee64ea81c 35-36
+  s_9a4855ece189e4::t_786b4817278eb8 63
+funera_core/src/provider.rs
+  s_9a4855ece189e4::t_4d0b39e5cff68b 21-24,26,30-32,37,40-43,51-54
+  s_9a4855ece189e4::t_61ee234f452406 33-35
+README.md
+  s_9a4855ece189e4::t_fc02bc460d0160 1-212
+funera_core/src/security/policy.rs
+  s_9a4855ece189e4::t_534069f6ad0916 10-14,17,19-20,22-23,25-26,28-29,31-32
+  s_9a4855ece189e4::t_344cfc48415c13 50,55,67,80,89-92,112,120
+  s_9a4855ece189e4::t_98a70aef4e2be8 136-139,142,144-145,147-148
+  s_9a4855ece189e4::t_f073dca9c15f65 153,162,171,184
+  s_9a4855ece189e4::t_bbcf572a633232 319
+builtin_tools/src/edit.rs
+  s_9a4855ece189e4::t_7197f4df18e0b9 10,14,16,18,20,24,42-46
+funera_core/src/security/path_guard.rs
+  s_9a4855ece189e4::t_655ca38edad350 92
+builtin_tools/src/write.rs
+  s_9a4855ece189e4::t_afc06e00d49f62 7-10
+builtin_tools/src/read.rs
+  s_9a4855ece189e4::t_110204a2d04a33 12
+  s_9a4855ece189e4::t_6ca9dec1b72be5 9-11,13
+funera_core/src/re_act/tool.rs
+  s_9a4855ece189e4::t_153510f9a6481e 38-39,41-42
+  s_9a4855ece189e4::t_fd7bb4501d6627 31,33-34,36-37
+  s_9a4855ece189e4::t_384966f0b5f7b7 46-48
+  s_9a4855ece189e4::t_ffd626b453d0d4 49
+builtin_tools/src/lib.rs
+  s_9a4855ece189e4::t_fa7e2ce913c8a0 1-4,6-8,13-23,37
+  s_9a4855ece189e4::t_a81657a6c2fd71 5,9-12
+funera-orchestrate/src/runtime.rs
+  s_9a4855ece189e4::t_364e5251b6d661 375,377-378
+  s_9a4855ece189e4::t_f3b4c3a805e343 385
+funera_core/src/re_act/skills.rs
+  s_9a4855ece189e4::t_46cdfff87ca270 200,208,213,219,224,229,234,244,249,254,259,264,269-271,284
+  s_9a4855ece189e4::t_f43c4127ca8880 45,60,76,103,112,138
+  s_9a4855ece189e4::t_51b9272bd8bc02 172,187-192
+  s_9a4855ece189e4::t_23bc0d1c826645 9-26
+funera_core/src/lib.rs
+  s_9a4855ece189e4::t_fd1d238568cb6a 11-17
+  s_9a4855ece189e4::t_753ad4b5829d0d 1-10,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "015a555b01e6ddfac8d0919b14d87d9c6b8f3677",
+  "prompts": {},
+  "sessions": {
+    "s_9a4855ece189e4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0ae3baa9fffeaxiLsqhXFjzw7B",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
