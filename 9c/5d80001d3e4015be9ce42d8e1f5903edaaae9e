@@ -1,0 +1,19 @@
+Cargo.toml
+  s_8ed6ea876f9466::t_fd853d33fb80f3 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "9c5d80001d3e4015be9ce42d8e1f5903edaaae9e",
+  "prompts": {},
+  "sessions": {
+    "s_8ed6ea876f9466": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c99a833dffetAIErcXyS7u7kN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
