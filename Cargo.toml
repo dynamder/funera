@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "LLM agent framework for Rust — ReAct loop, tools, skills, middleware, security"
 license = "MIT"
-repository = "https://github.com/anomalyco/funera"
+repository = "https://github.com/dynamder/Funera"
 
 [workspace]
 resolver = "3"
