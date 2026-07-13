@@ -1,0 +1,60 @@
+funera_core/src/security/sandbox.rs
+  s_8d850c9be60db1::t_860d6533fde693 299-322
+  s_8d850c9be60db1::t_3b5a0fbc1fc95e 11-15
+  s_8d850c9be60db1::t_064c8aad714770 97-99
+funera-orchestrate/src/runtime.rs
+  s_8d850c9be60db1::t_63f39c549c64c7 2
+  s_8d850c9be60db1::t_ee4a4b664d7586 223-226
+funera-orchestrate/examples/sandbox.rs
+  s_8d850c9be60db1::t_b3210ee2a8963d 1-2,19-21,27-31
+builtin_tools/src/shell.rs
+  s_8d850c9be60db1::t_7029861a36b595 530,532-536
+funera_core/src/security/sandbox_win.rs
+  s_8d850c9be60db1::t_82f426e0ce7f74 68-69
+  s_8d850c9be60db1::t_2440cea7b1076e 169-170
+  s_8d850c9be60db1::t_b8113695143156 248-249,251
+  s_8d850c9be60db1::t_a7dfaa57f28bd1 14-17
+  s_8d850c9be60db1::t_0c84da3bda7c0d 94-98,100,642,647
+  s_8d850c9be60db1::t_a9d749e2384fc7 595-597,612-614
+  s_8d850c9be60db1::t_2112ab12042811 442-443,448,451,453-456,460-462,465-467,470-472,480-487,491-492,500-501,504-508,511-516,518-527,542-544,549-555,559-567,569,574-575
+  s_8d850c9be60db1::t_83582a704c1b0d 1145
+  s_8d850c9be60db1::t_89d7b01a90d2ad 332,337-338,342-348,350,357-360,365-372
+  s_8d850c9be60db1::t_7008cdda7ac057 13
+  s_8d850c9be60db1::t_10e92a9712a4f2 409-413
+  s_8d850c9be60db1::t_cb3d35754b09e6 629-631
+  s_8d850c9be60db1::t_7d8db1d3034608 1137,1141-1143,1146-1149
+  s_8d850c9be60db1::t_fda8f2d1b9ca86 489
+  s_8d850c9be60db1::t_2a030f087432a6 272
+  s_8d850c9be60db1::t_f9f605eb9bfb05 99
+  s_8d850c9be60db1::t_5b62f8780e711b 118-120
+  s_8d850c9be60db1::t_3fa48804e41ff4 264-265,276-289,292-303,311-323,325-326
+  s_8d850c9be60db1::t_7af677284db155 378,380-381
+  s_8d850c9be60db1::t_4f94808777de07 39-46,53-54
+  s_8d850c9be60db1::t_dd35e17f11f7af 245-247
+  s_8d850c9be60db1::t_548f3abe834a76 269-271
+  s_8d850c9be60db1::t_e6bb126198401d 275
+  s_8d850c9be60db1::t_c402060f7693d8 327-331
+  s_8d850c9be60db1::t_9d8bbe04be7f3a 408
+  s_8d850c9be60db1::t_88f737a6fc23a6 488
+  s_8d850c9be60db1::t_611c5940c32ce8 490
+  s_8d850c9be60db1::t_31686bf97cdea4 576-578
+  s_8d850c9be60db1::t_2ff08ef373f0ec 632-634
+  s_8d850c9be60db1::t_be199b93f2a01a 643-646
+  s_8d850c9be60db1::t_bc80b5ee71acf5 1144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "bd6e1a2e6083120dd1c1710455648d685f568f3b",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
