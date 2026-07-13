@@ -1,0 +1,22 @@
+funera-orchestrate/examples/tool_policy.rs
+  s_02b832acb6a2d4::t_ed76afa743bc60 27
+  s_02b832acb6a2d4::t_c27e87b0b08731 1-26,28-416
+funera-orchestrate/Cargo.toml
+  s_02b832acb6a2d4::t_a907fb9cf858ad 57-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "431decc484e669b3eb489ec516f9383916089d2c",
+  "prompts": {},
+  "sessions": {
+    "s_02b832acb6a2d4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a4fed863ffe7v8EzFW6b8aRTG",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
