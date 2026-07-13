@@ -69,7 +69,7 @@ async fn main() {
     let runtime = match AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(&api_key)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
-        .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()))
+        .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into()))
         .with_sandbox_policy(sandbox)
         .with_builtin_tools()
         .build()

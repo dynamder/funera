@@ -60,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY")?)
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
-        .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o".into()))
+        .model(std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "deepseek-v4-flash".into()))
         .with_tool::<WeatherTool>()
         .build()?;
 
