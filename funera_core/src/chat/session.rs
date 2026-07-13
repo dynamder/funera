@@ -17,9 +17,7 @@ use crate::{
 
 pub enum SessionCmd {
     /// 向 session 末尾追加一批消息
-    PushMessages {
-        msgs: Vec<FuneraMessage>,
-    },
+    PushMessages { msgs: Vec<FuneraMessage> },
     /// 获取当前上下文（JSON 格式，用于构建 LLM 请求）
     FetchContext {
         respond: oneshot::Sender<Vec<JsonValue>>,
@@ -46,6 +44,8 @@ pub enum SessionCmd {
 /// ```
 pub fn spawn_session_actor() -> mpsc::UnboundedSender<SessionCmd> {
     let (tx, mut rx) = mpsc::unbounded_channel();
+    // Actor runs until all sender handles are dropped; rx.recv() then
+    // returns None and the task exits cleanly — no leak.
     tokio::spawn(async move {
         let mut msgs: Vec<FuneraMessage> = Vec::new();
         while let Some(cmd) = rx.recv().await {
@@ -100,18 +100,14 @@ impl FuneraSession {
     /// 异步获取 session 上下文（JSON 格式）。
     pub async fn session_context(&self) -> Vec<JsonValue> {
         let (respond, rx) = oneshot::channel();
-        let _ = self
-            .session_tx
-            .send(SessionCmd::FetchContext { respond });
+        let _ = self.session_tx.send(SessionCmd::FetchContext { respond });
         rx.await.unwrap_or_default()
     }
 
     /// 异步获取消息列表（不可变引用）。
     pub async fn get_messages(&self) -> Vec<FuneraMessage> {
         let (respond, rx) = oneshot::channel();
-        let _ = self
-            .session_tx
-            .send(SessionCmd::GetMessages { respond });
+        let _ = self.session_tx.send(SessionCmd::GetMessages { respond });
         rx.await.unwrap_or_default()
     }
 

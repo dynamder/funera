@@ -10,12 +10,19 @@ pub enum EnvStateEvent {
     SessionStart,
     SessionClosed,
     LlmChanged(String),
+    #[cfg(feature = "tool")]
     ToolAdded(String),
+    #[cfg(feature = "tool")]
     ToolRemoved(String),
+    #[cfg(feature = "tool")]
     ToolAvailability(String, bool),
+    #[cfg(feature = "skill")]
     SkillAdded(String),
+    #[cfg(feature = "skill")]
     SkillRemoved(String),
+    #[cfg(feature = "skill")]
     SkillActivated(String),
+    #[cfg(feature = "skill")]
     SkillDeactivated(String),
     PerTurnBusReady {
         token_tx: broadcast::Sender<TokenEvent>,
@@ -37,9 +44,7 @@ pub struct TurnHighWayHandle {
 }
 
 impl TurnHighWayHandle {
-    pub async fn prepare_turn(
-        &mut self,
-    ) -> (broadcast::Sender<TokenEvent>, ReactBus) {
+    pub async fn prepare_turn(&mut self) -> (broadcast::Sender<TokenEvent>, ReactBus) {
         let _ = self
             .turn_high_way_tx
             .send(TurnHighWayEvent::TurnPrepareRequest)
@@ -86,6 +91,9 @@ impl EnvStateBus {
     }
 
     pub fn start_turn_highway(self) {
+        // Spawns a long-lived actor that processes TurnPrepareRequest.
+        // When the paired sender (in TurnHighWayHandle) is dropped,
+        // rx.recv() returns None and the task exits cleanly — no leak.
         tokio::spawn(async move {
             let mut rx = self.turn_high_way_handle.turn_high_way_rx;
             let tx = self.turn_high_way_handle.turn_high_way_tx;
@@ -95,12 +103,10 @@ impl EnvStateBus {
                         let (token_tx, _) = broadcast::channel(50);
                         let react_bus = ReactBus::new();
                         let react_tx = react_bus.sender();
-                        let _ = self
-                            .env_state_tx
-                            .send(EnvStateEvent::PerTurnBusReady {
-                                token_tx: token_tx.clone(),
-                                react_tx,
-                            });
+                        let _ = self.env_state_tx.send(EnvStateEvent::PerTurnBusReady {
+                            token_tx: token_tx.clone(),
+                            react_tx,
+                        });
                         let _ = tx
                             .send(TurnHighWayEvent::TurnPrepareResponse {
                                 token_tx,
@@ -156,28 +162,34 @@ mod tests {
         let _ = token_tx;
     }
 
+    #[cfg(feature = "skill")]
     #[tokio::test]
     async fn skill_events() {
         let (bus, _handle) = EnvStateBus::new();
         let mut rx = bus.subscribe();
 
-        bus.send(EnvStateEvent::SkillAdded("weather".into())).unwrap();
+        bus.send(EnvStateEvent::SkillAdded("weather".into()))
+            .unwrap();
         let event = rx.recv().await.unwrap();
         assert!(matches!(event, EnvStateEvent::SkillAdded(n) if n == "weather"));
 
-        bus.send(EnvStateEvent::SkillActivated("weather".into())).unwrap();
+        bus.send(EnvStateEvent::SkillActivated("weather".into()))
+            .unwrap();
         let event = rx.recv().await.unwrap();
         assert!(matches!(event, EnvStateEvent::SkillActivated(n) if n == "weather"));
 
-        bus.send(EnvStateEvent::SkillDeactivated("weather".into())).unwrap();
+        bus.send(EnvStateEvent::SkillDeactivated("weather".into()))
+            .unwrap();
         let event = rx.recv().await.unwrap();
         assert!(matches!(event, EnvStateEvent::SkillDeactivated(n) if n == "weather"));
 
-        bus.send(EnvStateEvent::SkillRemoved("weather".into())).unwrap();
+        bus.send(EnvStateEvent::SkillRemoved("weather".into()))
+            .unwrap();
         let event = rx.recv().await.unwrap();
         assert!(matches!(event, EnvStateEvent::SkillRemoved(n) if n == "weather"));
     }
 
+    #[cfg(feature = "tool")]
     #[tokio::test]
     async fn env_state_bus_send_receive() {
         let (bus, _handle) = EnvStateBus::new();
