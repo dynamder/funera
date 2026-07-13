@@ -96,7 +96,7 @@ impl WindowsSandbox {
                 // CreateRestrictedToken / CreateProcessAsUserW failing
                 // due to missing admin privileges) is expected on some
                 // Windows configurations. We degrade to network-only.
-                eprintln!("warn: sandbox creation failed, falling back to network-only isolation: {e}");
+                tracing::warn!("sandbox creation failed, falling back to network-only isolation: {e}");
             }
         }
         execute_fallback(
