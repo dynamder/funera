@@ -1,0 +1,30 @@
+funera_core/src/security/sandbox_win.rs
+  s_8d850c9be60db1::t_190cbabddc6158 429,468-499,504-514,519-683,685,694-722,724-834,849-895,898,900-912,914-980
+  s_8d850c9be60db1::t_0919c3ecb0d02e 723
+  s_8d850c9be60db1::t_81c482bd86c874 50-60
+  s_8d850c9be60db1::t_3f4ae19ae1d8f5 312,321-337,365-367,372-373,395-428
+  s_8d850c9be60db1::t_ef3b07f0590c14 500-503,515-518
+  s_8d850c9be60db1::t_60ed0c72cf07f6 380
+  s_8d850c9be60db1::t_a0a58e9aae39ad 896-897,899,913
+  s_8d850c9be60db1::t_6da7077732671b 684,686-693
+  s_8d850c9be60db1::t_7fd58e0658ff5a 835,837-838,840,848
+  s_8d850c9be60db1::t_73243414088daa 836,839,841-847
+  s_8d850c9be60db1::t_4de3f04aa73d89 374
+  s_8d850c9be60db1::t_63ba2ac9b2a1d5 430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "dc4dacb3d64133282a431aa91d7ff326fece2328",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
