@@ -1,0 +1,40 @@
+funera_core/src/security/registry.rs
+  s_8d850c9be60db1::t_fa1bcb72c47b5b 575
+  s_8d850c9be60db1::t_94c877eb63a06e 576-577
+  s_8d850c9be60db1::t_370a11140c340f 373,418,450,488
+  s_8d850c9be60db1::t_49d244e95c3bd8 555
+  s_8d850c9be60db1::t_dcfdae835295a2 537
+  s_8d850c9be60db1::t_9bc68ef118d333 316-318
+  s_8d850c9be60db1::t_ca8079ce82bb19 560-564,566
+  s_8d850c9be60db1::t_eaf0521e54bd30 536,538-539
+  s_8d850c9be60db1::t_8e6c4ba81bb92a 502-535,540-549,551-553,557-559,565,567-572,579-595
+  s_8d850c9be60db1::t_a87192906e98e0 550,556
+  s_8d850c9be60db1::t_453cd0fc77975b 554
+  s_8d850c9be60db1::t_33ee3968d9b100 573-574,578
+  s_8d850c9be60db1::t_984611203c3a6f 48
+funera_core/src/security/boundary.rs
+  s_8d850c9be60db1::t_839479d3a54b72 96-197
+  s_8d850c9be60db1::t_739c8335a74b61 74
+  s_8d850c9be60db1::t_f836537a4cc9c7 95
+  s_8d850c9be60db1::t_29c4de65f537ae 198
+funera-orchestrate/examples/sandbox.rs
+  s_8d850c9be60db1::t_abf4a073b18cb7 34-47
+funera_core/src/security/sandbox.rs
+  s_8d850c9be60db1::t_f4f97701841e1f 595-636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "1882dbb92d86f9b8011ba013a3e6e97771cef781",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
