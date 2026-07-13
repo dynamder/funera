@@ -1,0 +1,23 @@
+funera_core/src/security/sandbox_win.rs
+  s_8d850c9be60db1::t_51b2a3376e7416 99
+funera_core/Cargo.toml
+  s_8d850c9be60db1::t_b2e09581c7defc 21
+Cargo.lock
+  s_8d850c9be60db1::t_bcd992e7a00746 976
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "7a4b882774eadf746414d3ebb161e1c1f7586a19",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
