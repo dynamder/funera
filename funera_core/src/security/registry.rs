@@ -105,6 +105,8 @@ impl GuardedToolRegistry {
                 self.policy.check_workdir(workdir)?;
             }
             self.policy.check_shell_command(name, &args)?;
+            #[cfg(feature = "sandbox")]
+            self.audit_sandbox(name);
             Ok(())
         })();
 
@@ -135,6 +137,18 @@ impl GuardedToolRegistry {
     fn audit(&self, event: AuditEvent) {
         if let Some(ref bus) = self.audit_bus {
             bus.report(event);
+        }
+    }
+
+    /// Record a sandbox audit event for the given tool.
+    #[cfg(feature = "sandbox")]
+    fn audit_sandbox(&self, tool_name: &str) {
+        let sandbox = &self.policy.sandbox;
+        let summary = sandbox.summary();
+        if sandbox.enabled {
+            self.audit(AuditEvent::sandbox_applied(tool_name, &summary));
+        } else {
+            self.audit(AuditEvent::sandbox_skipped(tool_name));
         }
     }
 }
@@ -208,9 +222,22 @@ mod tests {
         registry.add_tool(Box::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
-        let event = rx.try_recv();
-        assert!(event.is_ok());
-        match event.unwrap() {
+
+        // Consume the SandboxApplied event (if sandbox feature is on)
+        #[cfg(feature = "sandbox")]
+        {
+            let event = rx.try_recv().expect("expected SandboxApplied");
+            match event {
+                AuditEvent::SandboxApplied { ref tool_name, .. } => {
+                    assert_eq!(tool_name, "ok_tool");
+                }
+                e => panic!("expected SandboxApplied, got {e:?}"),
+            }
+        }
+
+        // The actual ToolExecuted event
+        let event = rx.try_recv().expect("expected ToolExecuted");
+        match event {
             AuditEvent::ToolExecuted { ref tool_name, success, .. } => {
                 assert_eq!(tool_name, "ok_tool");
                 assert!(success);
@@ -237,6 +264,76 @@ mod tests {
                 assert_eq!(tool_name, "evil");
             }
             e => panic!("expected ToolDenied, got {e:?}"),
+        }
+    }
+
+    // ── sandbox audit tests (sandbox feature only) ─────────────────
+
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn sandbox_audit_event_contains_policy_summary() {
+        use crate::security::sandbox::SandboxPolicy;
+
+        let policy = ToolPolicy {
+            sandbox: SandboxPolicy {
+                read_write_paths: vec!["/workspace".into()],
+                block_network: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let bus = AuditBus::new(16);
+        let mut rx = bus.subscribe();
+        let mut registry = GuardedToolRegistry::with_policy(policy);
+        registry.set_audit_bus(bus);
+        registry.add_tool(Box::new(OkTool));
+
+        registry.call_tool("ok_tool", json!({})).await.unwrap();
+
+        let event = rx.try_recv().expect("expected SandboxApplied");
+        match event {
+            AuditEvent::SandboxApplied {
+                ref tool_name,
+                ref policy_summary,
+                ..
+            } => {
+                assert_eq!(tool_name, "ok_tool");
+                assert!(
+                    policy_summary.contains("rw:/workspace"),
+                    "summary should describe policy: {policy_summary}"
+                );
+                assert!(
+                    policy_summary.contains("no-net"),
+                    "summary should mention blocked network: {policy_summary}"
+                );
+            }
+            e => panic!("expected SandboxApplied, got {e:?}"),
+        }
+    }
+
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn sandbox_skipped_when_disabled() {
+        use crate::security::sandbox::SandboxPolicy;
+
+        let policy = ToolPolicy {
+            sandbox: SandboxPolicy::disabled(),
+            ..Default::default()
+        };
+        let bus = AuditBus::new(16);
+        let mut rx = bus.subscribe();
+        let mut registry = GuardedToolRegistry::with_policy(policy);
+        registry.set_audit_bus(bus);
+        registry.add_tool(Box::new(OkTool));
+
+        registry.call_tool("ok_tool", json!({})).await.unwrap();
+
+        let event = rx.try_recv().expect("expected SandboxSkipped");
+        match event {
+            AuditEvent::SandboxSkipped { ref tool_name, .. } => {
+                assert_eq!(tool_name, "ok_tool");
+            }
+            e => panic!("expected SandboxSkipped, got {e:?}"),
         }
     }
 }

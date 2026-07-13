@@ -20,6 +20,15 @@ pub enum AuditEvent {
         detail: String,
         timestamp: i64,
     },
+    SandboxApplied {
+        tool_name: String,
+        policy_summary: String,
+        timestamp: i64,
+    },
+    SandboxSkipped {
+        tool_name: String,
+        timestamp: i64,
+    },
 }
 
 impl AuditEvent {
@@ -49,6 +58,21 @@ impl AuditEvent {
     pub fn policy_violated(detail: String) -> Self {
         Self::PolicyViolated {
             detail,
+            timestamp: Utc::now().timestamp(),
+        }
+    }
+
+    pub fn sandbox_applied(tool_name: &str, policy_summary: &str) -> Self {
+        Self::SandboxApplied {
+            tool_name: tool_name.to_string(),
+            policy_summary: policy_summary.to_string(),
+            timestamp: Utc::now().timestamp(),
+        }
+    }
+
+    pub fn sandbox_skipped(tool_name: &str) -> Self {
+        Self::SandboxSkipped {
+            tool_name: tool_name.to_string(),
             timestamp: Utc::now().timestamp(),
         }
     }

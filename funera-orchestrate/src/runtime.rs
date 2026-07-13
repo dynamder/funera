@@ -1,12 +1,15 @@
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tokio::task::JoinHandle;
 
-use funera_core::chat::session::{spawn_session_actor, FuneraSession, SessionCmd};
+#[cfg(feature = "sandbox")]
+use funera_core::security::sandbox::SandboxPolicy;
+use funera_core::chat::session::{spawn_session_actor, SessionCmd};
+#[cfg(test)]
+use funera_core::chat::session::FuneraSession;
 #[cfg(feature = "deepseek")]
 use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
@@ -57,6 +60,8 @@ pub struct AgentRuntimeBuilder {
     skill_names_to_activate: Vec<String>,
     #[cfg(feature = "skill")]
     load_default_skills: bool,
+    #[cfg(feature = "sandbox")]
+    sandbox_policy: Option<SandboxPolicy>,
     #[cfg(feature = "middleware")]
     middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
 }
@@ -84,6 +89,8 @@ impl AgentRuntimeBuilder {
             skill_names_to_activate: Vec::new(),
             #[cfg(feature = "skill")]
             load_default_skills: false,
+            #[cfg(feature = "sandbox")]
+            sandbox_policy: None,
             #[cfg(feature = "middleware")]
             middleware_bundle: None,
         }
@@ -210,15 +217,36 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    /// Set a kernel-enforced sandbox policy for tool subprocesses.
+    ///
+    /// When enabled, the `shell` tool subprocesses are isolated via
+    /// Landlock (Linux 5.13+) or Seatbelt (macOS). Unsupported platforms
+    /// gracefully degrade without isolation.
+    #[cfg(feature = "sandbox")]
+    pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {
+        self.sandbox_policy = Some(policy);
+        self
+    }
+
     /// Register all builtin tools (Read, Write, Edit, Shell).
     /// Requires the `builtin-tools` feature.
+    ///
+    /// If a sandbox policy was configured via [`with_sandbox_policy`],
+    /// the `shell` tool will apply kernel-level isolation to each subprocess.
     #[cfg(feature = "builtin-tools")]
     pub fn with_builtin_tools(mut self) -> Self {
         use builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
         self.tools.push(Box::new(ReadTool));
         self.tools.push(Box::new(WriteTool));
         self.tools.push(Box::new(EditTool));
-        self.tools.push(Box::new(ShellTool));
+        #[cfg(feature = "sandbox")]
+        if let Some(ref policy) = self.sandbox_policy {
+            self.tools.push(Box::new(ShellTool::with_sandbox(policy.clone())));
+        } else {
+            self.tools.push(Box::new(ShellTool::new()));
+        }
+        #[cfg(not(feature = "sandbox"))]
+        self.tools.push(Box::new(ShellTool::new()));
         self
     }
 
@@ -294,6 +322,13 @@ impl AgentRuntimeBuilder {
         }
 
         let (env, env_watcher) = FuneraEnv::new(client, &model);
+
+        #[cfg(feature = "sandbox")]
+        let env = if let Some(ref sp) = self.sandbox_policy {
+            env.with_sandbox_policy(sp.clone())
+        } else {
+            env
+        };
 
         #[cfg(feature = "tool")]
         let env = env.with_tool_registry(registry);
@@ -491,6 +526,12 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
     #[cfg(feature = "skill")]
     pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
         self.env.skill_registry.clone()
+    }
+
+    /// The sandbox policy configured for this runtime.
+    #[cfg(feature = "sandbox")]
+    pub fn sandbox_policy(&self) -> SandboxPolicy {
+        self.env.sandbox_policy().clone()
     }
 }
 
@@ -798,5 +839,65 @@ mod tests {
             got,
             Ok(Ok(EnvStateEvent::LlmChanged(m))) if m == "new-model"
         ));
+    }
+
+    // ── sandbox integration tests ───────────────────────────────────
+
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn builder_sandbox_policy_flows_to_env() {
+        use funera_core::security::sandbox::SandboxPolicy;
+
+        let custom_policy = SandboxPolicy {
+            read_write_paths: vec!["/project".into()],
+            block_network: true,
+            ..Default::default()
+        };
+
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .with_sandbox_policy(custom_policy.clone())
+            .build()
+            .unwrap();
+
+        let stored = rt.sandbox_policy();
+        assert_eq!(stored.read_write_paths, custom_policy.read_write_paths);
+        assert_eq!(stored.block_network, custom_policy.block_network);
+        assert!(stored.enabled);
+    }
+
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn builder_no_sandbox_uses_default() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let stored = rt.sandbox_policy();
+        // Default policy is enabled with network blocked and empty paths
+        assert!(stored.enabled);
+        assert!(stored.block_network);
+        assert!(stored.read_paths.is_empty());
+        assert!(stored.read_write_paths.is_empty());
+        assert!(stored.execute_paths.is_empty());
+    }
+
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn builder_sandbox_with_custom_environments() {
+        use funera_core::security::sandbox::SandboxPolicy;
+
+        // Test that a disabled sandbox policy flows correctly
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .with_sandbox_policy(SandboxPolicy::disabled())
+            .build()
+            .unwrap();
+
+        let stored = rt.sandbox_policy();
+        assert!(!stored.enabled, "disabled policy should stay disabled");
     }
 }

@@ -6,6 +6,8 @@ use async_openai::config::OpenAIConfig;
 use crate::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "skill")]
 use crate::re_act::skills::{Skill, SkillRegistry};
+#[cfg(feature = "sandbox")]
+use crate::security::sandbox::SandboxPolicy;
 use serde_json::Value as JsonValue;
 use tokio::sync::{
     watch::{self, error::RecvError},
@@ -25,6 +27,8 @@ pub struct FuneraEnv {
     model_tx: watch::Sender<String>,
     #[cfg(feature = "skill")]
     skill_tx: watch::Sender<String>,
+    #[cfg(feature = "sandbox")]
+    sandbox_policy: SandboxPolicy,
 }
 
 impl FuneraEnv {
@@ -60,6 +64,8 @@ impl FuneraEnv {
                 model_tx,
                 #[cfg(feature = "skill")]
                 skill_tx,
+                #[cfg(feature = "sandbox")]
+                sandbox_policy: SandboxPolicy::default(),
             },
             FuneraEnvWatcher {
                 #[cfg(feature = "tool")]
@@ -70,6 +76,19 @@ impl FuneraEnv {
                 skill_rx,
             },
         )
+    }
+
+    /// Access the current sandbox policy.
+    #[cfg(feature = "sandbox")]
+    pub fn sandbox_policy(&self) -> &SandboxPolicy {
+        &self.sandbox_policy
+    }
+
+    /// Set a custom sandbox policy.
+    #[cfg(feature = "sandbox")]
+    pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {
+        self.sandbox_policy = policy;
+        self
     }
 
     #[cfg(feature = "tool")]

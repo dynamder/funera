@@ -21,9 +21,13 @@ tokio-util = "0.7.18"
 uuid = { version = "1.23.4", features = ["serde", "v4"] }
 serde_yaml = "0.9.34"
 
+[target.'cfg(not(windows))'.dependencies]
+nono = "0.67"
+
 [features]
 default = ["security", "deepseek", "tool"]
 security = ["tool"]
+sandbox = ["security"]
 deepseek = []
 openai = []
 regex = ["dep:regex", "security"]

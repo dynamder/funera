@@ -23,6 +23,7 @@ tracing = "0.1"
 [features]
 default = ["deepseek", "tool"]
 builtin-tools = ["dep:builtin_tools", "funera_core/tool"]
+sandbox = ["funera_core/sandbox", "builtin_tools?/sandbox"]
 security = ["funera_core/security"]
 deepseek = ["funera_core/deepseek"]
 openai = ["funera_core/openai"]
@@ -49,3 +50,7 @@ required-features = ["middleware"]
 [[example]]
 name = "skills"
 required-features = ["skill"]
+
+[[example]]
+name = "sandbox"
+required-features = ["sandbox", "builtin-tools"]

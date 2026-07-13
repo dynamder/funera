@@ -7,6 +7,9 @@ use thiserror::Error;
 #[cfg(feature = "regex")]
 use regex::Regex;
 
+#[cfg(feature = "sandbox")]
+use crate::security::sandbox::SandboxPolicy;
+
 /// Policy configuration for tool execution.
 ///
 /// Controls which tools are allowed or denied, enforces argument size limits,
@@ -31,6 +34,11 @@ pub struct ToolPolicy {
 
     /// Allowed working directories for shell tools.
     pub allowed_workdirs: HashSet<String>,
+
+    /// Kernel-enforced sandbox policy (nono-backed Landlock/Seatbelt).
+    #[cfg(feature = "sandbox")]
+    #[serde(default)]
+    pub sandbox: SandboxPolicy,
 }
 
 impl Default for ToolPolicy {
@@ -42,6 +50,8 @@ impl Default for ToolPolicy {
             max_timeout_secs: 300.0,
             shell_policy: Some(ShellPolicy::permissive()),
             allowed_workdirs: HashSet::new(),
+            #[cfg(feature = "sandbox")]
+            sandbox: SandboxPolicy::default(),
         }
     }
 }
@@ -61,6 +71,8 @@ impl ToolPolicy {
             max_timeout_secs: 300.0,
             shell_policy: Some(ShellPolicy::strict()),
             allowed_workdirs: HashSet::new(),
+            #[cfg(feature = "sandbox")]
+            sandbox: SandboxPolicy::default(),
         }
     }
 

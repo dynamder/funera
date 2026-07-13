@@ -6,5 +6,7 @@ pub mod path_guard;
 pub mod policy;
 #[cfg(feature = "security")]
 pub mod registry;
+#[cfg(feature = "sandbox")]
+pub mod sandbox;
 #[cfg(feature = "security")]
 pub mod secret;

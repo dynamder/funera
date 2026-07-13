@@ -32,14 +32,37 @@ pub use read::ReadTool;
 pub use shell::ShellTool;
 pub use write::WriteTool;
 
+#[cfg(feature = "sandbox")]
+pub use funera_core::security::sandbox::SandboxPolicy;
+
 use funera_core::re_act::tool::ToolRegistry;
 
 /// Register all four built-in tools (read, write, edit, shell) in the given registry.
+///
+/// The `shell` tool is registered **without** kernel sandboxing.
+/// Use [`register_all_tools_with_sandbox`] to enable it.
 pub fn register_all_tools(registry: &mut ToolRegistry) {
     registry.add_tool(Box::new(ReadTool));
     registry.add_tool(Box::new(WriteTool));
     registry.add_tool(Box::new(EditTool));
-    registry.add_tool(Box::new(ShellTool));
+    registry.add_tool(Box::new(ShellTool::new()));
+}
+
+/// Register all built-in tools, configuring the `shell` tool with a
+/// [`SandboxPolicy`] for kernel-enforced isolation (Landlock/Seatbelt).
+///
+/// The sandbox is applied to every shell subprocess via `pre_exec`.
+/// Unsupported platforms (e.g. Windows, older Linux kernels) gracefully
+/// degrade and run the tool without kernel isolation.
+#[cfg(feature = "sandbox")]
+pub fn register_all_tools_with_sandbox(
+    registry: &mut ToolRegistry,
+    policy: SandboxPolicy,
+) {
+    registry.add_tool(Box::new(ReadTool));
+    registry.add_tool(Box::new(WriteTool));
+    registry.add_tool(Box::new(EditTool));
+    registry.add_tool(Box::new(ShellTool::with_sandbox(policy)));
 }
 
 #[cfg(test)]
