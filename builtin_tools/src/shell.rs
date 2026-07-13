@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
+#[cfg(feature = "sandbox")]
 use funera_core::security::sandbox::{Sandbox, SandboxPolicy, format_triple_output};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 use tokio::time::timeout;
 
 /// Tool for executing shell commands.
@@ -97,9 +98,10 @@ impl Tool for ShellTool {
     }
 
     async fn execute(&self, args: JsonValue) -> Result<String, ToolCallError> {
-        let command_str = args.get("command").and_then(|v| v.as_str()).ok_or_else(|| {
-            ToolCallError::ParameterMismatch(json!({"error": "missing command"}))
-        })?;
+        let command_str = args
+            .get("command")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| ToolCallError::ParameterMismatch(json!({"error": "missing command"})))?;
 
         let workdir = args.get("workdir").and_then(|v| v.as_str());
         let timeout_secs = args.get("timeout").and_then(|v| v.as_f64()).unwrap_or(30.0);
@@ -181,18 +183,14 @@ impl ShellTool {
         })?;
 
         let sandbox = Sandbox::new(policy).map_err(|e| {
-            ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                "failed to set up sandbox: {e}"
-            ))
+            ToolCallError::ToolExecutionError(anyhow::anyhow!("failed to set up sandbox: {e}"))
         })?;
 
         let (stdout, stderr, exit_code) = sandbox
             .execute(shell, shell_flag, command_str, workdir, timeout_dur)
             .await
             .map_err(|e| {
-                ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                    "sandboxed command failed: {e}"
-                ))
+                ToolCallError::ToolExecutionError(anyhow::anyhow!("sandboxed command failed: {e}"))
             })?;
 
         Ok(format_triple_output(&stdout, &stderr, exit_code))
@@ -299,9 +297,7 @@ mod tests {
         } else {
             "pwd"
         };
-        let result = tool
-            .execute(json!({"command": cmd, "workdir": dir}))
-            .await;
+        let result = tool.execute(json!({"command": cmd, "workdir": dir})).await;
         assert!(result.is_ok());
     }
 
@@ -374,8 +370,7 @@ mod tests {
     /// Unique counter so parallel tests don't clobber each other's
     /// temp directories.
     #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
-    static TEMP_COUNTER: std::sync::atomic::AtomicU64 =
-        std::sync::atomic::AtomicU64::new(0);
+    static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
     /// Create a fresh temp directory for a sandbox test and write a
     /// known file into it.  Each call uses a unique suffix so that
@@ -426,7 +421,10 @@ mod tests {
         let cmd = format!("cat {}", test_file.display());
         let (success, output, exit_code) = run_sandboxed(policy, &cmd, None).await;
         cleanup_sandbox_temp(&tmpdir);
-        assert!(success, "sandboxed command should succeed - output: {output}");
+        assert!(
+            success,
+            "sandboxed command should succeed - output: {output}"
+        );
         assert_eq!(exit_code, 0, "exit code should be 0 - output: {output}");
         assert!(output.contains("hello from sandbox"), "output: {output}");
     }
@@ -453,7 +451,10 @@ mod tests {
         cleanup_sandbox_temp(&tmpdir);
         // /tmp is outside the allowed set → EACCES or ENOENT
         assert!(success, "command should produce exit code output: {output}");
-        assert_ne!(exit_code, 0, "expected non-zero exit for blocked read: {output}");
+        assert_ne!(
+            exit_code, 0,
+            "expected non-zero exit for blocked read: {output}"
+        );
     }
 
     // ── test: only system paths allowed, file creation blocked ─────
@@ -477,7 +478,10 @@ mod tests {
         cleanup_sandbox_temp(&tmpdir);
         // /tmp is excluded → Landlock blocks file creation
         assert!(success, "command should produce exit code output: {output}");
-        assert_ne!(exit_code, 0, "expected non-zero exit for blocked write: {output}");
+        assert_ne!(
+            exit_code, 0,
+            "expected non-zero exit for blocked write: {output}"
+        );
     }
 
     // ── test: workdir is respected inside sandbox ───────────────────
@@ -499,8 +503,7 @@ mod tests {
             ..Default::default()
         };
         let workdir_str = tmpdir.to_string_lossy().to_string();
-        let (success, output, exit_code) =
-            run_sandboxed(policy, "pwd", Some(&workdir_str)).await;
+        let (success, output, exit_code) = run_sandboxed(policy, "pwd", Some(&workdir_str)).await;
         cleanup_sandbox_temp(&tmpdir);
         assert!(success, "pwd should succeed - output: {output}");
         assert_eq!(exit_code, 0, "expected exit code 0 - output: {output}");
@@ -518,8 +521,7 @@ mod tests {
         // This test runs even when Landlock is unavailable because
         // the disabled policy skips the sandbox path entirely.
         let policy = funera_core::security::sandbox::SandboxPolicy::disabled();
-        let (success, output, exit_code) =
-            run_sandboxed(policy, "uname -o", None).await;
+        let (success, output, exit_code) = run_sandboxed(policy, "uname -o", None).await;
         assert!(success, "disabled sandbox should not block commands");
         assert_eq!(exit_code, 0, "expected exit code 0");
         assert!(!output.is_empty(), "expected uname output");
@@ -536,7 +538,9 @@ mod tests {
     async fn sandbox_windows_falls_through_gracefully() {
         let policy = funera_core::security::sandbox::SandboxPolicy::default();
         let tool = ShellTool::with_sandbox(policy);
-        let result = tool.execute(json!({"command": "echo windows_sandbox_graceful"})).await;
+        let result = tool
+            .execute(json!({"command": "echo windows_sandbox_graceful"}))
+            .await;
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("windows_sandbox_graceful"));
