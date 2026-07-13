@@ -73,6 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         match env_rx.try_recv() {
             Ok(EnvStateEvent::ToolAdded(name)) => eprintln!("  tool added: {name}"),
+            #[cfg(feature = "skill")]
             Ok(EnvStateEvent::SkillAdded(name)) => eprintln!("  skill added: {name}"),
             Ok(_) => {}
             Err(_) => break,

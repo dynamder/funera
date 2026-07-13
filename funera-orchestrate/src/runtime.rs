@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+#[cfg(feature = "skill")]
 use std::path::PathBuf;
 use std::sync::Arc;
 
