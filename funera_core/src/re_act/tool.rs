@@ -68,6 +68,20 @@ pub enum ToolCallError {
     /// No tool with the given name is registered.
     #[error("tool not found: {0}")]
     ToolNotFound(String),
+
+    /// The tool call requires user approval before proceeding.
+    #[error("approval required for {tool_name}: {reason}")]
+    ApprovalRequired {
+        call_id: String,
+        tool_name: String,
+        reason: String,
+    },
+
+    /// The tool call was rejected after an approval request was denied.
+    #[error("tool call rejected: {reason}")]
+    Rejected {
+        reason: String,
+    },
 }
 
 /// An entry in the tool registry, pairing a tool with its availability status.

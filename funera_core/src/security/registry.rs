@@ -1,18 +1,33 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use serde_json::Value as JsonValue;
+use tokio::sync::oneshot;
 
 use crate::re_act::tool::{RawToolRegistry, Tool, ToolCallError, ToolRegistryEntry};
 use crate::security::audit::{AuditBus, AuditEvent};
+use crate::security::boundary::BoundaryDecision;
 use crate::security::path_guard::PathGuard;
 use crate::security::policy::ToolPolicy;
+
+/// Callback signature for tool approval requests.
+pub type ApprovalCallback = Arc<
+    dyn Fn(&str, &str, &str, &[PathBuf]) + Send + Sync,
+>;
 
 pub struct GuardedToolRegistry {
     inner: RawToolRegistry,
     policy: ToolPolicy,
     path_guard: Option<PathGuard>,
     audit_bus: Option<AuditBus>,
+    #[cfg(feature = "sandbox")]
+    sandbox_paths: (Vec<PathBuf>, Vec<PathBuf>),
+    pending_approvals:
+        std::sync::Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<bool>>>>,
+    approval_timeout: Option<std::time::Duration>,
+    approval_callback: Option<ApprovalCallback>,
 }
 
 impl GuardedToolRegistry {
@@ -22,6 +37,11 @@ impl GuardedToolRegistry {
             policy: ToolPolicy::default(),
             path_guard: None,
             audit_bus: None,
+            #[cfg(feature = "sandbox")]
+            sandbox_paths: (vec![], vec![]),
+            pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
+            approval_timeout: None,
+            approval_callback: None,
         }
     }
 
@@ -31,6 +51,11 @@ impl GuardedToolRegistry {
             policy,
             path_guard: None,
             audit_bus: None,
+            #[cfg(feature = "sandbox")]
+            sandbox_paths: (vec![], vec![]),
+            pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
+            approval_timeout: None,
+            approval_callback: None,
         }
     }
 
@@ -62,6 +87,41 @@ impl GuardedToolRegistry {
 
     pub fn policy_mut(&mut self) -> &mut ToolPolicy {
         &mut self.policy
+    }
+
+    /// Set sandbox path boundaries (read_paths, read_write_paths)
+    /// used by the boundary check when the sandbox feature is enabled.
+    #[cfg(feature = "sandbox")]
+    pub fn set_sandbox_paths(&mut self, read_paths: Vec<PathBuf>, read_write_paths: Vec<PathBuf>) {
+        self.sandbox_paths = (read_paths, read_write_paths);
+    }
+
+    /// Set how long to wait for user approval of a tool call.
+    /// `None` means wait indefinitely.
+    pub fn set_approval_timeout(&mut self, timeout: Option<std::time::Duration>) {
+        self.approval_timeout = timeout;
+    }
+
+    /// Set a callback that fires when a tool requires user approval.
+    /// The callback receives (call_id, tool_name, reason, paths).
+    pub fn set_approval_callback(&mut self, cb: ApprovalCallback) {
+        self.approval_callback = Some(cb);
+    }
+
+    /// Approve or reject a tool call that is awaiting approval.
+    ///
+    /// This is the mechanism for external code (callbacks, middleware)
+    /// to respond to a [`ToolCallError::ApprovalRequired`] error.
+    /// Existing callbacks or middleware handling the `ReactEvent::ToolApprovalRequired`
+    /// event can call this method to answer.
+    pub fn approve_tool_call(&self, call_id: &str, approved: bool) -> Result<(), String> {
+        let mut map = self.pending_approvals.lock().map_err(|e| e.to_string())?;
+        if let Some(tx) = map.remove(call_id) {
+            let _ = tx.send(approved);
+            Ok(())
+        } else {
+            Err(format!("no pending approval for call_id {call_id}"))
+        }
     }
 
     pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
@@ -116,6 +176,77 @@ impl GuardedToolRegistry {
             return Err(ToolCallError::ToolUnavailable(e.to_string()));
         }
 
+        // ── Sandbox boundary check ──────────────────────────────────
+        let paths = extract_paths_from_args(&args);
+        #[cfg(feature = "sandbox")]
+        let boundary_decision = {
+            let (read_paths, read_write_paths) = &self.sandbox_paths;
+            let all_paths: Vec<PathBuf> = read_paths
+                .iter()
+                .chain(read_write_paths.iter())
+                .cloned()
+                .collect();
+            crate::security::boundary::check_boundary(
+                name,
+                &paths,
+                self.path_guard.as_ref(),
+                self.policy.sandbox.enabled,
+                |p: &PathBuf| {
+                    all_paths.iter().any(|root| {
+                        let canon = p.canonicalize().unwrap_or_else(|_| p.clone());
+                        let root_canon = root.canonicalize().unwrap_or_else(|_| root.clone());
+                        canon.starts_with(&root_canon)
+                    })
+                },
+            )
+        };
+        #[cfg(not(feature = "sandbox"))]
+        let boundary_decision = {
+            crate::security::boundary::check_boundary(name, &paths, self.path_guard.as_ref())
+        };
+
+        match boundary_decision {
+            BoundaryDecision::Rejected { reason, .. } => {
+                return Err(ToolCallError::Rejected { reason });
+            }
+            BoundaryDecision::RequiresApproval {
+                reason, paths, ..
+            } => {
+                // If no approval callback is registered, auto-deny
+                // to avoid hanging the ReAct loop.
+                if self.approval_callback.is_none() {
+                    return Err(ToolCallError::Rejected {
+                        reason: format!("tool call requires approval but no handler registered: {reason}"),
+                    });
+                }
+                let call_id = uuid::Uuid::new_v4().to_string();
+                let (tx, rx) = oneshot::channel();
+                {
+                    let mut map = self.pending_approvals.lock().unwrap();
+                    map.insert(call_id.clone(), tx);
+                }
+                // Notify the approval callback, if registered.
+                if let Some(ref cb) = self.approval_callback {
+                    cb(&call_id, name, &reason, &paths);
+                }
+                // Await the approval response.
+                let approved = match self.approval_timeout {
+                    Some(timeout) => tokio::time::timeout(timeout, rx)
+                        .await
+                        .unwrap_or(Ok(false))
+                        .unwrap_or(false),
+                    None => rx.await.unwrap_or(false),
+                };
+                if !approved {
+                    return Err(ToolCallError::Rejected {
+                        reason: "tool call rejected by user".into(),
+                    });
+                }
+                // Approved — fall through to execute
+            }
+            BoundaryDecision::AutoApproved => {}
+        }
+
         let result = self.inner.call_tool(name, args).await;
 
         let duration = start.elapsed();
@@ -132,6 +263,18 @@ impl GuardedToolRegistry {
         }
 
         result
+    }
+
+    /// Check whether a tool call with the given call_id is awaiting
+    /// user approval. Returns `None` if unknown, or `Some(true/false)`
+    /// if the caller has already responded.
+    pub fn is_pending_approval(&self, call_id: &str) -> Option<bool> {
+        let map = self.pending_approvals.lock().ok()?;
+        if map.contains_key(call_id) {
+            Some(false) // still pending, not yet answered
+        } else {
+            None // unknown or resolved
+        }
     }
 
     fn audit(&self, event: AuditEvent) {
@@ -172,6 +315,24 @@ impl From<ToolPolicy> for GuardedToolRegistry {
     fn from(policy: ToolPolicy) -> Self {
         Self::with_policy(policy)
     }
+}
+
+/// Extract file paths from tool arguments.
+///
+/// Many tools accept a `filePath` parameter; this helper collects them
+/// for the sandbox boundary check.
+fn extract_paths_from_args(args: &JsonValue) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(fp) = args.get("filePath").and_then(|v| v.as_str()) {
+        paths.push(std::path::PathBuf::from(fp));
+    }
+    if let Some(_command) = args.get("command").and_then(|v| v.as_str()) {
+        // For shell commands, the sandbox operates on the process level
+        // via pre_exec / CreateProcessAsUserW.  The boundary check is
+        // advisory — we extract the command string for reference.
+        paths.push(std::path::PathBuf::from("shell-command"));
+    }
+    paths
 }
 
 #[cfg(test)]

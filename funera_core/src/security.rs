@@ -1,6 +1,8 @@
 #[cfg(feature = "security")]
 pub mod audit;
 #[cfg(feature = "security")]
+pub mod boundary;
+#[cfg(feature = "security")]
 pub mod path_guard;
 #[cfg(feature = "security")]
 pub mod policy;

@@ -118,6 +118,26 @@ impl SandboxPolicy {
         Ok(caps)
     }
 
+    /// Check whether a path is within the sandbox boundary.
+    ///
+    /// A path is considered inside if it is a descendant (or exact match)
+    /// of any configured `read_path`, `read_write_path`, or `execute_path`.
+    /// Paths outside this perimeter are rejected by the boundary check.
+    #[cfg(feature = "sandbox")]
+    pub fn is_within_boundary(&self, path: &std::path::Path) -> bool {
+        if !self.enabled {
+            return true;
+        }
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        for root in self.read_paths.iter().chain(self.read_write_paths.iter()) {
+            let root_canon = root.canonicalize().unwrap_or_else(|_| root.clone());
+            if canonical.starts_with(&root_canon) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// A human-readable summary for diagnostics / auditing.
     pub fn summary(&self) -> String {
         if !self.enabled {
