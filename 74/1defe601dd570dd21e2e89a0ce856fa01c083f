@@ -1,0 +1,24 @@
+funera_core/src/event_bus/env_state_bus.rs
+  s_8d850c9be60db1::t_379270fc0bf37b 192
+  s_8d850c9be60db1::t_1c2e450126ce72 165
+  s_8d850c9be60db1::t_d54e163d2f2d58 13,15,17,19,21,23,25
+  s_8d850c9be60db1::t_0236fc9f1d2e17 94-96
+funera_core/src/chat/session.rs
+  s_8d850c9be60db1::t_c8b6677f588f15 47-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "741defe601dd570dd21e2e89a0ce856fa01c083f",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
