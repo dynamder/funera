@@ -1,0 +1,37 @@
+funera-orchestrate/examples/builtin_tools.rs
+  s_8d850c9be60db1::t_a39d8233947cbf 17
+funera-orchestrate/examples/multi_turn.rs
+  s_8d850c9be60db1::t_b84180a55c0ac0 17
+funera-orchestrate/examples/sandbox.rs
+  s_8d850c9be60db1::t_50cb45b780957e 72
+funera-orchestrate/examples/minimal.rs
+  s_8d850c9be60db1::t_95df41fc334075 20
+funera-orchestrate/examples/session_reset.rs
+  s_8d850c9be60db1::t_856a6d865aab73 17
+funera-orchestrate/examples/raw_events.rs
+  s_8d850c9be60db1::t_0eae0e604deffa 63
+funera-orchestrate/examples/streaming_with_tools.rs
+  s_8d850c9be60db1::t_83c194b5f1c6a5 54
+funera-orchestrate/examples/custom_tool.rs
+  s_8d850c9be60db1::t_5f8e4c6266dbde 66
+funera-orchestrate/examples/skills.rs
+  s_8d850c9be60db1::t_96c45a17852c2f 26
+funera-orchestrate/examples/streaming.rs
+  s_8d850c9be60db1::t_d8edac02312f24 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "b41869106c6cee39c29bd7b3b7c8d8131e2c873f",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
