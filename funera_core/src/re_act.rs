@@ -13,7 +13,9 @@ use crate::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use crate::chat::session::SessionCmd;
 use crate::env::FuneraEnvWatcher;
 use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
-use crate::event_bus::react_bus::{ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
+use crate::event_bus::react_bus::{
+    ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse,
+};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 #[cfg(feature = "tool")]
 use crate::event_bus::tool_bus::ToolBus;
@@ -160,12 +162,10 @@ impl<P: ChatProvider> ReActLoop<P> {
                     Vec::new()
                 };
 
-                let (token_tx, react_bus) =
-                    self.turn_highway_handle.prepare_turn().await;
+                let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
 
-                let request_json = P::build_request_json(
-                    &model, &history_json, &skill_content, &tools_json,
-                );
+                let request_json =
+                    P::build_request_json(&model, &history_json, &skill_content, &tools_json);
 
                 react_bus.send(ReactEvent::TurnStart).ok();
 
@@ -174,16 +174,10 @@ impl<P: ChatProvider> ReActLoop<P> {
                 let stream = P::create_stream(&client, request_json).await?;
 
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);
-                let (
-                    assistant_content,
-                    reasoning_content,
-                    tool_call_accums,
-                    turn_finish_reason,
-                ) = process_token_stream(&mut token_bus, &react_bus).await?;
+                let (assistant_content, reasoning_content, tool_call_accums, turn_finish_reason) =
+                    process_token_stream(&mut token_bus, &react_bus).await?;
 
-                let finish_reason_str = turn_finish_reason
-                    .as_ref()
-                    .map(|r| format!("{:?}", r));
+                let finish_reason_str = turn_finish_reason.as_ref().map(|r| format!("{:?}", r));
 
                 let mut turn_events: Vec<E> = Vec::new();
 
@@ -194,8 +188,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                 };
 
                 if !assistant_content.is_empty() {
-                    turn_events
-                        .push(E::assistant_text(assistant_content.clone(), reasoning));
+                    turn_events.push(E::assistant_text(assistant_content.clone(), reasoning));
                 }
 
                 let mut accums_sorted: Vec<_> = tool_call_accums.values().collect();
@@ -210,12 +203,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                     ));
                 }
 
-                filter_and_store(
-                    turn_events,
-                    &middleware,
-                    &event_sender,
-                    &self.session_tx,
-                );
+                filter_and_store(turn_events, &middleware, &event_sender, &self.session_tx);
 
                 let (should_continue, tool_results) = handle_turn_finish(
                     turn_finish_reason.as_ref(),
@@ -236,12 +224,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                         };
                         result_events.push(E::tool_response(r.call_id.into(), r.name, result));
                     }
-                    filter_and_store(
-                        result_events,
-                        &middleware,
-                        &event_sender,
-                        &self.session_tx,
-                    );
+                    filter_and_store(result_events, &middleware, &event_sender, &self.session_tx);
                 }
 
                 emit_event(&event_sender, E::turn_end(finish_reason_str));
@@ -368,7 +351,12 @@ async fn process_token_stream<C: crate::provider::StreamChunkExt>(
         }
     }
 
-    Ok((assistant_content, reasoning_content, tool_call_accums, turn_finish_reason))
+    Ok((
+        assistant_content,
+        reasoning_content,
+        tool_call_accums,
+        turn_finish_reason,
+    ))
 }
 
 #[cfg(feature = "tool")]
@@ -398,11 +386,13 @@ async fn handle_turn_finish(
             }
 
             use futures::future::join_all;
-            let results: Vec<Result<String, crate::re_act::tool::ToolCallError>> = join_all(accums.iter().map(|acc| {
-                let args: JsonValue = serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
-                tool_bus.execute(acc.call_id.clone(), acc.name.clone(), args)
-            }))
-            .await;
+            let results: Vec<Result<String, crate::re_act::tool::ToolCallError>> =
+                join_all(accums.iter().map(|acc| {
+                    let args: JsonValue =
+                        serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
+                    tool_bus.execute(acc.call_id.clone(), acc.name.clone(), args)
+                }))
+                .await;
 
             let mut tool_results = Vec::new();
             for (acc, result) in accums.iter().zip(results) {
@@ -481,7 +471,6 @@ mod tests {
     use std::collections::HashMap;
 
     use async_openai::types::chat::FinishReason;
-    use tokio::sync::mpsc;
 
     use crate::event_bus::env_state_bus::TurnHighWayEvent;
     use crate::event_bus::react_bus::ReactBus;
@@ -520,13 +509,12 @@ mod tests {
         fn into_session_message(self) -> Option<(Role, MsgVariant)> {
             Some((
                 Role::Assistant,
-                MsgVariant::Text(TextMessage { text: self.0.into(), reasoning_content: None }),
+                MsgVariant::Text(TextMessage {
+                    text: self.0.into(),
+                    reasoning_content: None,
+                }),
             ))
         }
-    }
-
-    fn empty_session_msgs() -> Arc<parking_lot::RwLock<Vec<FuneraMessage>>> {
-        Arc::new(parking_lot::RwLock::new(Vec::new()))
     }
 
     // ── process_token_stream ────────────────────────────────────
@@ -538,8 +526,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) =
-            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "");
         assert_eq!(reasoning, "");
         assert!(accums.is_empty());
@@ -553,8 +542,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) =
-            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "Hello World");
         assert_eq!(reasoning, "");
         assert!(accums.is_empty());
@@ -568,8 +558,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) =
-            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "");
         assert_eq!(reasoning, "");
         assert_eq!(accums.len(), 1);
@@ -599,8 +590,9 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) =
-            process_token_stream(&mut token_bus, &react_bus).await.unwrap();
+        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
+            .await
+            .unwrap();
         assert_eq!(content, "Thinking...");
         assert_eq!(reasoning, "");
         assert_eq!(accums.len(), 1);
@@ -634,14 +626,10 @@ mod tests {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = crate::event_bus::tool_bus::ToolBus::new();
 
-        let (should_continue, results) = handle_turn_finish(
-            None,
-            &HashMap::new(),
-            &react_bus,
-            &tool_bus,
-        )
-        .await
-        .unwrap();
+        let (should_continue, results) =
+            handle_turn_finish(None, &HashMap::new(), &react_bus, &tool_bus)
+                .await
+                .unwrap();
 
         assert!(!should_continue);
         assert!(results.is_empty());
@@ -749,8 +737,10 @@ mod tests {
         async fn create_stream(
             _client: &async_openai::Client<async_openai::config::OpenAIConfig>,
             _request_json: JsonValue,
-        ) -> Result<async_openai::types::stream::StreamResponse<Self::Chunk>, async_openai::error::OpenAIError>
-        {
+        ) -> Result<
+            async_openai::types::stream::StreamResponse<Self::Chunk>,
+            async_openai::error::OpenAIError,
+        > {
             Ok(test_helpers::mock_text_stream(vec!["Mock response"]))
         }
     }
@@ -768,10 +758,12 @@ mod tests {
             let _req = rx_from_loop.recv().await;
             let (token_tx, _) = tokio::sync::broadcast::channel(50);
             let react_bus = ReactBus::new();
-            let _ = tx_to_loop.send(TurnHighWayEvent::TurnPrepareResponse {
-                token_tx,
-                react_bus,
-            }).await;
+            let _ = tx_to_loop
+                .send(TurnHighWayEvent::TurnPrepareResponse {
+                    token_tx,
+                    react_bus,
+                })
+                .await;
         });
 
         let handle = TurnHighWayHandle {
@@ -780,27 +772,28 @@ mod tests {
         };
 
         let session_tx = crate::chat::session::spawn_session_actor();
-        let (_env, _env_watcher) = crate::env::FuneraEnv::new(
-            async_openai::Client::new(),
-            "mock-model",
-        );
+        let (_env, _env_watcher) =
+            crate::env::FuneraEnv::new(async_openai::Client::new(), "mock-model");
         let env_watcher = _env_watcher;
 
         let loop_instance = ReActLoop::<MockProvider>::new(
-            1, Some(session_tx.clone()),
+            1,
+            Some(session_tx.clone()),
             env_watcher,
             env_state_tx,
             handle,
-        ).with_tool_bus(tool_bus);
+        )
+        .with_tool_bus(tool_bus);
 
         let loop_handle = loop_instance.run::<TestEvent>(None, None);
         let msg = FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: "ping".into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: "ping".into(),
+                reasoning_content: None,
+            }),
         );
-        let _ = session_tx.send(crate::chat::session::SessionCmd::PushMessages {
-            msgs: vec![msg],
-        });
+        let _ = session_tx.send(crate::chat::session::SessionCmd::PushMessages { msgs: vec![msg] });
 
         let result = loop_handle.task.await;
         assert!(result.is_ok(), "loop task should complete successfully");

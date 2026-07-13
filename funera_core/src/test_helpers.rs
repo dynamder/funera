@@ -7,6 +7,7 @@ use async_openai::types::chat::{
 use futures::stream;
 
 fn base_chunk() -> Chunk {
+    #[allow(deprecated)]
     Chunk {
         id: "chatcmpl-test".into(),
         object: "chat.completion.chunk".into(),
@@ -19,6 +20,7 @@ fn base_chunk() -> Chunk {
     }
 }
 
+#[allow(deprecated)]
 pub fn mock_text_chunk(content: &str) -> Chunk {
     Chunk {
         choices: vec![Choice {
@@ -56,6 +58,7 @@ pub fn mock_finish_chunk(reason: FinishReason) -> Chunk {
     }
 }
 
+#[allow(deprecated)]
 #[allow(deprecated)]
 pub fn mock_tool_call_chunk(index: u32, call_id: &str, name: &str, args: &str) -> Chunk {
     Chunk {

@@ -1,11 +1,8 @@
 use async_openai::{
+    Client,
     config::OpenAIConfig,
     error::OpenAIError,
-    types::{
-        chat::CreateChatCompletionStreamResponse,
-        stream::StreamResponse,
-    },
-    Client,
+    types::{chat::CreateChatCompletionStreamResponse, stream::StreamResponse},
 };
 use serde::de::DeserializeOwned;
 use serde_json::Value as JsonValue;
@@ -67,7 +64,10 @@ impl StreamChunkExt for CreateChatCompletionStreamResponse {
             if let Some(finish_reason) = choice.finish_reason {
                 events.push(TokenEvent::Finish(finish_reason));
             }
-            match (choice.delta.content.as_deref(), choice.delta.tool_calls.as_ref()) {
+            match (
+                choice.delta.content.as_deref(),
+                choice.delta.tool_calls.as_ref(),
+            ) {
                 (Some(text), Some(tool_calls)) => {
                     if !text.is_empty() {
                         events.push(TokenEvent::Text(text.to_string()));
@@ -113,9 +113,12 @@ pub fn build_standard_request_json(
     let mut msgs: Vec<JsonValue> = messages.to_vec();
     if !skill_content.is_empty() {
         msgs.push(JsonValue::Object(
-            [("role".into(), "system".into()), ("content".into(), skill_content.into())]
-                .into_iter()
-                .collect(),
+            [
+                ("role".into(), "system".into()),
+                ("content".into(), skill_content.into()),
+            ]
+            .into_iter()
+            .collect(),
         ));
     }
     let mut req = JsonValue::Object(
