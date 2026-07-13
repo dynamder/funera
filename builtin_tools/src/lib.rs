@@ -27,6 +27,9 @@ pub mod read;
 pub mod shell;
 pub mod write;
 
+#[cfg(all(feature = "sandbox", target_os = "windows"))]
+pub mod sandbox_win;
+
 pub use edit::EditTool;
 pub use read::ReadTool;
 pub use shell::ShellTool;
@@ -49,11 +52,15 @@ pub fn register_all_tools(registry: &mut ToolRegistry) {
 }
 
 /// Register all built-in tools, configuring the `shell` tool with a
-/// [`SandboxPolicy`] for kernel-enforced isolation (Landlock/Seatbelt).
+/// [`SandboxPolicy`] for kernel-enforced isolation.
 ///
-/// The sandbox is applied to every shell subprocess via `pre_exec`.
-/// Unsupported platforms (e.g. Windows, older Linux kernels) gracefully
-/// degrade and run the tool without kernel isolation.
+/// | Platform | Mechanism |
+/// |----------|-----------|
+/// | Linux    | Landlock (nono crate) |
+/// | macOS    | Seatbelt (nono crate) |
+/// | Windows  | Write-Restricted Token + ACLs |
+///
+/// Unsupported platforms/kernels gracefully degrade to normal execution.
 #[cfg(feature = "sandbox")]
 pub fn register_all_tools_with_sandbox(
     registry: &mut ToolRegistry,

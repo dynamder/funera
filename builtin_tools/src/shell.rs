@@ -20,35 +20,41 @@ use std::os::unix::process::CommandExt;
 /// clamped to 1–300s).
 ///
 /// When compiled with `sandbox` feature, an optional [`SandboxPolicy`]
-/// can be set to apply kernel-enforced isolation (Landlock on Linux,
-/// Seatbelt on macOS) to each tool subprocess via `pre_exec` hook.
+/// can be set to apply kernel-enforced isolation:
 ///
-/// **Windows note:** sandbox is only supported on Linux and macOS.
-/// On Windows, `with_sandbox` is a no-op and the tool runs without
-/// kernel isolation.
+/// | Platform | Mechanism |
+/// |----------|-----------|
+/// | Linux    | Landlock (nono crate) via `pre_exec` |
+/// | macOS    | Seatbelt (nono crate) via `pre_exec` |
+/// | Windows  | Write-Restricted Token + synthetic SID + ACLs |
+///
+/// If the sandbox cannot be applied (unsupported kernel, missing privileges),
+/// execution falls back to the normal path and logs a warning.
 pub struct ShellTool {
-    #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+    #[cfg(feature = "sandbox")]
     sandbox_policy: Option<SandboxPolicy>,
 }
 
 impl ShellTool {
     pub fn new() -> Self {
         Self {
-            #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+            #[cfg(feature = "sandbox")]
             sandbox_policy: None,
         }
     }
 
-    /// Create a ShellTool that applies the given kernel sandbox to
-    /// every subprocess invocation.
+    /// Create a ShellTool that applies sandbox isolation to every
+    /// subprocess invocation.
     ///
-    /// On Windows this is a no-op — the sandbox is silently disabled
-    /// because the underlying `nono` crate only supports Linux/macOS.
+    /// Uses Landlock/Seatbelt on Linux/macOS (via `nono`),
+    /// Write-Restricted Tokens on Windows.
+    ///
+    /// If the platform cannot enforce isolation, the tool falls back
+    /// to normal execution gracefully.
     #[cfg(feature = "sandbox")]
-    pub fn with_sandbox(_policy: SandboxPolicy) -> Self {
+    pub fn with_sandbox(policy: SandboxPolicy) -> Self {
         Self {
-            #[cfg(not(target_os = "windows"))]
-            sandbox_policy: Some(_policy),
+            sandbox_policy: Some(policy),
         }
     }
 }
@@ -112,12 +118,22 @@ impl Tool for ShellTool {
             ("sh", "-c")
         };
 
-        // ── sandboxed path (Linux / macOS only) ─────────────────────
+        // ── sandboxed path (Linux / macOS) ─────────────────────────
         #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
         if let Some(ref policy) = self.sandbox_policy {
             if policy.enabled {
                 return self
                     .execute_sandboxed(shell, shell_flag, command_str, workdir, timeout_dur)
+                    .await;
+            }
+        }
+
+        // ── sandboxed path (Windows) ────────────────────────────────
+        #[cfg(all(feature = "sandbox", target_os = "windows"))]
+        if let Some(ref policy) = self.sandbox_policy {
+            if policy.enabled {
+                return self
+                    .execute_sandboxed_windows(shell, shell_flag, command_str, workdir, timeout_dur)
                     .await;
             }
         }
@@ -251,6 +267,63 @@ impl ShellTool {
             })?;
 
         Ok(format_output(output))
+    }
+
+    /// Windows sandboxed execution via Write-Restricted Token + ACLs.
+    #[cfg(all(feature = "sandbox", target_os = "windows"))]
+    async fn execute_sandboxed_windows(
+        &self,
+        shell: &str,
+        shell_flag: &str,
+        command_str: &str,
+        workdir: Option<&str>,
+        timeout_dur: Duration,
+    ) -> Result<String, ToolCallError> {
+        let policy = self.sandbox_policy.as_ref().ok_or_else(|| {
+            ToolCallError::ToolExecutionError(anyhow::anyhow!("sandbox policy missing"))
+        })?;
+
+        let sandbox = crate::sandbox_win::WindowsSandbox::new(policy).map_err(|e| {
+            ToolCallError::ToolExecutionError(anyhow::anyhow!(
+                "failed to set up Windows sandbox: {e}"
+            ))
+        })?;
+
+        let full_command = format!("{} {} {}", shell, shell_flag, command_str);
+
+        let result = sandbox
+            .execute(&full_command, workdir, timeout_dur)
+            .await
+            .map_err(|e| {
+                ToolCallError::ToolExecutionError(anyhow::anyhow!(
+                    "sandboxed command failed: {e}"
+                ))
+            })?;
+
+        let (stdout, stderr, exit_code) = result;
+
+        // Build output in the same format as format_output
+        let mut output_str = String::new();
+        if !stdout.is_empty() {
+            output_str.push_str("stdout:\n");
+            output_str.push_str(&stdout);
+        }
+        if !stderr.is_empty() {
+            if !output_str.is_empty() {
+                output_str.push('\n');
+            }
+            output_str.push_str("stderr:\n");
+            output_str.push_str(&stderr);
+        }
+        if exit_code == 0 {
+            if output_str.is_empty() {
+                output_str.push_str("(command completed with no output)");
+            }
+        } else {
+            output_str.push_str(&format!("\n(exit code: {})", exit_code));
+        }
+
+        Ok(output_str)
     }
 }
 
