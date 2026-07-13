@@ -50,6 +50,7 @@ funera = { git = "https://github.com/dynamder/Funera" }
 | `deepseek` | ✅ | DeepSeek provider |
 | `openai` | ❌ | OpenAI provider |
 | `security` | ❌ | Tool policy enforcement, path guards, audit logging |
+| `sandbox` | ❌ | Kernel-level subprocess isolation (Landlock/Seatbelt/Token) |
 | `middleware` | ❌ | Event interception pipeline |
 | `skill` | ❌ | Skill loading and prompt injection |
 
@@ -82,6 +83,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use funera::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
 let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
     .model("deepseek-v4-flash")
@@ -97,12 +100,14 @@ while let Some(event) = rx.recv().await {
         print!("{t}");
     }
 }
+Ok(())
+}
 ```
 
 ### Multi-turn conversation
 
 ```rust
-let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
+let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
     .model("deepseek-v4-flash")
     .build()?;
@@ -160,6 +165,35 @@ let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .build()?;
 ```
 
+### Security configuration
+
+Requires the `security` feature (and optionally `builtin-tools`, `sandbox`):
+
+```rust
+use funera::{Agent, AgentRuntime, DeepSeekProvider, ToolPolicy, ShellPolicy};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+        .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+        .model("deepseek-v4-flash")
+        .with_builtin_tools()
+        .with_tool_policy(ToolPolicy {
+            denied_tools: ["shell".into()].into_iter().collect(),
+            shell_policy: Some(ShellPolicy::with_allowed(
+                vec!["git".into(), "cargo".into()],
+            )),
+            ..Default::default()
+        })
+        .build()?;
+
+    let agent = Agent::builder().build();
+    let resp = agent.fire("List the git log.", &runtime).await?;
+    println!("{}", resp.content);
+    Ok(())
+}
+```
+
 ## Project structure
 
 ```
@@ -180,7 +214,7 @@ funera/
 │   │   ├── event.rs      AgentEvent enum
 │   │   ├── dispatcher.rs  Callback dispatch
 │   │   └── send_handle.rs Ownership handles
-│   └── examples/         10 example programs
+│   └── examples/         Example programs
 ├── builtin_tools/        Default tool implementations
 │   └── src/
 │       ├── read.rs       ReadTool (file/dir, hashline output)

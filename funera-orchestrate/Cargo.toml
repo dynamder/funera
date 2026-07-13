@@ -58,3 +58,27 @@ required-features = ["sandbox", "builtin-tools"]
 [[example]]
 name = "tool_policy"
 required-features = ["security"]
+
+[[example]]
+name = "custom_tool"
+
+[[example]]
+name = "minimal"
+
+[[example]]
+name = "multi_runtime"
+
+[[example]]
+name = "multi_turn"
+
+[[example]]
+name = "raw_events"
+
+[[example]]
+name = "session_reset"
+
+[[example]]
+name = "streaming"
+
+[[example]]
+name = "streaming_with_tools"

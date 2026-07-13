@@ -9,8 +9,8 @@
 //! use funera::{Agent, AgentRuntime, DeepSeekProvider};
 //!
 //! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-//!     .api_key(std::env::var("OPENAI_API_KEY")?)
-//!     .model("gpt-4o")
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-v4-flash")
 //!     .build()?;
 //!
 //! let agent = Agent::builder()
@@ -20,6 +20,23 @@
 //! let resp = agent.fire("Hello!", &runtime).await?;
 //! println!("{}", resp.content);
 //! ```
+//!
+//! ## Security Configuration
+//!
+//! Enable the `security` feature to restrict tool execution:
+//!
+//! ```rust,ignore
+//! use funera::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
+//!
+//! let runtime = AgentRuntimeBuilder::new()
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-v4-flash")
+//!     .with_tool_policy(ToolPolicy::strict())
+//!     .build()?;
+//! ```
+//!
+//! See the `examples/tool_policy.rs` example for a comprehensive walk-through
+//! of all policy configuration options.
 //!
 //! ## Accessing the core layer
 //!

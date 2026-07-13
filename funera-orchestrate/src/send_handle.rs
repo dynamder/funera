@@ -32,7 +32,7 @@ use crate::runtime::{Acquired, AgentRuntime, Idle};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// # let agent = Agent::builder().build();
 /// # let rt = AgentRuntime::<DeepSeekProvider>::builder()
-/// #     .api_key("sk-xxx").build()?;
+/// #     .api_key(std::env::var("DEEPSEEK_API_KEY")?).build()?;
 /// let handle = agent.send("Hello", rt).await?;
 /// let (_rt, resp) = handle.await?;    // IntoFuture → (Idle, ChatResponse)
 /// # Ok(())

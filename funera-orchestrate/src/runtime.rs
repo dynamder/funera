@@ -42,9 +42,9 @@ use crate::error::OrchestrateError;
 /// ```rust,no_run
 /// # use funera_orchestrate::{AgentRuntime, DeepSeekProvider};
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
-///     .api_key(std::env::var("OPENAI_API_KEY")?)
-///     .model("gpt-4o")
+/// let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+///     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+///     .model("deepseek-v4-flash")
 ///     .build()?;
 /// # Ok(())
 /// # }
@@ -241,6 +241,26 @@ impl AgentRuntimeBuilder {
     /// The policy is enforced by the guarded tool registry before each
     /// tool call.  Combine with [`with_sandbox_policy`](Self::with_sandbox_policy)
     /// for defence-in-depth (application-level + kernel-enforced isolation).
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use funera_orchestrate::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
+    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let policy = ToolPolicy {
+    ///     denied_tools: ["shell".into()].into_iter().collect(),
+    ///     shell_policy: Some(ShellPolicy::strict()),
+    ///     ..ToolPolicy::default()
+    /// };
+    ///
+    /// let runtime = AgentRuntimeBuilder::new()
+    ///     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+    ///     .model("deepseek-v4-flash")
+    ///     .with_tool_policy(policy)
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "security")]
     pub fn with_tool_policy(mut self, policy: ToolPolicy) -> Self {
         self.tool_policy = Some(policy);
@@ -283,7 +303,7 @@ impl AgentRuntimeBuilder {
     /// ```rust,no_run
     /// # use funera_orchestrate::{AgentRuntime, DeepSeekProvider};
     /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let rt = AgentRuntime::<DeepSeekProvider>::builder().api_key("sk-key").model("gpt-4o").build_with::<DeepSeekProvider>()?;
+    /// let rt = AgentRuntime::<DeepSeekProvider>::builder().api_key(std::env::var("DEEPSEEK_API_KEY")?).model("deepseek-v4-flash").build_with::<DeepSeekProvider>()?;
     /// # Ok(())
     /// # }
     /// ```
@@ -311,6 +331,18 @@ impl AgentRuntimeBuilder {
                 async_openai::Client::with_config(cfg)
             }
         };
+
+        // Sync sandbox policy into tool policy when only sandbox was configured.
+        #[cfg(all(feature = "sandbox", feature = "security"))]
+        {
+            if self.tool_policy.is_none() {
+                if let Some(ref sp) = self.sandbox_policy {
+                    let mut tp = ToolPolicy::default();
+                    tp.sandbox = sp.clone();
+                    self.tool_policy = Some(tp);
+                }
+            }
+        }
 
         #[cfg(feature = "tool")]
         let registry = {

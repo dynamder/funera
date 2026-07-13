@@ -165,7 +165,8 @@ impl AgentBuilder {
 /// # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-///     .api_key(std::env::var("OPENAI_API_KEY")?)
+///     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+///     .model("deepseek-v4-flash")
 ///     .build()?;
 ///
 /// let agent = Agent::builder()
@@ -184,7 +185,8 @@ impl AgentBuilder {
 /// # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-///     .api_key(std::env::var("OPENAI_API_KEY")?)
+///     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+///     .model("deepseek-v4-flash")
 ///     .build()?;
 ///
 /// let agent = Agent::builder().build();

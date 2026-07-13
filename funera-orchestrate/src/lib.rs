@@ -12,9 +12,12 @@
 //! |---------|---------|-------------|
 //! | `deepseek` | ✅ | DeepSeek provider |
 //! | `openai` | ❌ | OpenAI provider |
-//! | `builtin-tools` | ✅ | Built-in tools (Read, Write, Edit, Shell) |
-//! | `security` | ✅ | Tool policy enforcement |
+//! | `tool` | ✅ | Tool system (trait, registry, executor) |
+//! | `builtin-tools` | ❌ | Built-in tools (Read, Write, Edit, Shell) |
+//! | `security` | ❌ | Tool policy enforcement |
 //! | `middleware` | ❌ | Event interception pipeline (Inspector + Mutator) |
+//! | `skill` | ❌ | Skill loading and prompt injection |
+//! | `sandbox` | ❌ | Kernel-level subprocess isolation |
 //!
 //! ---
 //!
@@ -26,8 +29,8 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-//!         .api_key(std::env::var("OPENAI_API_KEY")?)
-//!         .model("gpt-4o")
+//!         .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!         .model("deepseek-v4-flash")
 //!         .build()?;
 //!
 //!     let agent = Agent::builder()
@@ -58,8 +61,8 @@
 //! # use funera_orchestrate::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-//!     .api_key(std::env::var("OPENAI_API_KEY")?)
-//!     .model("gpt-4o")
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-v4-flash")
 //!     .build()?;
 //!
 //! let agent = Agent::builder()
@@ -81,9 +84,9 @@
 //! ```rust,no_run
 //! # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let mut runtime = AgentRuntime::<DeepSeekProvider>::builder()
-//!     .api_key(std::env::var("OPENAI_API_KEY")?)
-//!     .model("gpt-4o")
+//! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-v4-flash")
 //!     .build()?;
 //!
 //! let agent = Agent::builder()
@@ -100,22 +103,51 @@
 //! # }
 //! ```
 //!
-//! ### Switching runtimes
+//! ### Switching models on the same provider
 //!
 //! ```rust,no_run
 //! # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let gpt = AgentRuntime::<DeepSeekProvider>::builder()
-//!     .api_key("sk-...").model("gpt-4o").build()?;
+//! let fast = AgentRuntime::<DeepSeekProvider>::builder()
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-v4-flash")
+//!     .build()?;
 //!
-//! let claude = AgentRuntime::<DeepSeekProvider>::builder()
-//!     .api_key("sk-ant-...").model("claude-3-opus").build()?;
+//! let powerful = AgentRuntime::<DeepSeekProvider>::builder()
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-r1")
+//!     .build()?;
 //!
 //! let agent = Agent::builder().build();
 //!
-//! let (gpt, _) = agent.send("What is Rust?", gpt).await?.await?;     // session in gpt
-//! agent.fire("What is Python?", &claude).await?;     // temp session
-//! let (_gpt, _) = agent.send("Tell me more", gpt).await?.await?;       // continues gpt session
+//! let (fast, _) = agent.send("Hello", fast).await?.await?;              // fast model
+//! agent.fire("What is Rust?", &powerful).await?;                        // powerful model (temp)
+//! let (_fast, _) = agent.send("Tell me more", fast).await?.await?;       // back to fast
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Security configuration
+//!
+//! Requires the `security` feature (and optionally `builtin-tools`, `sandbox`).
+//!
+//! ```rust,no_run
+//! # use funera_orchestrate::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let runtime = AgentRuntimeBuilder::new()
+//!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+//!     .model("deepseek-v4-flash")
+//!     .with_builtin_tools()
+//!     .with_tool_policy(
+//!         ToolPolicy {
+//!             denied_tools: ["shell".into()].into_iter().collect(),
+//!             shell_policy: Some(ShellPolicy::with_allowed(
+//!                 vec!["git".into(), "cargo".into()],
+//!             )),
+//!             ..Default::default()
+//!         },
+//!     )
+//!     .build()?;
 //! # Ok(())
 //! # }
 //! ```
@@ -151,6 +183,10 @@ pub use funera_core::provider::openai::OpenAIProvider;
 pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
 pub use send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
+
+// Re-export security policy types for convenience.
+#[cfg(feature = "security")]
+pub use funera_core::security::policy::{PolicyError, ShellPolicy, ToolPolicy};
 
 // Re-export core event types for direct access
 pub use funera_core::event_bus::env_state_bus::EnvStateEvent;
