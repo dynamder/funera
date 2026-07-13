@@ -9,6 +9,8 @@ use tokio::task::JoinHandle;
 
 #[cfg(feature = "sandbox")]
 use funera_core::security::sandbox::SandboxPolicy;
+#[cfg(feature = "security")]
+use funera_core::security::policy::ToolPolicy;
 use funera_core::chat::session::{spawn_session_actor, SessionCmd};
 #[cfg(test)]
 use funera_core::chat::session::FuneraSession;
@@ -64,6 +66,8 @@ pub struct AgentRuntimeBuilder {
     load_default_skills: bool,
     #[cfg(feature = "sandbox")]
     sandbox_policy: Option<SandboxPolicy>,
+    #[cfg(feature = "security")]
+    tool_policy: Option<ToolPolicy>,
     #[cfg(feature = "middleware")]
     middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
 }
@@ -93,6 +97,8 @@ impl AgentRuntimeBuilder {
             load_default_skills: false,
             #[cfg(feature = "sandbox")]
             sandbox_policy: None,
+            #[cfg(feature = "security")]
+            tool_policy: None,
             #[cfg(feature = "middleware")]
             middleware_bundle: None,
         }
@@ -228,6 +234,19 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    /// Set an application-level tool policy for controlling which tools
+    /// are allowed/denied, shell command restrictions, argument size
+    /// limits, timeout bounds, and working directory restrictions.
+    ///
+    /// The policy is enforced by the guarded tool registry before each
+    /// tool call.  Combine with [`with_sandbox_policy`](Self::with_sandbox_policy)
+    /// for defence-in-depth (application-level + kernel-enforced isolation).
+    #[cfg(feature = "security")]
+    pub fn with_tool_policy(mut self, policy: ToolPolicy) -> Self {
+        self.tool_policy = Some(policy);
+        self
+    }
+
     /// Register all builtin tools (Read, Write, Edit, Shell).
     /// Requires the `builtin-tools` feature.
     ///
@@ -295,6 +314,12 @@ impl AgentRuntimeBuilder {
 
         #[cfg(feature = "tool")]
         let registry = {
+            #[cfg(feature = "security")]
+            let mut reg = match self.tool_policy {
+                Some(ref policy) => ToolRegistry::new_from_policy(policy.clone()),
+                None => ToolRegistry::new(),
+            };
+            #[cfg(not(feature = "security"))]
             let mut reg = ToolRegistry::new();
             for t in self.tools {
                 reg.add_tool(t);
@@ -387,6 +412,9 @@ impl AgentRuntimeBuilder {
 
         let session_tx = spawn_session_actor();
 
+        #[cfg(feature = "security")]
+        let tool_policy_val = self.tool_policy.clone().unwrap_or_default();
+
         Ok(AgentRuntime::<P> {
             env,
             env_watcher,
@@ -403,6 +431,8 @@ impl AgentRuntimeBuilder {
             _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain,
+            #[cfg(feature = "security")]
+            tool_policy: tool_policy_val,
         })
     }
 }
@@ -438,6 +468,8 @@ pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     _phantom: PhantomData<fn() -> P>,
     #[cfg(feature = "middleware")]
     middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
+    #[cfg(feature = "security")]
+    tool_policy: ToolPolicy,
 }
 
 // ── All state markers share these methods ─────────────────────
@@ -515,6 +547,8 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
             _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
+            #[cfg(feature = "security")]
+            tool_policy: self.tool_policy,
         }
     }
 
@@ -534,6 +568,16 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
     #[cfg(feature = "sandbox")]
     pub fn sandbox_policy(&self) -> SandboxPolicy {
         self.env.sandbox_policy().clone()
+    }
+
+    /// The application-level tool policy configured for this runtime.
+    ///
+    /// Returns the [`ToolPolicy`] that controls which tools are allowed,
+    /// shell command restrictions, argument size limits, timeout bounds,
+    /// and working directory restrictions.
+    #[cfg(feature = "security")]
+    pub fn tool_policy(&self) -> &ToolPolicy {
+        &self.tool_policy
     }
 }
 
@@ -557,6 +601,8 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
             _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
+            #[cfg(feature = "security")]
+            tool_policy: self.tool_policy,
         }
     }
 }
