@@ -1,0 +1,26 @@
+funera_core/src/security/sandbox.rs
+  s_8d850c9be60db1::t_2f11cf80c0fdd5 230-232,234
+builtin_tools/src/shell.rs
+  s_8d850c9be60db1::t_c8df1f21804025 432,458
+  s_8d850c9be60db1::t_9e64ac26d3843d 317
+  s_8d850c9be60db1::t_22e42f12e11fa1 483
+  s_8d850c9be60db1::t_48c72bada99620 400
+builtin_tools/Cargo.toml
+  s_8d850c9be60db1::t_7b0a564602e634 16,19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "e3ba58746ba2fbe2d4dd6dbec43026dea23960b9",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
