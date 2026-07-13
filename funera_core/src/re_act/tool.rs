@@ -192,3 +192,29 @@ pub use crate::security::registry::GuardedToolRegistry as ToolRegistry;
 
 #[cfg(not(feature = "security"))]
 pub use RawToolRegistry as ToolRegistry;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejected_error_display() {
+        let e = ToolCallError::Rejected {
+            reason: "access denied".into(),
+        };
+        let msg = format!("{e}");
+        assert!(msg.contains("access denied"), "msg: {msg}");
+    }
+
+    #[test]
+    fn approval_required_error_display() {
+        let e = ToolCallError::ApprovalRequired {
+            call_id: "c1".into(),
+            tool_name: "shell".into(),
+            reason: "needs approval".into(),
+        };
+        let msg = format!("{e}");
+        assert!(msg.contains("shell"), "msg: {msg}");
+        assert!(msg.contains("approval"), "msg: {msg}");
+    }
+}

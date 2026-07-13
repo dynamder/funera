@@ -23,8 +23,6 @@ pub enum BoundaryDecision {
     },
 }
 
-/// Check whether the given paths cross any security boundary.
-///
 /// Three-tier model:
 /// 1. **Inside PathGuard**  → `AutoApproved`
 /// 2. **Inside sandbox boundary** (if enabled) → `RequiresApproval`
@@ -32,13 +30,6 @@ pub enum BoundaryDecision {
 ///
 /// When the `sandbox` feature is disabled there is no outer fence,
 /// so everything outside PathGuard becomes `RequiresApproval`.
-///
-/// ## `is_within_boundary` (sandbox feature only)
-///
-/// A closure that returns `true` if the path is within the sandbox
-/// perimeter. This is only compiled when `feature = "sandbox"` and
-/// should be provided by the caller (typically by checking against
-/// `SandboxPolicy::read_paths` + `read_write_paths`).
 #[cfg(feature = "sandbox")]
 pub fn check_boundary(
     tool_name: &str,
@@ -47,7 +38,6 @@ pub fn check_boundary(
     sandbox_enabled: bool,
     is_within_boundary: impl Fn(&PathBuf) -> bool,
 ) -> BoundaryDecision {
-    // 1. PathGuard zone → auto-approved
     if let Some(guard) = path_guard
         && paths.iter().all(|p| guard.verify(p).is_ok())
     {
@@ -57,7 +47,6 @@ pub fn check_boundary(
         return BoundaryDecision::AutoApproved;
     }
 
-    // 2. Sandbox outer boundary check
     if sandbox_enabled {
         for path in paths {
             if !is_within_boundary(path) {
@@ -75,7 +64,6 @@ pub fn check_boundary(
         };
     }
 
-    // 3. No sandbox boundary → everything outside PathGuard needs approval
     BoundaryDecision::RequiresApproval {
         tool_name: tool_name.to_string(),
         paths: paths.to_vec(),
@@ -83,8 +71,7 @@ pub fn check_boundary(
     }
 }
 
-/// Boundary check when the sandbox feature is disabled.
-/// Everything outside PathGuard becomes `RequiresApproval`.
+/// No sandbox boundary — everything outside PathGuard becomes `RequiresApproval`.
 #[cfg(not(feature = "sandbox"))]
 pub fn check_boundary(
     tool_name: &str,
@@ -103,5 +90,109 @@ pub fn check_boundary(
         tool_name: tool_name.to_string(),
         paths: paths.to_vec(),
         reason: "paths outside the trusted zone".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    fn guard_with_root(root: &str) -> PathGuard {
+        PathGuard::new([root])
+    }
+
+    fn always_inside(_: &PathBuf) -> bool {
+        true
+    }
+
+    fn never_inside(_: &PathBuf) -> bool {
+        false
+    }
+
+    #[cfg(feature = "sandbox")]
+    mod sandbox_on {
+        use super::*;
+
+        #[test]
+        fn auto_approved_empty_paths_no_guard() {
+            let d = check_boundary("tool", &[], None, true, always_inside);
+            assert_eq!(d, BoundaryDecision::AutoApproved);
+        }
+
+        #[test]
+        fn auto_approved_within_pathguard() {
+            let guard = guard_with_root(".");
+            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml")], Some(&guard), true, always_inside);
+            assert_eq!(d, BoundaryDecision::AutoApproved);
+        }
+
+        #[test]
+        fn auto_approved_sandbox_disabled_in_guard() {
+            let guard = guard_with_root(".");
+            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml")], Some(&guard), false, always_inside);
+            assert_eq!(d, BoundaryDecision::AutoApproved);
+        }
+
+        #[test]
+        fn requires_approval_outside_guard_sandbox_off() {
+            let guard = guard_with_root("src");
+            let d = check_boundary("tool", &[PathBuf::from("/nonexistent")], Some(&guard), false, always_inside);
+            assert!(matches!(d, BoundaryDecision::RequiresApproval { .. }));
+        }
+
+        #[test]
+        fn requires_approval_inside_sandbox_outside_guard() {
+            let guard = guard_with_root("src");
+            let d = check_boundary("tool", &[PathBuf::from("/nonexistent")], Some(&guard), true, always_inside);
+            assert!(matches!(d, BoundaryDecision::RequiresApproval { .. }));
+        }
+
+        #[test]
+        fn rejected_outside_sandbox() {
+            let guard = guard_with_root(".");
+            let d = check_boundary("tool", &[PathBuf::from("/etc")], Some(&guard), true, never_inside);
+            assert!(matches!(d, BoundaryDecision::Rejected { .. }));
+        }
+
+        #[test]
+        fn rejected_multiple_paths_one_outside() {
+            let guard = guard_with_root(".");
+            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml"), PathBuf::from("/etc")], Some(&guard), true, |p| {
+                p.to_string_lossy().contains("Cargo")
+            });
+            assert!(matches!(d, BoundaryDecision::Rejected { .. }));
+        }
+    }
+
+    #[cfg(not(feature = "sandbox"))]
+    mod sandbox_off {
+        use super::*;
+
+        #[test]
+        fn no_sandbox_auto_approved_in_guard() {
+            let guard = guard_with_root(".");
+            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml")], Some(&guard));
+            assert_eq!(d, BoundaryDecision::AutoApproved);
+        }
+
+        #[test]
+        fn no_sandbox_requires_approval_outside_guard() {
+            let guard = guard_with_root("src");
+            let d = check_boundary("tool", &[PathBuf::from("/nonexistent")], Some(&guard));
+            assert!(matches!(d, BoundaryDecision::RequiresApproval { .. }));
+        }
+
+        #[test]
+        fn no_sandbox_empty_paths_no_guard() {
+            let d = check_boundary("tool", &[], None);
+            assert_eq!(d, BoundaryDecision::AutoApproved);
+        }
+
+        #[test]
+        fn no_sandbox_outside_guard_no_guard() {
+            let d = check_boundary("tool", &[PathBuf::from("/etc")], None);
+            assert!(matches!(d, BoundaryDecision::RequiresApproval { .. }));
+        }
     }
 }

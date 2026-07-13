@@ -45,7 +45,7 @@ impl GuardedToolRegistry {
         }
     }
 
-    pub fn with_policy(policy: ToolPolicy) -> Self {
+    pub fn new_from_policy(policy: ToolPolicy) -> Self {
         Self {
             inner: RawToolRegistry::new(),
             policy,
@@ -313,7 +313,9 @@ impl std::fmt::Debug for GuardedToolRegistry {
 
 impl From<ToolPolicy> for GuardedToolRegistry {
     fn from(policy: ToolPolicy) -> Self {
-        Self::with_policy(policy)
+        let mut reg = Self::new();
+        reg.policy = policy;
+        reg
     }
 }
 
@@ -368,7 +370,7 @@ mod tests {
     async fn denied_tool_blocked() {
         let mut policy = ToolPolicy::default();
         policy.denied_tools.insert("danger".into());
-        let mut registry = GuardedToolRegistry::with_policy(policy);
+        let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.add_tool(Box::new(OkTool));
         let result = registry.call_tool("danger", json!({})).await;
         assert!(result.is_err());
@@ -413,7 +415,7 @@ mod tests {
         policy.denied_tools.insert("evil".into());
         let bus = AuditBus::new(16);
         let mut rx = bus.subscribe();
-        let mut registry = GuardedToolRegistry::with_policy(policy);
+        let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
         registry.add_tool(Box::new(OkTool));
 
@@ -445,7 +447,7 @@ mod tests {
         };
         let bus = AuditBus::new(16);
         let mut rx = bus.subscribe();
-        let mut registry = GuardedToolRegistry::with_policy(policy);
+        let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
         registry.add_tool(Box::new(OkTool));
 
@@ -483,7 +485,7 @@ mod tests {
         };
         let bus = AuditBus::new(16);
         let mut rx = bus.subscribe();
-        let mut registry = GuardedToolRegistry::with_policy(policy);
+        let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
         registry.add_tool(Box::new(OkTool));
 
@@ -496,5 +498,99 @@ mod tests {
             }
             e => panic!("expected SandboxSkipped, got {e:?}"),
         }
+    }
+
+    // ── boundary check tests ──────────────────────────────────────
+
+    struct ApprovableTool;
+
+    #[async_trait]
+    impl Tool for ApprovableTool {
+        fn name(&self) -> &str { "approvable" }
+        fn description(&self) -> &str { "may need approval" }
+        fn schema(&self) -> JsonValue {
+            json!({"type": "function", "function": {"name": "approvable", "parameters": {"type": "object", "properties": {}}}})
+        }
+        async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+            Ok("approved".into())
+        }
+    }
+
+    #[tokio::test]
+    async fn boundary_rejected_outside_sandbox() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        #[cfg(feature = "sandbox")]
+        registry.set_sandbox_paths(vec![], vec!["src".into()]);
+        let result = registry.call_tool("approvable", json!({"filePath": "/etc/passwd"})).await;
+        match result {
+            Err(ToolCallError::Rejected { .. }) => {}
+            other => panic!("expected Rejected, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn boundary_rejected_no_callback() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        // Use a path that canonicalizes; "src" exists in the project root
+        #[cfg(feature = "sandbox")]
+        registry.set_sandbox_paths(vec![], vec!["src".into()]);
+        let result = registry.call_tool("approvable", json!({"filePath": "src/lib.rs"})).await;
+        match result {
+            Err(ToolCallError::Rejected { ref reason }) => {
+                assert!(reason.contains("no handler"), "reason: {reason}");
+            }
+            other => panic!("expected Rejected with no-handler, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn boundary_approval_callback_fires() {
+        let invoked = std::sync::Arc::new(std::sync::Mutex::new(false));
+        let inv = invoked.clone();
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        #[cfg(feature = "sandbox")]
+        registry.set_sandbox_paths(vec![], vec!["src".into()]);
+        registry.set_approval_callback(std::sync::Arc::new(move |_id, name, _reason, _paths| {
+            *inv.lock().unwrap() = true;
+            assert_eq!(name, "approvable");
+        }));
+        // Call in a spawned task so we can abort it if it blocks on approval
+        let handle = tokio::spawn(async move {
+            let _ = registry.call_tool("approvable", json!({"filePath": "src/lib.rs"})).await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert!(*invoked.lock().unwrap(), "callback must have been invoked");
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn boundary_approval_timeout() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        #[cfg(feature = "sandbox")]
+        registry.set_sandbox_paths(vec![], vec!["src".into()]);
+        registry.set_approval_timeout(Some(std::time::Duration::from_millis(1)));
+        // Register a callback that simply records the call but never responds
+        registry.set_approval_callback(std::sync::Arc::new(|_, _, _, _| {}));
+        let result = registry.call_tool("approvable", json!({"filePath": "src/lib.rs"})).await;
+        match result {
+            Err(ToolCallError::Rejected { .. }) => {}
+            other => panic!("expected Rejected, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn boundary_auto_approved_within_pathguard() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        registry.set_path_guard(PathGuard::new(["."]));
+        let result = registry
+            .call_tool("approvable", json!({"filePath": "Cargo.toml"}))
+            .await;
+        assert!(result.is_ok(), "got error: {result:?}");
+        assert_eq!(result.unwrap(), "approved");
     }
 }

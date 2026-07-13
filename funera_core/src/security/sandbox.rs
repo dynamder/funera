@@ -592,5 +592,47 @@ mod tests {
     fn to_capability_set_empty_policy_creates_minimal_caps() {
         let p = SandboxPolicy::default();
         let _caps = p.to_capability_set().expect("build caps from empty policy");
+
+    }
+
+    // ── is_within_boundary tests (sandbox feature) ────────────────
+
+    #[cfg(feature = "sandbox")]
+    mod boundary_tests {
+        use super::*;
+        use std::path::Path;
+
+        #[test]
+        fn is_within_boundary_disabled() {
+            let p = SandboxPolicy { enabled: false, ..Default::default() };
+            assert!(p.is_within_boundary(Path::new("/any/path")));
+        }
+
+        #[test]
+        fn is_within_boundary_inside_root() {
+            let p = SandboxPolicy {
+                read_write_paths: vec!["src".into()],
+                ..Default::default()
+            };
+            assert!(p.is_within_boundary(Path::new("src/lib.rs")));
+        }
+
+        #[test]
+        fn is_within_boundary_outside_root() {
+            let p = SandboxPolicy {
+                read_write_paths: vec!["src".into()],
+                ..Default::default()
+            };
+            assert!(!p.is_within_boundary(Path::new("/etc/passwd")));
+        }
+
+        #[test]
+        fn is_within_boundary_read_paths() {
+            let p = SandboxPolicy {
+                read_paths: vec!["/usr/share".into()],
+                ..Default::default()
+            };
+            assert!(p.is_within_boundary(Path::new("/usr/share/man")));
+        }
     }
 }

@@ -31,6 +31,20 @@
 //! 6. Audit events (`SandboxApplied`) are emitted for every tool
 //!    call, visible when subscribing to the runtime audit bus.
 //!
+//! ## Three-tier boundary check (since 0.1.x)
+//!
+//! All tools now pass through a three-tier boundary check:
+//!
+//! | Zone | Decision | Description |
+//! |------|----------|-------------|
+//! | Inside PathGuard | ✅ Auto-approved | Trusted paths, no questions asked |
+//! | Inside sandbox, outside PathGuard | ⏳ Requires approval | Safe zone, but user must OK |
+//! | Outside sandbox | ❌ Rejected | Forbidden outright |
+//!
+//! When no approval callback is registered, tools in the
+//! "requires approval" zone are auto-rejected with a clear
+//! error message.
+//!
 //! ## Platform notes
 //!
 //! | Platform | Mechanism |
