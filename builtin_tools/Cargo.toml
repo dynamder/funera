@@ -13,7 +13,7 @@ tokio = { version = "1.52.3", features = ["process", "fs", "io-util"] }
 twox-hash = "2.1.2"
 
 [target.'cfg(not(windows))'.dependencies]
-nono = "0.67"
+nono = { version = "0.67", optional = true }
 
 [features]
-sandbox = ["funera_core/sandbox"]
+sandbox = ["funera_core/sandbox", "dep:nono"]

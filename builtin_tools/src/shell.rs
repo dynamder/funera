@@ -314,7 +314,7 @@ mod tests {
     // access skip themselves at runtime.
 
     /// Helper: run a quick shell command through a sandboxed ShellTool
-    /// and return (success, stdout_text, stderr_text, exit_code).
+    /// and return (success, stdout_text, exit_code).
     #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
     async fn run_sandboxed(
         policy: funera_core::security::sandbox::SandboxPolicy,
@@ -337,21 +337,6 @@ mod tests {
                 (false, String::new(), -1)
             }
         }
-    }
-
-    /// Standard system paths required for shell, cat, echo, pwd etc.
-    /// Landlock needs every path the subprocess will access to be
-    /// explicitly allowed, including shared libraries, the dynamic
-    /// linker, and the executables themselves.
-    #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
-    fn system_sandbox_read_paths() -> Vec<std::path::PathBuf> {
-        vec![
-            "/usr".into(),
-            "/bin".into(),
-            "/lib".into(),
-            "/lib64".into(),
-            "/etc".into(),
-        ]
     }
 
     /// Extract the exit code from ShellTool's formatted output.
@@ -412,7 +397,7 @@ mod tests {
         // Landlock requires every ancestor directory in the path to
         // be explicitly allowed for traversal.
         let (tmpdir, test_file) = sandbox_temp_dir();
-        let mut sys = system_sandbox_read_paths();
+        let mut sys = funera_core::security::sandbox::system_sandbox_read_paths();
         sys.push(std::path::PathBuf::from("/tmp"));
         let policy = funera_core::security::sandbox::SandboxPolicy {
             read_paths: sys,
@@ -444,7 +429,7 @@ mod tests {
         let (tmpdir, _test_file) = sandbox_temp_dir();
         let cmd = format!("cat {}", _test_file.display());
         let policy = funera_core::security::sandbox::SandboxPolicy {
-            read_paths: system_sandbox_read_paths(),
+            read_paths: funera_core::security::sandbox::system_sandbox_read_paths(),
             ..Default::default()
         };
         let (success, output, exit_code) = run_sandboxed(policy, &cmd, None).await;
@@ -470,7 +455,7 @@ mod tests {
         let blocked_path = tmpdir.join("blocked_write.txt");
         // Only system paths — /tmp is NOT in the allowed set
         let policy = funera_core::security::sandbox::SandboxPolicy {
-            read_paths: system_sandbox_read_paths(),
+            read_paths: funera_core::security::sandbox::system_sandbox_read_paths(),
             ..Default::default()
         };
         let cmd = format!("echo forbidden > {}", blocked_path.display());
@@ -495,7 +480,7 @@ mod tests {
         }
         let (tmpdir, _test_file) = sandbox_temp_dir();
         // Allow /tmp for traversal, then the subdir for read+write + pwd
-        let mut sys_r = system_sandbox_read_paths();
+        let mut sys_r = funera_core::security::sandbox::system_sandbox_read_paths();
         sys_r.push(std::path::PathBuf::from("/tmp"));
         let policy = funera_core::security::sandbox::SandboxPolicy {
             read_paths: sys_r,

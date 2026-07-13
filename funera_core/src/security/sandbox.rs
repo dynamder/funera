@@ -227,8 +227,11 @@ impl Sandbox {
 /// Landlock needs every path the subprocess will access to be
 /// explicitly allowed, including shared libraries, the dynamic
 /// linker, and the executables themselves.
+///
+/// This is a public helper exposed for testing and for tools that
+/// build sandbox policies programmatically.
 #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
-fn system_sandbox_read_paths() -> Vec<PathBuf> {
+pub fn system_sandbox_read_paths() -> Vec<PathBuf> {
     vec![
         "/usr".into(),
         "/bin".into(),
