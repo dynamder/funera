@@ -30,16 +30,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let gpt35 = make_runtime("deepseek-v4-flash")?;
 
     // ── Talk to gpt-4o ──
-    let (gpt4, _) = agent.send("I need a detailed explanation of monads.", gpt4).await?.await?;
-    let (gpt4, _) = agent.send("Can you give me a code example?", gpt4).await?.await?;
+    let (gpt4, _) = agent
+        .send("I need a detailed explanation of monads.", gpt4)
+        .await?
+        .await?;
+    let (gpt4, _) = agent
+        .send("Can you give me a code example?", gpt4)
+        .await?
+        .await?;
     println!("(gpt-4o session has 2 messages)");
 
     // ── Talk to gpt-4o-mini on the side ──
-    let (_gpt35, _) = agent.send("Write a haiku about Rust.", gpt35).await?.await?;
+    let (_gpt35, _) = agent
+        .send("Write a haiku about Rust.", gpt35)
+        .await?
+        .await?;
     println!("(gpt-4o-mini session has 1 message)");
 
     // ── Continue gpt-4o conversation ──
-    let (gpt4, resp) = agent.send("Now explain functors too.", gpt4).await?.await?;
+    let (_, resp) = agent.send("Now explain functors too.", gpt4).await?.await?;
     println!("\n=== gpt-4o response ===");
     println!("{}", resp.content);
 

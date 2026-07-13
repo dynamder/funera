@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .build();
 
-    let (runtime, resp) = agent
+    let (_, resp) = agent
         .send("What's the weather in Tokyo?", runtime)
         .await?
         .await?;

@@ -22,19 +22,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     // ── Turn 1: introduce yourself ──
-    let (runtime, resp) = agent.send("Hi! My name is Alice and I love cats.", runtime).await?.await?;
+    let (runtime, resp) = agent
+        .send("Hi! My name is Alice and I love cats.", runtime)
+        .await?
+        .await?;
     println!("Alice >> Hi! My name is Alice and I love cats.");
     println!("Agent >> {}", resp.content);
     println!();
 
     // ── Turn 2: the agent should remember Alice's name ──
-    let (runtime, resp) = agent.send("What's my name? What do I love?", runtime).await?.await?;
+    let (runtime, resp) = agent
+        .send("What's my name? What do I love?", runtime)
+        .await?
+        .await?;
     println!("Alice >> What's my name? What do I love?");
     println!("Agent >> {}", resp.content);
     println!();
 
     // ── Turn 3: follow-up ──
-    let (runtime, resp) = agent.send("Recommend a book about my favorite animal.", runtime).await?.await?;
+    let (_, resp) = agent
+        .send("Recommend a book about my favorite animal.", runtime)
+        .await?
+        .await?;
     println!("Alice >> Recommend a book about my favorite animal.");
     println!("Agent >> {}", resp.content);
 
