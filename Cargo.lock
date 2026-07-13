@@ -346,7 +346,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "twox-hash",
- "windows",
 ]
 
 [[package]]
@@ -975,6 +974,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
+ "windows",
  "zeroize",
 ]
 

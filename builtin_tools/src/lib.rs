@@ -27,9 +27,6 @@ pub mod read;
 pub mod shell;
 pub mod write;
 
-#[cfg(all(feature = "sandbox", target_os = "windows"))]
-pub mod sandbox_win;
-
 pub use edit::EditTool;
 pub use read::ReadTool;
 pub use shell::ShellTool;

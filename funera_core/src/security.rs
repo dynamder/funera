@@ -8,5 +8,7 @@ pub mod policy;
 pub mod registry;
 #[cfg(feature = "sandbox")]
 pub mod sandbox;
+#[cfg(all(feature = "sandbox", target_os = "windows"))]
+pub mod sandbox_win;
 #[cfg(feature = "security")]
 pub mod secret;

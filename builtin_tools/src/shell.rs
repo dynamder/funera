@@ -2,16 +2,9 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
+use funera_core::security::sandbox::{Sandbox, SandboxPolicy, format_triple_output};
 use serde_json::{json, Value as JsonValue};
 use tokio::time::timeout;
-
-#[cfg(feature = "sandbox")]
-use funera_core::security::sandbox::SandboxPolicy;
-
-#[cfg(all(feature = "sandbox", not(target_os = "windows")))]
-use nono::AccessMode;
-#[cfg(all(feature = "sandbox", not(target_os = "windows")))]
-use std::os::unix::process::CommandExt;
 
 /// Tool for executing shell commands.
 ///
@@ -29,7 +22,7 @@ use std::os::unix::process::CommandExt;
 /// | Windows  | Write-Restricted Token + synthetic SID + ACLs |
 ///
 /// If the sandbox cannot be applied (unsupported kernel, missing privileges),
-/// execution falls back to the normal path and logs a warning.
+/// execution falls back to the normal path.
 pub struct ShellTool {
     #[cfg(feature = "sandbox")]
     sandbox_policy: Option<SandboxPolicy>,
@@ -118,22 +111,12 @@ impl Tool for ShellTool {
             ("sh", "-c")
         };
 
-        // ── sandboxed path (Linux / macOS) ─────────────────────────
-        #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+        // ── sandboxed path (platform-independent) ───────────────────
+        #[cfg(feature = "sandbox")]
         if let Some(ref policy) = self.sandbox_policy {
             if policy.enabled {
                 return self
                     .execute_sandboxed(shell, shell_flag, command_str, workdir, timeout_dur)
-                    .await;
-            }
-        }
-
-        // ── sandboxed path (Windows) ────────────────────────────────
-        #[cfg(all(feature = "sandbox", target_os = "windows"))]
-        if let Some(ref policy) = self.sandbox_policy {
-            if policy.enabled {
-                return self
-                    .execute_sandboxed_windows(shell, shell_flag, command_str, workdir, timeout_dur)
                     .await;
             }
         }
@@ -183,95 +166,9 @@ impl ShellTool {
         Ok(format_output(output))
     }
 
-    /// Sandboxed execution via std::process::Command + pre_exec hook.
-    #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+    /// Sandboxed execution — delegates to [`Sandbox`] which is platform-independent.
+    #[cfg(feature = "sandbox")]
     async fn execute_sandboxed(
-        &self,
-        shell: &str,
-        shell_flag: &str,
-        command_str: &str,
-        workdir: Option<&str>,
-        timeout_dur: Duration,
-    ) -> Result<String, ToolCallError> {
-        let mut caps = self
-            .sandbox_policy
-            .as_ref()
-            .and_then(|p| p.to_capability_set().ok())
-            .ok_or_else(|| {
-                ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                    "failed to build sandbox capability set from policy"
-                ))
-            })?;
-
-        // Add essential system paths so the shell and its dependencies
-        // (binary, shared libraries, dynamic linker) can be loaded.
-        for path in &system_sandbox_read_paths() {
-            caps = caps.allow_path(path, AccessMode::Read).map_err(|e| {
-                ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                    "failed to allow system path {}: {e}",
-                    path.display()
-                ))
-            })?;
-        }
-
-        let command_owned = command_str.to_owned();
-        let shell_owned = shell.to_owned();
-        let flag_owned = shell_flag.to_owned();
-        let workdir_owned = workdir.map(|d| d.to_owned());
-
-        let mut std_cmd = std::process::Command::new(&shell_owned);
-        std_cmd
-            .arg(&flag_owned)
-            .arg(&command_owned)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped());
-
-        if let Some(ref dir) = workdir_owned {
-            std_cmd.current_dir(dir);
-        }
-
-        unsafe {
-            std_cmd.pre_exec(move || {
-                match nono::Sandbox::is_supported() {
-                    true => match nono::Sandbox::apply_auto(&caps) {
-                        Ok(_) => Ok(()),
-                        Err(e) => Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("sandbox apply failed: {e}"),
-                        )),
-                    },
-                    false => {
-                        // platform does not support nono sandboxing —
-                        // allow execution without kernel isolation
-                        Ok(())
-                    }
-                }
-            });
-        }
-
-        let mut tokio_cmd = tokio::process::Command::from(std_cmd);
-
-        let output = timeout(timeout_dur, tokio_cmd.output())
-            .await
-            .map_err(|_| {
-                ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                    "command timed out after {:.1}s",
-                    timeout_dur.as_secs_f64()
-                ))
-            })?
-            .map_err(|e| {
-                ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                    "failed to execute command: {}",
-                    e
-                ))
-            })?;
-
-        Ok(format_output(output))
-    }
-
-    /// Windows sandboxed execution via Write-Restricted Token + ACLs.
-    #[cfg(all(feature = "sandbox", target_os = "windows"))]
-    async fn execute_sandboxed_windows(
         &self,
         shell: &str,
         shell_flag: &str,
@@ -283,16 +180,14 @@ impl ShellTool {
             ToolCallError::ToolExecutionError(anyhow::anyhow!("sandbox policy missing"))
         })?;
 
-        let sandbox = crate::sandbox_win::WindowsSandbox::new(policy).map_err(|e| {
+        let sandbox = Sandbox::new(policy).map_err(|e| {
             ToolCallError::ToolExecutionError(anyhow::anyhow!(
-                "failed to set up Windows sandbox: {e}"
+                "failed to set up sandbox: {e}"
             ))
         })?;
 
-        let full_command = format!("{} {} {}", shell, shell_flag, command_str);
-
-        let result = sandbox
-            .execute(&full_command, workdir, timeout_dur)
+        let (stdout, stderr, exit_code) = sandbox
+            .execute(shell, shell_flag, command_str, workdir, timeout_dur)
             .await
             .map_err(|e| {
                 ToolCallError::ToolExecutionError(anyhow::anyhow!(
@@ -300,48 +195,8 @@ impl ShellTool {
                 ))
             })?;
 
-        let (stdout, stderr, exit_code) = result;
-
-        // Build output in the same format as format_output
-        let mut output_str = String::new();
-        if !stdout.is_empty() {
-            output_str.push_str("stdout:\n");
-            output_str.push_str(&stdout);
-        }
-        if !stderr.is_empty() {
-            if !output_str.is_empty() {
-                output_str.push('\n');
-            }
-            output_str.push_str("stderr:\n");
-            output_str.push_str(&stderr);
-        }
-        if exit_code == 0 {
-            if output_str.is_empty() {
-                output_str.push_str("(command completed with no output)");
-            }
-        } else {
-            output_str.push_str(&format!("\n(exit code: {})", exit_code));
-        }
-
-        Ok(output_str)
+        Ok(format_triple_output(&stdout, &stderr, exit_code))
     }
-}
-
-// ── system sandbox paths ───────────────────────────────────────────
-
-/// Standard system paths required for shell, cat, echo, pwd etc.
-/// Landlock needs every path the subprocess will access to be
-/// explicitly allowed, including shared libraries, the dynamic
-/// linker, and the executables themselves.
-#[cfg(all(feature = "sandbox", not(target_os = "windows")))]
-fn system_sandbox_read_paths() -> Vec<std::path::PathBuf> {
-    vec![
-        "/usr".into(),
-        "/bin".into(),
-        "/lib".into(),
-        "/lib64".into(),
-        "/etc".into(), // glibc NSS / ldconfig
-    ]
 }
 
 // ── output formatting ──────────────────────────────────────────────
@@ -488,8 +343,23 @@ mod tests {
         }
     }
 
-    /// Extracted above as a module-level helper; tests call
-    /// `system_sandbox_read_paths()` directly.
+    /// Standard system paths required for shell, cat, echo, pwd etc.
+    /// Landlock needs every path the subprocess will access to be
+    /// explicitly allowed, including shared libraries, the dynamic
+    /// linker, and the executables themselves.
+    #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+    fn system_sandbox_read_paths() -> Vec<std::path::PathBuf> {
+        vec![
+            "/usr".into(),
+            "/bin".into(),
+            "/lib".into(),
+            "/lib64".into(),
+            "/etc".into(),
+        ]
+    }
+
+    /// Extract the exit code from ShellTool's formatted output.
+    /// Returns 0 if the command succeeded (no explicit exit code line).
     #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
     fn extract_exit_code(output: &str) -> i32 {
         if let Some(pos) = output.find("(exit code: ") {

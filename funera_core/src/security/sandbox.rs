@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
 use nono::{AccessMode, CapabilitySet};
 
+#[cfg(all(feature = "sandbox", target_os = "windows"))]
+use super::sandbox_win::WindowsSandbox;
+
 /// Policy config for kernel-enforced sandboxing via nono.
 ///
 /// Maps to [`nono::CapabilitySet`] at the moment of application.
@@ -136,6 +139,210 @@ impl SandboxPolicy {
         .collect();
         parts.join(", ")
     }
+}
+
+// ── platform-independent Sandbox runner ────────────────────────────
+
+/// A sandbox runner that enforces [`SandboxPolicy`] on any supported OS.
+///
+/// | Platform | Mechanism |
+/// |----------|-----------|
+/// | Linux   | Landlock via `nono` `pre_exec` hook |
+/// | macOS   | Seatbelt via `nono` `pre_exec` hook |
+/// | Windows | Write-Restricted Token + ACLs |
+///
+/// # Failover
+///
+/// If the platform-specific mechanism cannot be applied (e.g. kernel too old,
+/// missing privileges), execution falls back to a normal subprocess with
+/// network restrictions only.
+pub struct Sandbox {
+    #[cfg(all(feature = "sandbox", target_os = "windows"))]
+    inner: WindowsSandbox,
+    #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+    policy: SandboxPolicy,
+    #[cfg(not(feature = "sandbox"))]
+    _private: (),
+}
+
+impl Sandbox {
+    /// Build a sandbox runner from the given policy.
+    ///
+    /// On supported platforms, sets up the necessary ACLs / capabilities.
+    /// Returns an error if the setup itself fails (not if the OS lacks
+    /// sandbox support — that is handled at execution time via failover).
+    pub fn new(policy: &SandboxPolicy) -> Result<Self, anyhow::Error> {
+        #[cfg(all(feature = "sandbox", target_os = "windows"))]
+        {
+            let inner = WindowsSandbox::new(policy)?;
+            Ok(Self { inner })
+        }
+        #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+        {
+            Ok(Self { policy: policy.clone() })
+        }
+        #[cfg(not(feature = "sandbox"))]
+        {
+            let _ = policy;
+            Ok(Self { _private: () })
+        }
+    }
+
+    /// Execute a shell command under sandbox restrictions.
+    ///
+    /// Parameters `shell` (e.g. `"sh"` / `"cmd"`), `shell_flag` (`"-c"` / `"/c"`)
+    /// and `command` are assembled into a full command line internally.
+    ///
+    /// Returns `(stdout, stderr, exit_code)`.
+    pub async fn execute(
+        &self,
+        shell: &str,
+        shell_flag: &str,
+        command: &str,
+        workdir: Option<&str>,
+        timeout: std::time::Duration,
+    ) -> Result<(String, String, i32), anyhow::Error> {
+        #[cfg(all(feature = "sandbox", target_os = "windows"))]
+        {
+            self.inner.execute(shell, shell_flag, command, workdir, timeout).await
+        }
+        #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+        {
+            execute_unix_sandbox(&self.policy, shell, shell_flag, command, workdir, timeout).await
+        }
+        #[cfg(not(feature = "sandbox"))]
+        {
+            let _ = (shell_flag, shell);
+            failover_execute(command, workdir, timeout).await
+        }
+    }
+}
+
+// ── Unix sandbox executor (nono Landlock / Seatbelt) ──────────────
+
+/// Standard system paths required for shell, cat, echo, pwd etc.
+/// Landlock needs every path the subprocess will access to be
+/// explicitly allowed, including shared libraries, the dynamic
+/// linker, and the executables themselves.
+#[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+fn system_sandbox_read_paths() -> Vec<PathBuf> {
+    vec![
+        "/usr".into(),
+        "/bin".into(),
+        "/lib".into(),
+        "/lib64".into(),
+        "/etc".into(),
+    ]
+}
+
+#[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+async fn execute_unix_sandbox(
+    policy: &SandboxPolicy,
+    shell: &str,
+    shell_flag: &str,
+    command: &str,
+    workdir: Option<&str>,
+    timeout: std::time::Duration,
+) -> Result<(String, String, i32), anyhow::Error> {
+    let mut caps = policy.to_capability_set().map_err(|e| {
+        anyhow::anyhow!("failed to build sandbox capability set: {e}")
+    })?;
+
+    for path in &system_sandbox_read_paths() {
+        caps = caps
+            .allow_path(path, nono::AccessMode::Read)
+            .map_err(|e| anyhow::anyhow!("failed to allow system path {}: {e}", path.display()))?;
+    }
+
+    let command_owned = command.to_owned();
+    let shell_owned = shell.to_owned();
+    let flag_owned = shell_flag.to_owned();
+    let workdir_owned = workdir.map(|d| d.to_owned());
+
+    let mut std_cmd = std::process::Command::new(&shell_owned);
+    std_cmd
+        .arg(&flag_owned)
+        .arg(&command_owned)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    if let Some(ref dir) = workdir_owned {
+        std_cmd.current_dir(dir);
+    }
+
+    unsafe {
+        std_cmd.pre_exec(move || match nono::Sandbox::is_supported() {
+            true => nono::Sandbox::apply_auto(&caps).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, format!("sandbox apply failed: {e}"))
+            }),
+            false => Ok(()),
+        });
+    }
+
+    let mut tokio_cmd = tokio::process::Command::from(std_cmd);
+
+    let output = tokio::time::timeout(timeout, tokio_cmd.output())
+        .await
+        .map_err(|_| anyhow::anyhow!("command timed out"))?
+        .map_err(|e| anyhow::anyhow!("command failed: {e}"))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let exit_code = output.status.code().unwrap_or(-1);
+
+    Ok((stdout, stderr, exit_code))
+}
+
+#[cfg(not(feature = "sandbox"))]
+async fn failover_execute(
+    command: &str,
+    workdir: Option<&str>,
+    timeout: std::time::Duration,
+) -> Result<(String, String, i32), anyhow::Error> {
+    // Always use sh -c; this path is unreachable on Windows because
+    // Sandbox is only constructed when the sandbox feature is enabled.
+    let mut cmd = tokio::process::Command::new("sh");
+    cmd.arg("-c").arg(command)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(dir) = workdir {
+        cmd.current_dir(dir);
+    }
+    let output = tokio::time::timeout(timeout, cmd.output())
+        .await
+        .map_err(|_| anyhow::anyhow!("command timed out"))?
+        .map_err(|e| anyhow::anyhow!("command failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let exit_code = output.status.code().unwrap_or(-1);
+    Ok((stdout, stderr, exit_code))
+}
+
+// ── format stdio triple to the string used by ShellTool ────────────
+
+/// Format (stdout, stderr, exit_code) into the same format as
+/// `format_output` for `std::process::Output`.
+pub fn format_triple_output(stdout: &str, stderr: &str, exit_code: i32) -> String {
+    let mut result = String::new();
+    if !stdout.is_empty() {
+        result.push_str("stdout:\n");
+        result.push_str(stdout);
+    }
+    if !stderr.is_empty() {
+        if !result.is_empty() {
+            result.push('\n');
+        }
+        result.push_str("stderr:\n");
+        result.push_str(stderr);
+    }
+    if exit_code == 0 {
+        if result.is_empty() {
+            result.push_str("(command completed with no output)");
+        }
+    } else {
+        result.push_str(&format!("\n(exit code: {exit_code})"));
+    }
+    result
 }
 
 #[cfg(test)]
