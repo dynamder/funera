@@ -1,0 +1,48 @@
+funera-orchestrate/src/agent.rs
+  s_02b832acb6a2d4::t_047c8857b6b2e0 168-169
+  s_02b832acb6a2d4::t_b170fabe111d15 188-189
+funera-orchestrate/src/lib.rs
+  s_02b832acb6a2d4::t_5d9b8d6d39edca 87-89
+  s_02b832acb6a2d4::t_f41754c16fa576 106,111-114,116-119,123-125
+  s_02b832acb6a2d4::t_1e62f5e50eacc8 15-17,19-20
+  s_02b832acb6a2d4::t_36631307247473 129-150
+  s_02b832acb6a2d4::t_7e8af03a2e9bdb 64-65
+  s_02b832acb6a2d4::t_7140f948189a52 187-190
+  s_02b832acb6a2d4::t_72fa05ad2387eb 126-128
+funera-orchestrate/Cargo.toml
+  s_02b832acb6a2d4::t_9d445303baa1c2 61-84
+README.md
+  s_02b832acb6a2d4::t_da5cffd63e71fe 53
+  s_02b832acb6a2d4::t_3881b4806d8576 86-87
+  s_02b832acb6a2d4::t_060596458c0184 103-104
+  s_02b832acb6a2d4::t_dd126eef8656c2 168-172,174-176,178-196,217
+  s_02b832acb6a2d4::t_96c1002560c51e 177
+  s_02b832acb6a2d4::t_0c6e9526d1235e 110
+  s_02b832acb6a2d4::t_d9c19294cb8c70 173
+funera-orchestrate/src/runtime.rs
+  s_02b832acb6a2d4::t_5ad514da3fecc5 249,261-262
+  s_02b832acb6a2d4::t_0d1fd0228e39cc 335-346
+  s_02b832acb6a2d4::t_ee06035ea5fdd1 306
+  s_02b832acb6a2d4::t_4b06fb5609329c 244-248,250-260,263
+src/lib.rs
+  s_02b832acb6a2d4::t_67b29223e1f0d8 12-13
+  s_02b832acb6a2d4::t_beb5bc36146b9b 24-40
+funera-orchestrate/src/send_handle.rs
+  s_02b832acb6a2d4::t_d4e7a6c53b04c9 35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "07a290cc028535bd7547488aced706999de0ae29",
+  "prompts": {},
+  "sessions": {
+    "s_02b832acb6a2d4": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a4fed863ffe7v8EzFW6b8aRTG",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
