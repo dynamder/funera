@@ -19,7 +19,16 @@
 //!    runs under Landlock (Linux 5.13+), Seatbelt (macOS), or
 //!    Write-Restricted Token (Windows 8+) and cannot access paths
 //!    outside the allowed set.
-//! 4. Audit events (`SandboxApplied`) are emitted for every tool
+//! 4. The agent then ATTEMPTS operations that deliberately violate
+//!    the sandbox policy:
+//!    - Write a file outside the allowed directory
+//!    - Access a network resource (`curl` / `ping`)
+//!    - Read a file outside the allowed directory
+//! 5. Each violation attempt is blocked by the sandbox, proving
+//!    that the policy is enforced at the OS level (or, on platforms
+//!    where the sandbox degrades gracefully, the user can observe
+//!    the fallback behaviour).
+//! 6. Audit events (`SandboxApplied`) are emitted for every tool
 //!    call, visible when subscribing to the runtime audit bus.
 //!
 //! ## Platform notes
@@ -83,15 +92,26 @@ async fn main() {
 
     let agent = Agent::builder()
         .system_prompt(
-            "You are a helpful assistant with shell access sandboxed \
-             to the current directory. List the files using `ls -la`.",
+            "You are a helpful assistant with shell access sandboxed to \
+             the current directory. Network access is blocked and file \
+             writes are restricted to the current directory only.\n\n\
+             First, list the files using `ls -la` or `dir`.\n\
+             Then, attempt THREE operations that SHOULD be blocked \
+             by the sandbox:\n\n\
+             1. Write a file OUTSIDE the allowed directory\n\
+             2. Access a network resource\n\
+             3. Read a file OUTSIDE the allowed directory\n\n\
+             For each attempt, observe whether it succeeds or is \
+             blocked, and explain what happened.",
         )
         .on_tool_call(|name, args| eprintln!("[tool] {name} {args}"))
         .build();
 
     match agent
         .fire(
-            "List the files in the current directory using a shell command.",
+            "Explore the current directory, then attempt operations \
+             that violate the sandbox restrictions to verify the \
+             sandbox is working.",
             &runtime,
         )
         .await
