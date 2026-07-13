@@ -1,0 +1,35 @@
+funera_core/src/security/sandbox_win.rs
+  s_8d850c9be60db1::t_f0ea3d6b5ea348 1-406
+funera_core/src/security/sandbox.rs
+  s_8d850c9be60db1::t_cdea128b2b739d 218-219
+  s_8d850c9be60db1::t_d8f4cdebd30d50 144-217,220-301,304-347
+  s_8d850c9be60db1::t_55e2bdfcbdd710 8-10
+  s_8d850c9be60db1::t_fcba80dd52b661 302-303
+funera_core/src/security.rs
+  s_8d850c9be60db1::t_d14abb231ea8fe 11-12
+funera_core/Cargo.toml
+  s_8d850c9be60db1::t_29a08c1609c84d 27-38,42
+builtin_tools/src/shell.rs
+  s_8d850c9be60db1::t_0001ae41bb6ba0 346-362
+  s_8d850c9be60db1::t_c512bb97da9bcb 5,25
+  s_8d850c9be60db1::t_4075b9fb322efe 169-170,183,185,189-190,198
+  s_8d850c9be60db1::t_1aaf75d416702a 114-115
+builtin_tools/Cargo.toml
+  s_8d850c9be60db1::t_6799a0753a7002 19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "e9d11326cb843e4cba3c224dbb6bd2b482009233",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
