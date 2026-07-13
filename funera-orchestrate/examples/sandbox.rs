@@ -119,10 +119,52 @@ async fn main() {
         Ok(resp) => {
             println!("=== Agent Response ===\n{}", resp.content);
             println!("=== Completed in {} iterations ===", resp.iterations);
+            println!();
+            sandbox_enforcement_summary();
         }
         Err(e) => {
             eprintln!("error: agent request failed: {e}");
             std::process::exit(1);
         }
     }
+}
+
+fn sandbox_enforcement_summary() {
+    #[cfg(target_os = "windows")]
+    let mechanism = "Write-Restricted Token + ACLs + environment proxy poison";
+    #[cfg(not(target_os = "windows"))]
+    let mechanism = "Landlock (Linux) or Seatbelt (macOS)";
+
+    let summary = format!(
+        "\
+=== Sandbox Enforcement Summary ===
+
+Platform:        {}
+Mechanism:       {}
+
+What SHOULD be blocked:
+  ✗ Writes outside  → {}: denied by write-restricted ACLs
+  ✗ Network access  → environment proxy variables; works for
+                       HTTP/HTTPS tools (curl, wget, git), but
+                       NOT for raw ICMP (ping) or DNS (nslookup)
+  ✗ Reads outside   → {}: forbidden by Landlock/Read-Token
+
+What is ALLOWED:
+  ✓ Reads/writes in  CWD
+  ✓ Shell builtins   (echo, cd, dir)
+  ✓ DNS / ICMP      (not covered by sandbox policy)
+
+NOTE: On Windows without admin privileges, the full token
+restriction degrades to network-only isolation. File-access
+restrictions still apply via icacls ACLs on the allowed paths.
+",
+        std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| "unknown".into()),
+        mechanism,
+        mechanism,
+        mechanism,
+    );
+
+    println!("{summary}");
 }
