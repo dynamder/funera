@@ -105,6 +105,25 @@ async fn main() {
              blocked, and explain what happened.",
         )
         .on_tool_call(|name, args| eprintln!("[tool] {name} {args}"))
+        .on_tool_result(|name, result| match result {
+            Ok(out) => {
+                let is_blocked = out.contains("denied")
+                    || out.contains("access")
+                    || out.contains("forbidden")
+                    || out.contains("blocked")
+                    || out.contains("timed out")
+                    || out.contains("exit code: 1")
+                    || out.contains("exit code: 7");
+                if is_blocked {
+                    eprintln!("  ⛔ BLOCKED by sandbox — {name}: {out:.100}");
+                } else {
+                    eprintln!("  ✅ ALLOWED — {name}");
+                }
+            }
+            Err(e) => {
+                eprintln!("  ⛔ BLOCKED by sandbox — {name}: {e:.100}");
+            }
+        })
         .build();
 
     match agent
