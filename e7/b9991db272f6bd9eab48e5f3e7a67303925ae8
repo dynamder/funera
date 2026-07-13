@@ -1,0 +1,21 @@
+funera-orchestrate/examples/sandbox.rs
+  s_8d850c9be60db1::t_508e44f8a0163b 164,176-182,185-188,190-194
+  s_8d850c9be60db1::t_fb4c9e4867c9a6 108-133
+  s_8d850c9be60db1::t_bc03fdce0c81da 150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "e7b9991db272f6bd9eab48e5f3e7a67303925ae8",
+  "prompts": {},
+  "sessions": {
+    "s_8d850c9be60db1": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0a6d805c4ffeGKoLkNbMxOuM2u",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
