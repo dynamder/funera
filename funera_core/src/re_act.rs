@@ -76,6 +76,7 @@ pub struct ReActLoop<P: ChatProvider> {
     env_watcher: FuneraEnvWatcher,
     #[cfg(feature = "tool")]
     tool_bus: ToolBus,
+    #[allow(dead_code)]
     env_state_tx: broadcast::Sender<EnvStateEvent>,
     turn_highway_handle: TurnHighWayHandle,
     _phantom: PhantomData<P>,
@@ -290,12 +291,12 @@ fn filter_and_store<E: MiddlewareEvent>(
         } else {
             event
         };
-        if let Some((role, variant)) = filtered.clone().into_session_message() {
-            if let Some(tx) = session_tx {
-                let _ = tx.send(SessionCmd::PushMessages {
-                    msgs: vec![FuneraMessage::new(role, variant)],
-                });
-            }
+        if let Some((role, variant)) = filtered.clone().into_session_message()
+            && let Some(tx) = session_tx
+        {
+            let _ = tx.send(SessionCmd::PushMessages {
+                msgs: vec![FuneraMessage::new(role, variant)],
+            });
         }
         if let Some(sender) = event_sender {
             sender(filtered);
@@ -404,7 +405,7 @@ async fn handle_turn_finish(
             .await;
 
             let mut tool_results = Vec::new();
-            for (acc, result) in accums.iter().zip(results.into_iter()) {
+            for (acc, result) in accums.iter().zip(results) {
                 match result {
                     Ok(response) => {
                         react_bus

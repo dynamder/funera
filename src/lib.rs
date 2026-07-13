@@ -38,6 +38,6 @@ pub use funera_orchestrate::*;
 
 /// Re-export of the core engine crate.
 ///
-/// Provides low-level access to the ReAct loop, tool/skill system,
+/// Provides low-level access to the `ReAct` loop, tool/skill system,
 /// security policies, event buses, and middleware.
 pub use funera_core as core;

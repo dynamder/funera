@@ -199,18 +199,18 @@ impl EditTool {
 
         let mut affected_range = None;
         for edit in edits {
-            if let Some(ref pos) = edit.pos {
-                if let Some((line_num, _)) = Self::parse_anchor(pos) {
-                    let end_line = edit
-                        .end
-                        .as_ref()
-                        .and_then(|e| Self::parse_anchor(e))
-                        .map(|(l, _)| l)
-                        .unwrap_or(line_num);
-                    let range = affected_range.get_or_insert((line_num, end_line));
-                    range.0 = range.0.min(line_num);
-                    range.1 = range.1.max(end_line);
-                }
+            if let Some(ref pos) = edit.pos
+                && let Some((line_num, _)) = Self::parse_anchor(pos)
+            {
+                let end_line = edit
+                    .end
+                    .as_ref()
+                    .and_then(|e| Self::parse_anchor(e))
+                    .map(|(l, _)| l)
+                    .unwrap_or(line_num);
+                let range = affected_range.get_or_insert((line_num, end_line));
+                range.0 = range.0.min(line_num);
+                range.1 = range.1.max(end_line);
             }
         }
 
@@ -368,6 +368,7 @@ impl Tool for EditTool {
         })?;
 
         tokio::fs::rename(&temp_file, path).await.map_err(|e| {
+            #[allow(clippy::let_underscore_future)]
             let _ = tokio::fs::remove_file(&temp_file);
             ToolCallError::ToolExecutionError(anyhow::anyhow!("cannot rename temp file: {}", e))
         })?;

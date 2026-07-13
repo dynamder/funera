@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc};
 
 use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
-use funera_core::chat::session::{FuneraSession, SessionCmd};
+use funera_core::chat::session::FuneraSession;
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
 use funera_core::middleware::EventSenderFn;
 #[cfg(feature = "middleware")]
@@ -581,18 +581,13 @@ async fn relay_broadcast_to_mpsc(
     mut event_rx: broadcast::Receiver<AgentEvent>,
     relay_tx: mpsc::Sender<AgentEvent>,
 ) {
-    loop {
-        match event_rx.recv().await {
-            Ok(event) => {
-                let is_done = matches!(event, AgentEvent::Done);
-                if relay_tx.send(event).await.is_err() {
-                    break;
-                }
-                if is_done {
-                    break;
-                }
-            }
-            Err(_) => break,
+    while let Ok(event) = event_rx.recv().await {
+        let is_done = matches!(event, AgentEvent::Done);
+        if relay_tx.send(event).await.is_err() {
+            break;
+        }
+        if is_done {
+            break;
         }
     }
 }

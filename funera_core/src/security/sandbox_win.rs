@@ -179,7 +179,7 @@ fn create_sandbox_sid() -> Result<PSID, windows::core::Error> {
             (pid >> 16) & 0xFFFF,
             pid & 0xFFFF,
             0xF1_E001u32,
-            0x5B0_01u32,
+            0x0005_B001u32,
             0,
             0,
             0,
@@ -272,20 +272,18 @@ fn create_write_restricted_token(sandbox_sid: PSID) -> anyhow::Result<HANDLE> {
         .map_err(|e| anyhow!("OpenProcessToken failed: {e}"))?;
     }
 
-    let logon_sid = get_logon_sid(token).map_err(|e| {
+    let logon_sid = get_logon_sid(token).inspect_err(|_e| {
         // SAFETY: CloseHandle closes the process token. Required
         // before propagating the error to avoid a handle leak.
         unsafe { CloseHandle(token).ok() };
-        e
     })?;
-    let everyone = make_everyone_sid().map_err(|e| {
+    let everyone = make_everyone_sid().inspect_err(|_e| {
         // SAFETY: Cleanup on error — free the already-allocated SID
         // and close the process token before returning.
         unsafe {
             FreeSid(logon_sid);
             CloseHandle(token).ok()
         };
-        e
     })?;
 
     let restricted_sids = [

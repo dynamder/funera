@@ -518,10 +518,10 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
                 let tx = self.error_tx.clone();
                 let insp = Arc::clone(insp);
                 handle.spawn(async move {
-                    if let Err(e) = insp.inspect(&evt) {
-                        if let Some(tx) = tx {
-                            let _ = tx.send((name, e));
-                        }
+                    if let Err(e) = insp.inspect(&evt)
+                        && let Some(tx) = tx
+                    {
+                        let _ = tx.send((name, e));
                     }
                 });
             }

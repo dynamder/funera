@@ -43,6 +43,7 @@ impl ReactBus {
         let (react_tx, _) = broadcast::channel(30);
         Self { react_tx }
     }
+
     pub fn subscribe(&self) -> broadcast::Receiver<ReactEvent> {
         self.react_tx.subscribe()
     }
@@ -51,5 +52,11 @@ impl ReactBus {
     }
     pub fn send(&self, event: ReactEvent) -> anyhow::Result<usize> {
         self.react_tx.send(event).map_err(|e| e.into())
+    }
+}
+
+impl Default for ReactBus {
+    fn default() -> Self {
+        Self::new()
     }
 }

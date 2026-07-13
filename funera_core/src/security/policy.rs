@@ -81,10 +81,10 @@ impl ToolPolicy {
         if self.denied_tools.contains(name) {
             return Err(PolicyError::ToolDenied(name.to_string()));
         }
-        if let Some(ref allowed) = self.allowed_tools {
-            if !allowed.contains(name) {
-                return Err(PolicyError::ToolNotAllowed(name.to_string()));
-            }
+        if let Some(ref allowed) = self.allowed_tools
+            && !allowed.contains(name)
+        {
+            return Err(PolicyError::ToolNotAllowed(name.to_string()));
         }
         Ok(())
     }

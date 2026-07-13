@@ -55,7 +55,7 @@ impl FuneraEnv {
                 #[cfg(feature = "tool")]
                 tool_registry,
                 #[cfg(feature = "skill")]
-                skill_registry: skill_registry,
+                skill_registry,
                 llm_client,
                 model,
                 #[cfg(feature = "tool")]

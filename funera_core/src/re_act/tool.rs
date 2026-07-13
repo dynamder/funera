@@ -107,12 +107,19 @@ pub struct RawToolRegistry {
     tools: HashMap<String, ToolRegistryEntry>,
 }
 
+impl Default for RawToolRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RawToolRegistry {
     pub fn new() -> Self {
         Self {
             tools: HashMap::new(),
         }
     }
+
     pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
         self.tools.insert(
             tool.name().to_string(),

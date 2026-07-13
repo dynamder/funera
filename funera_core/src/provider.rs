@@ -2,7 +2,7 @@ use async_openai::{
     config::OpenAIConfig,
     error::OpenAIError,
     types::{
-        chat::{CreateChatCompletionStreamResponse, FinishReason},
+        chat::CreateChatCompletionStreamResponse,
         stream::StreamResponse,
     },
     Client,
@@ -127,12 +127,12 @@ pub fn build_standard_request_json(
         .into_iter()
         .collect(),
     );
-    if let Some(arr) = tools_json.as_array() {
-        if !arr.is_empty() {
-            req.as_object_mut()
-                .unwrap()
-                .insert("tools".into(), tools_json.clone());
-        }
+    if let Some(arr) = tools_json.as_array()
+        && !arr.is_empty()
+    {
+        req.as_object_mut()
+            .unwrap()
+            .insert("tools".into(), tools_json.clone());
     }
     req
 }

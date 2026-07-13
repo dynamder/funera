@@ -195,10 +195,7 @@ impl AgentRuntimeBuilder {
 
     /// Register a tool by its type (requires `Tool + Default`).
     #[cfg(feature = "tool")]
-    pub fn with_tool<T: Tool + 'static>(mut self) -> Self
-    where
-        T: Default,
-    {
+    pub fn with_tool<T: Tool + Default + 'static>(mut self) -> Self {
         self.tools.push(Box::new(T::default()));
         self
     }
@@ -271,7 +268,9 @@ impl AgentRuntimeBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn build_with<P: ChatProvider>(mut self) -> Result<AgentRuntime<P>, OrchestrateError> {
+    pub fn build_with<P: ChatProvider>(
+        #[allow(unused_mut)] mut self,
+    ) -> Result<AgentRuntime<P>, OrchestrateError> {
         let api_key = self.api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
         let model = self
             .model

@@ -105,7 +105,7 @@ impl Tool for ShellTool {
 
         let workdir = args.get("workdir").and_then(|v| v.as_str());
         let timeout_secs = args.get("timeout").and_then(|v| v.as_f64()).unwrap_or(30.0);
-        let timeout_dur = Duration::from_secs_f64(timeout_secs.max(1.0).min(300.0));
+        let timeout_dur = Duration::from_secs_f64(timeout_secs.clamp(1.0, 300.0));
 
         let (shell, shell_flag) = if cfg!(target_os = "windows") {
             ("cmd", "/c")
@@ -115,12 +115,12 @@ impl Tool for ShellTool {
 
         // ── sandboxed path (platform-independent) ───────────────────
         #[cfg(feature = "sandbox")]
-        if let Some(ref policy) = self.sandbox_policy {
-            if policy.enabled {
-                return self
-                    .execute_sandboxed(shell, shell_flag, command_str, workdir, timeout_dur)
-                    .await;
-            }
+        if let Some(ref policy) = self.sandbox_policy
+            && policy.enabled
+        {
+            return self
+                .execute_sandboxed(shell, shell_flag, command_str, workdir, timeout_dur)
+                .await;
         }
 
         // ── normal path ─────────────────────────────────────────────

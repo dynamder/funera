@@ -74,6 +74,7 @@ impl Skill {
     }
 
     /// Parse a skill from a Markdown string with YAML frontmatter.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Result<Self, SkillParseError> {
         let s = s.trim();
         if !s.starts_with("---") {
@@ -148,10 +149,10 @@ impl Skill {
 
         let mut all = Vec::new();
         for candidate in candidates.iter().flatten() {
-            if candidate.is_dir() {
-                if let Ok(skills) = Self::from_dir(candidate) {
-                    all.extend(skills);
-                }
+            if candidate.is_dir()
+                && let Ok(skills) = Self::from_dir(candidate)
+            {
+                all.extend(skills);
             }
         }
         all
@@ -272,10 +273,10 @@ impl SkillRegistry {
     pub fn get_active_skills_prompt(&self) -> String {
         let mut parts = Vec::new();
         for skill in self.active_skills() {
-            if !skill.disable_model_invocation {
-                if !skill.content.is_empty() {
-                    parts.push(skill.content.clone());
-                }
+            if !skill.disable_model_invocation
+                && !skill.content.is_empty()
+            {
+                parts.push(skill.content.clone());
             }
         }
         parts.join("\n\n")

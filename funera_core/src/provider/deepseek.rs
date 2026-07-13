@@ -49,10 +49,10 @@ impl StreamChunkExt for StreamChunk {
             if let Some(finish_reason) = choice.finish_reason {
                 events.push(TokenEvent::Finish(finish_reason));
             }
-            if let Some(ref reasoning) = choice.delta.reasoning_content {
-                if !reasoning.is_empty() {
-                    events.push(TokenEvent::Reasoning(reasoning.clone()));
-                }
+            if let Some(ref reasoning) = choice.delta.reasoning_content
+                && !reasoning.is_empty()
+            {
+                events.push(TokenEvent::Reasoning(reasoning.clone()));
             }
             match (choice.delta.content.as_deref(), choice.delta.tool_calls.as_ref()) {
                 (Some(text), Some(tool_calls)) => {
@@ -144,12 +144,11 @@ impl ChatProvider for DeepSeekProvider {
                     merged.push(merged_msg);
                 } else {
                     let mut m = msg.clone();
-                    if role == "assistant" {
-                        if let Some(arr) = m.get("tool_calls").and_then(|t| t.as_array()) {
-                            if !arr.is_empty() && !m.as_object().unwrap().contains_key("content") {
-                                m.as_object_mut().unwrap().insert("content".into(), JsonValue::Null);
-                            }
-                        }
+                    if role == "assistant"
+                        && let Some(arr) = m.get("tool_calls").and_then(|t| t.as_array())
+                        && !arr.is_empty() && !m.as_object().unwrap().contains_key("content")
+                    {
+                        m.as_object_mut().unwrap().insert("content".into(), JsonValue::Null);
                     }
                     merged.push(m);
                     i += 1;
