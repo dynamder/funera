@@ -54,6 +54,7 @@ fn default_block_network() -> bool {
 }
 
 impl Default for SandboxPolicy {
+    //TODO: better sandbox default
     fn default() -> Self {
         Self {
             enabled: true,
@@ -202,7 +203,9 @@ impl Sandbox {
         }
         #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
         {
-            Ok(Self { policy: policy.clone() })
+            Ok(Self {
+                policy: policy.clone(),
+            })
         }
         #[cfg(not(feature = "sandbox"))]
         {
@@ -227,7 +230,9 @@ impl Sandbox {
     ) -> Result<(String, String, i32), anyhow::Error> {
         #[cfg(all(feature = "sandbox", target_os = "windows"))]
         {
-            self.inner.execute(shell, shell_flag, command, workdir, timeout).await
+            self.inner
+                .execute(shell, shell_flag, command, workdir, timeout)
+                .await
         }
         #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
         {
@@ -270,9 +275,9 @@ async fn execute_unix_sandbox(
     workdir: Option<&str>,
     timeout: std::time::Duration,
 ) -> Result<(String, String, i32), anyhow::Error> {
-    let mut caps = policy.to_capability_set().map_err(|e| {
-        anyhow::anyhow!("failed to build sandbox capability set: {e}")
-    })?;
+    let mut caps = policy
+        .to_capability_set()
+        .map_err(|e| anyhow::anyhow!("failed to build sandbox capability set: {e}"))?;
 
     for path in &system_sandbox_read_paths() {
         caps = caps
@@ -299,7 +304,10 @@ async fn execute_unix_sandbox(
     unsafe {
         std_cmd.pre_exec(move || match nono::Sandbox::is_supported() {
             true => nono::Sandbox::apply_auto(&caps).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("sandbox apply failed: {e}"))
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("sandbox apply failed: {e}"),
+                )
             }),
             false => Ok(()),
         });
@@ -326,7 +334,8 @@ async fn failover_execute(
     timeout: std::time::Duration,
 ) -> Result<(String, String, i32), anyhow::Error> {
     let mut cmd = tokio::process::Command::new("cmd");
-    cmd.arg("/c").arg(command)
+    cmd.arg("/c")
+        .arg(command)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if let Some(dir) = workdir {
@@ -349,7 +358,8 @@ async fn failover_execute(
     timeout: std::time::Duration,
 ) -> Result<(String, String, i32), anyhow::Error> {
     let mut cmd = tokio::process::Command::new("sh");
-    cmd.arg("-c").arg(command)
+    cmd.arg("-c")
+        .arg(command)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if let Some(dir) = workdir {
@@ -592,7 +602,6 @@ mod tests {
     fn to_capability_set_empty_policy_creates_minimal_caps() {
         let p = SandboxPolicy::default();
         let _caps = p.to_capability_set().expect("build caps from empty policy");
-
     }
 
     // ── is_within_boundary tests (sandbox feature) ────────────────
@@ -604,7 +613,10 @@ mod tests {
 
         #[test]
         fn is_within_boundary_disabled() {
-            let p = SandboxPolicy { enabled: false, ..Default::default() };
+            let p = SandboxPolicy {
+                enabled: false,
+                ..Default::default()
+            };
             assert!(p.is_within_boundary(Path::new("/any/path")));
         }
 

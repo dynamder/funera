@@ -34,6 +34,7 @@ pub enum ReactEvent {
     ToolExecRequest(ToolCallRequest),
     ToolExecResponse(Result<ToolCallResponse, ToolCallErrorInfo>),
     /// A tool call requires user approval before it can proceed.
+    #[cfg(feature = "security")]
     ToolApprovalRequired {
         call_id: String,
         tool_name: String,

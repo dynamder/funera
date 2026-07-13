@@ -54,3 +54,7 @@ required-features = ["skill"]
 [[example]]
 name = "sandbox"
 required-features = ["sandbox", "builtin-tools"]
+
+[[example]]
+name = "tool_policy"
+required-features = ["security"]

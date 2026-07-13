@@ -13,9 +13,7 @@ use crate::security::path_guard::PathGuard;
 use crate::security::policy::ToolPolicy;
 
 /// Callback signature for tool approval requests.
-pub type ApprovalCallback = Arc<
-    dyn Fn(&str, &str, &str, &[PathBuf]) + Send + Sync,
->;
+pub type ApprovalCallback = Arc<dyn Fn(&str, &str, &str, &[PathBuf]) + Send + Sync>;
 
 pub struct GuardedToolRegistry {
     inner: RawToolRegistry,
@@ -24,8 +22,7 @@ pub struct GuardedToolRegistry {
     audit_bus: Option<AuditBus>,
     #[cfg(feature = "sandbox")]
     sandbox_paths: (Vec<PathBuf>, Vec<PathBuf>),
-    pending_approvals:
-        std::sync::Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<bool>>>>,
+    pending_approvals: std::sync::Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<bool>>>>,
     approval_timeout: Option<std::time::Duration>,
     approval_callback: Option<ApprovalCallback>,
 }
@@ -201,27 +198,28 @@ impl GuardedToolRegistry {
             )
         };
         #[cfg(not(feature = "sandbox"))]
-        let boundary_decision = {
-            crate::security::boundary::check_boundary(name, &paths, self.path_guard.as_ref())
-        };
+        let boundary_decision =
+            { crate::security::boundary::check_boundary(name, &paths, self.path_guard.as_ref()) };
 
         match boundary_decision {
             BoundaryDecision::Rejected { reason, .. } => {
                 return Err(ToolCallError::Rejected { reason });
             }
-            BoundaryDecision::RequiresApproval {
-                reason, paths, ..
-            } => {
+            BoundaryDecision::RequiresApproval { reason, paths, .. } => {
                 // If no approval callback is registered, auto-deny
                 // to avoid hanging the ReAct loop.
                 if self.approval_callback.is_none() {
                     return Err(ToolCallError::Rejected {
-                        reason: format!("tool call requires approval but no handler registered: {reason}"),
+                        reason: format!(
+                            "tool call requires approval but no handler registered: {reason}"
+                        ),
                     });
                 }
+                //QUESTION: seems redundant for creating a uuid
                 let call_id = uuid::Uuid::new_v4().to_string();
                 let (tx, rx) = oneshot::channel();
                 {
+                    //TODO: use parking lot or auto recover from the poisoned mutex
                     let mut map = self.pending_approvals.lock().unwrap();
                     map.insert(call_id.clone(), tx);
                 }
@@ -258,7 +256,12 @@ impl GuardedToolRegistry {
             }
             Err(e) => {
                 let error_str = e.to_string();
-                self.audit(AuditEvent::tool_executed(name, duration_ms, false, Some(error_str)));
+                self.audit(AuditEvent::tool_executed(
+                    name,
+                    duration_ms,
+                    false,
+                    Some(error_str),
+                ));
             }
         }
 
@@ -347,8 +350,12 @@ mod tests {
 
     #[async_trait]
     impl Tool for OkTool {
-        fn name(&self) -> &str { "ok_tool" }
-        fn description(&self) -> &str { "always succeeds" }
+        fn name(&self) -> &str {
+            "ok_tool"
+        }
+        fn description(&self) -> &str {
+            "always succeeds"
+        }
         fn schema(&self) -> JsonValue {
             json!({"type": "function", "function": {"name": "ok_tool", "parameters": {"type": "object", "properties": {}}}})
         }
@@ -401,7 +408,11 @@ mod tests {
         // The actual ToolExecuted event
         let event = rx.try_recv().expect("expected ToolExecuted");
         match event {
-            AuditEvent::ToolExecuted { ref tool_name, success, .. } => {
+            AuditEvent::ToolExecuted {
+                ref tool_name,
+                success,
+                ..
+            } => {
                 assert_eq!(tool_name, "ok_tool");
                 assert!(success);
             }
@@ -506,8 +517,12 @@ mod tests {
 
     #[async_trait]
     impl Tool for ApprovableTool {
-        fn name(&self) -> &str { "approvable" }
-        fn description(&self) -> &str { "may need approval" }
+        fn name(&self) -> &str {
+            "approvable"
+        }
+        fn description(&self) -> &str {
+            "may need approval"
+        }
         fn schema(&self) -> JsonValue {
             json!({"type": "function", "function": {"name": "approvable", "parameters": {"type": "object", "properties": {}}}})
         }
@@ -522,7 +537,9 @@ mod tests {
         registry.add_tool(Box::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
-        let result = registry.call_tool("approvable", json!({"filePath": "/etc/passwd"})).await;
+        let result = registry
+            .call_tool("approvable", json!({"filePath": "/etc/passwd"}))
+            .await;
         match result {
             Err(ToolCallError::Rejected { .. }) => {}
             other => panic!("expected Rejected, got {other:?}"),
@@ -536,7 +553,9 @@ mod tests {
         // Use a path that canonicalizes; "src" exists in the project root
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
-        let result = registry.call_tool("approvable", json!({"filePath": "src/lib.rs"})).await;
+        let result = registry
+            .call_tool("approvable", json!({"filePath": "src/lib.rs"}))
+            .await;
         match result {
             Err(ToolCallError::Rejected { ref reason }) => {
                 assert!(reason.contains("no handler"), "reason: {reason}");
@@ -559,7 +578,9 @@ mod tests {
         }));
         // Call in a spawned task so we can abort it if it blocks on approval
         let handle = tokio::spawn(async move {
-            let _ = registry.call_tool("approvable", json!({"filePath": "src/lib.rs"})).await;
+            let _ = registry
+                .call_tool("approvable", json!({"filePath": "src/lib.rs"}))
+                .await;
         });
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         assert!(*invoked.lock().unwrap(), "callback must have been invoked");
@@ -575,7 +596,9 @@ mod tests {
         registry.set_approval_timeout(Some(std::time::Duration::from_millis(1)));
         // Register a callback that simply records the call but never responds
         registry.set_approval_callback(std::sync::Arc::new(|_, _, _, _| {}));
-        let result = registry.call_tool("approvable", json!({"filePath": "src/lib.rs"})).await;
+        let result = registry
+            .call_tool("approvable", json!({"filePath": "src/lib.rs"}))
+            .await;
         match result {
             Err(ToolCallError::Rejected { .. }) => {}
             other => panic!("expected Rejected, got {other:?}"),
