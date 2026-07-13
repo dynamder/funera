@@ -105,23 +105,33 @@ async fn main() {
              blocked, and explain what happened.",
         )
         .on_tool_call(|name, args| eprintln!("[tool] {name} {args}"))
-        .on_tool_result(|name, result| match result {
-            Ok(out) => {
-                let is_blocked = out.contains("denied")
-                    || out.contains("access")
-                    || out.contains("forbidden")
-                    || out.contains("blocked")
-                    || out.contains("timed out")
-                    || out.contains("exit code: 1")
-                    || out.contains("exit code: 7");
-                if is_blocked {
-                    eprintln!("  ⛔ BLOCKED by sandbox — {name}: {out:.100}");
-                } else {
-                    eprintln!("  ✅ ALLOWED — {name}");
+        .on_tool_result(|name, result| {
+            let tag = match name.as_str() {
+                "shell" => "by sandbox",
+                "write" | "read" | "edit" => "by path guard",
+                _ => "by security policy",
+            };
+            match result {
+                Ok(out) => {
+                    // Only mark as blocked when the output clearly
+                    // indicates a security or sandbox rejection.
+                    // Exit code 1 alone is insufficient (ls -la → exit 1
+                    // on Windows is just "command not found").
+                    let is_blocked = out.contains("denied")
+                        || out.contains("Permission denied")
+                        || out.contains("Access denied")
+                        || out.contains("blocked")
+                        || out.contains("timed out")
+                        || out.contains("exit code: 7");
+                    if is_blocked {
+                        eprintln!("  ⛔ BLOCKED {tag} — {name}");
+                    } else {
+                        eprintln!("  ✅ ALLOWED — {name}");
+                    }
                 }
-            }
-            Err(e) => {
-                eprintln!("  ⛔ BLOCKED by sandbox — {name}: {e:.100}");
+                Err(e) => {
+                    eprintln!("  ⛔ BLOCKED {tag} — {name}: {e:.100}");
+                }
             }
         })
         .build();
@@ -137,6 +147,7 @@ async fn main() {
     {
         Ok(resp) => {
             println!("=== Agent Response ===\n{}", resp.content);
+            eprintln!("[debug] agent response: {} chars, {} iterations", resp.content.len(), resp.iterations);
             println!("=== Completed in {} iterations ===", resp.iterations);
             println!();
             sandbox_enforcement_summary();
@@ -150,7 +161,7 @@ async fn main() {
 
 fn sandbox_enforcement_summary() {
     #[cfg(target_os = "windows")]
-    let mechanism = "Write-Restricted Token + ACLs + environment proxy poison";
+    let mechanism = "Write-Restricted Token + ACLs + env proxy poison";
     #[cfg(not(target_os = "windows"))]
     let mechanism = "Landlock (Linux) or Seatbelt (macOS)";
 
@@ -162,26 +173,29 @@ Platform:        {}
 Mechanism:       {}
 
 What SHOULD be blocked:
-  ✗ Writes outside  → {}: denied by write-restricted ACLs
-  ✗ Network access  → environment proxy variables; works for
-                       HTTP/HTTPS tools (curl, wget, git), but
-                       NOT for raw ICMP (ping) or DNS (nslookup)
-  ✗ Reads outside   → {}: forbidden by Landlock/Read-Token
+  ✗ Writes outside CWD
+     → blocked by write-restricted token ACLs (shell) or PathGuard (write tool)
+  ✗ Network access (HTTP/HTTPS)
+     → blocked by environment proxy poison; applies to curl, wget, git
+       ⚠ .NET WebClient / PowerShell bypasses env proxies
+  ✗ Reads outside CWD
+     → blocked by read restrictions (shell) or PathGuard (read tool)
 
 What is ALLOWED:
-  ✓ Reads/writes in  CWD
-  ✓ Shell builtins   (echo, cd, dir)
-  ✓ DNS / ICMP      (not covered by sandbox policy)
+  ✓ Shell builtins       (echo, cd, dir)
+  ✓ Raw ICMP / DNS      (ping, nslookup — not covered by sandbox policy)
+  ✓ .NET WebClient      (uses IE proxy settings, not env vars)
+  ✓ Commands not found  (exit code 1 from \"ls\" on Windows is NOT a block)
 
-NOTE: On Windows without admin privileges, the full token
-restriction degrades to network-only isolation. File-access
-restrictions still apply via icacls ACLs on the allowed paths.
+NOTES:
+  - Windows without admin: full token restriction degrades to
+    network-only isolation. File writes still blocked by ACLs.
+  - The write/read/edit tools are protected by PathGuard, not
+    the sandbox layer. The shell tool is sandboxed.
 ",
         std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| "unknown".into()),
-        mechanism,
-        mechanism,
         mechanism,
     );
 
