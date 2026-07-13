@@ -8,9 +8,12 @@ use nono::{AccessMode, CapabilitySet};
 #[cfg(all(feature = "sandbox", target_os = "windows"))]
 use super::sandbox_win::WindowsSandbox;
 
-/// Policy config for kernel-enforced sandboxing via nono.
+/// Policy config for kernel-enforced sandboxing.
 ///
-/// Maps to [`nono::CapabilitySet`] at the moment of application.
+/// On Linux/macOS the policy maps to a [`nono::CapabilitySet`] that grants
+/// Landlock (Linux 5.13+) or Seatbelt (macOS) access rights. On Windows it
+/// configures a Write-Restricted Token + ACLs via [`WindowsSandbox`].
+///
 /// When `enabled` is true and the platform supports it, each tool
 /// subprocess will be restricted to only the granted capabilities.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,9 +94,9 @@ impl SandboxPolicy {
     /// platform lacks sandbox support. Callers should check
     /// [`enabled`](Self::enabled) first.
     ///
-    /// **Not available on Windows** — the underlying `nono` crate
-    /// does not support Windows natively. Use WSL2 for sandboxed
-    /// tool execution on Windows.
+    /// **Not available on Windows** — the underlying `nono` crate does not
+    /// support Windows natively. On Windows, callers should use
+    /// [`Sandbox`] instead, which delegates to [`WindowsSandbox`].
     #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
     pub fn to_capability_set(&self) -> Result<CapabilitySet, nono::NonoError> {
         let mut caps = CapabilitySet::new();
@@ -293,14 +296,35 @@ async fn execute_unix_sandbox(
     Ok((stdout, stderr, exit_code))
 }
 
-#[cfg(not(feature = "sandbox"))]
+#[cfg(all(not(feature = "sandbox"), target_os = "windows"))]
 async fn failover_execute(
     command: &str,
     workdir: Option<&str>,
     timeout: std::time::Duration,
 ) -> Result<(String, String, i32), anyhow::Error> {
-    // Always use sh -c; this path is unreachable on Windows because
-    // Sandbox is only constructed when the sandbox feature is enabled.
+    let mut cmd = tokio::process::Command::new("cmd");
+    cmd.arg("/c").arg(command)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(dir) = workdir {
+        cmd.current_dir(dir);
+    }
+    let output = tokio::time::timeout(timeout, cmd.output())
+        .await
+        .map_err(|_| anyhow::anyhow!("command timed out"))?
+        .map_err(|e| anyhow::anyhow!("command failed: {e}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let exit_code = output.status.code().unwrap_or(-1);
+    Ok((stdout, stderr, exit_code))
+}
+
+#[cfg(all(not(feature = "sandbox"), not(target_os = "windows")))]
+async fn failover_execute(
+    command: &str,
+    workdir: Option<&str>,
+    timeout: std::time::Duration,
+) -> Result<(String, String, i32), anyhow::Error> {
     let mut cmd = tokio::process::Command::new("sh");
     cmd.arg("-c").arg(command)
         .stdout(std::process::Stdio::piped())

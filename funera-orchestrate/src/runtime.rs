@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
@@ -219,9 +220,10 @@ impl AgentRuntimeBuilder {
 
     /// Set a kernel-enforced sandbox policy for tool subprocesses.
     ///
-    /// When enabled, the `shell` tool subprocesses are isolated via
-    /// Landlock (Linux 5.13+) or Seatbelt (macOS). Unsupported platforms
-    /// gracefully degrade without isolation.
+    /// When enabled, tool subprocesses are isolated via Landlock
+    /// (Linux 5.13+), Seatbelt (macOS), or Write-Restricted Token
+    /// (Windows 8+). Unsupported configurations gracefully degrade
+    /// without full isolation.
     #[cfg(feature = "sandbox")]
     pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {
         self.sandbox_policy = Some(policy);

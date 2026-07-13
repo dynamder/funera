@@ -1,4 +1,5 @@
-//! Demo kernel sandboxing with nono (Landlock/Seatbelt).
+//! Demo kernel sandboxing (Landlock on Linux, Seatbelt on macOS,
+//! Write-Restricted Token on Windows).
 //!
 //! ```bash
 //! cargo run --example sandbox --features sandbox,builtin-tools
@@ -15,18 +16,19 @@
 //! 2. Passing the policy to the runtime via
 //!    [`AgentRuntimeBuilder::with_sandbox_policy`].
 //! 3. The agent uses the shell tool to list files — the subprocess
-//!    runs under Landlock (Linux 5.13+) or Seatbelt (macOS) and
-//!    cannot access paths outside the allowed set.
+//!    runs under Landlock (Linux 5.13+), Seatbelt (macOS), or
+//!    Write-Restricted Token (Windows 8+) and cannot access paths
+//!    outside the allowed set.
 //! 4. Audit events (`SandboxApplied`) are emitted for every tool
 //!    call, visible when subscribing to the runtime audit bus.
 //!
 //! ## Platform notes
 //!
-//! - **Linux 5.13+**: Full Landlock support.
-//! - **macOS 10.5+**: Seatbelt-based sandboxing.
-//! - **Windows**: The sandbox feature is accepted but the kernel
-//!   isolation is not enforced. Tools run without sandboxing.
-//!   Use WSL2 to run the agent with sandbox on Windows.
+//! | Platform | Mechanism |
+//! |----------|-----------|
+//! | Linux 5.13+ | Landlock via `nono` |
+//! | macOS 10.5+ | Seatbelt via `nono` |
+//! | Windows 8+ | Write-Restricted Token + synthetic SID + ACLs |
 //!
 //! ## Prerequisites
 //!

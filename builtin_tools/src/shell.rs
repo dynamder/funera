@@ -527,12 +527,13 @@ mod tests {
         assert!(!output.is_empty(), "expected uname output");
     }
 
-    // ── test: sandbox with unsupported platform is graceful ─────────
+    // ── test: sandbox on Windows runs with fallback if needed ───────
     //
-    // On Windows (where nono is not compiled) the `with_sandbox`
-    // constructor silently ignores the policy and falls through to
-    // the normal execution path.  We verify that commands still work.
-
+    // On Windows, `Sandbox::new` creates a `WindowsSandbox` (Write-Restricted
+    // Token + ACLs). The sandboxed command runs under the restricted token;
+    // if that fails (e.g. missing admin privileges), execution falls back
+    // to a normal subprocess with network-only isolation. Either way, the
+    // command should produce correct output.
     #[cfg(all(feature = "sandbox", target_os = "windows"))]
     #[tokio::test]
     async fn sandbox_windows_falls_through_gracefully() {
