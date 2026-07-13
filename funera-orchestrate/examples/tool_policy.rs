@@ -343,7 +343,12 @@ fn demo_guarded_registry() {
     let mut all_allowed = ToolPolicy::default();
     all_allowed.denied_tools.insert("blocked".into());
     let from_registry: GuardedToolRegistry = all_allowed.into();
-    assert!(from_registry.policy().check_tool_allowed("blocked").is_err());
+    assert!(
+        from_registry
+            .policy()
+            .check_tool_allowed("blocked")
+            .is_err()
+    );
     println_pass("GuardedToolRegistry can be created via From<ToolPolicy>");
 
     println!();
