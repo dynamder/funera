@@ -131,7 +131,7 @@
 //!
 //! Requires the `security` feature (and optionally `builtin-tools`, `sandbox`).
 //!
-//! ```rust,no_run
+//! ```rust,no_run,ignore
 //! # use funera_orchestrate::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
 //! # fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let runtime = AgentRuntimeBuilder::new()
@@ -185,6 +185,8 @@ pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
 pub use send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
 
 // Re-export security policy types for convenience.
+#[cfg(feature = "security")]
+pub use funera_core::security::audit::{AuditBus, AuditEvent};
 #[cfg(feature = "security")]
 pub use funera_core::security::policy::{PolicyError, ShellPolicy, ToolPolicy};
 

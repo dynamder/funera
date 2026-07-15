@@ -60,6 +60,10 @@ name = "tool_policy"
 required-features = ["security"]
 
 [[example]]
+name = "security"
+required-features = ["security", "builtin-tools"]
+
+[[example]]
 name = "custom_tool"
 
 [[example]]

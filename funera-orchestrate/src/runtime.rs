@@ -10,7 +10,15 @@ use tokio::task::JoinHandle;
 #[cfg(feature = "sandbox")]
 use funera_core::security::sandbox::SandboxPolicy;
 #[cfg(feature = "security")]
+use funera_core::security::audit::{AuditBus, AuditEvent};
+#[cfg(feature = "security")]
 use funera_core::security::policy::ToolPolicy;
+#[cfg(feature = "security")]
+use funera_core::security::registry::ApprovalCallback;
+#[cfg(feature = "security")]
+use funera_core::security::secret::SecureApiKey;
+#[cfg(all(feature = "sandbox", feature = "security"))]
+use funera_core::security::path_guard::PathGuard;
 use funera_core::chat::session::{spawn_session_actor, SessionCmd};
 #[cfg(test)]
 use funera_core::chat::session::FuneraSession;
@@ -68,6 +76,12 @@ pub struct AgentRuntimeBuilder {
     sandbox_policy: Option<SandboxPolicy>,
     #[cfg(feature = "security")]
     tool_policy: Option<ToolPolicy>,
+    #[cfg(feature = "security")]
+    secure_api_key: Option<SecureApiKey>,
+    #[cfg(feature = "security")]
+    approval_callback: Option<ApprovalCallback>,
+    #[cfg(feature = "security")]
+    approval_timeout: Option<std::time::Duration>,
     #[cfg(feature = "middleware")]
     middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
 }
@@ -99,6 +113,12 @@ impl AgentRuntimeBuilder {
             sandbox_policy: None,
             #[cfg(feature = "security")]
             tool_policy: None,
+            #[cfg(feature = "security")]
+            secure_api_key: None,
+            #[cfg(feature = "security")]
+            approval_callback: None,
+            #[cfg(feature = "security")]
+            approval_timeout: None,
             #[cfg(feature = "middleware")]
             middleware_bundle: None,
         }
@@ -106,7 +126,12 @@ impl AgentRuntimeBuilder {
 
     /// OpenAI API key. Falls back to `OPENAI_API_KEY` env var.
     pub fn api_key(mut self, key: impl Into<String>) -> Self {
-        self.api_key = Some(key.into());
+        let key = key.into();
+        #[cfg(feature = "security")]
+        {
+            self.secure_api_key = Some(SecureApiKey::new(key.clone()));
+        }
+        self.api_key = Some(key);
         self
     }
 
@@ -267,6 +292,38 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    /// Register a handler that fires when a tool call requires user approval.
+    ///
+    /// When a tool call targets a path outside the [`PathGuard`] trusted zone but
+    /// within the sandbox boundary, the registry pauses execution and invokes this
+    /// handler with `(call_id, tool_name, reason)`. The caller must call
+    /// [`GuardedToolRegistry::approve_tool_call`](funera_core::security::registry::GuardedToolRegistry::approve_tool_call)
+    /// to approve or reject the pending call.
+    ///
+    /// Requires the `security` feature.
+    #[cfg(feature = "security")]
+    pub fn with_approval_handler(
+        mut self,
+        cb: impl Fn(String, String, String) + Send + Sync + 'static,
+    ) -> Self {
+        self.approval_callback = Some(std::sync::Arc::new(
+            move |call_id: &str, tool_name: &str, reason: &str, _paths: &[std::path::PathBuf]| {
+                cb(call_id.to_string(), tool_name.to_string(), reason.to_string());
+            },
+        ));
+        self
+    }
+
+    /// Set a timeout for tool call approval. If not set, the registry waits indefinitely.
+    /// When the timeout elapses, the tool call is automatically rejected.
+    ///
+    /// Requires the `security` feature.
+    #[cfg(feature = "security")]
+    pub fn with_approval_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.approval_timeout = Some(timeout);
+        self
+    }
+
     /// Register all builtin tools (Read, Write, Edit, Shell).
     /// Requires the `builtin-tools` feature.
     ///
@@ -310,6 +367,15 @@ impl AgentRuntimeBuilder {
     pub fn build_with<P: ChatProvider>(
         #[allow(unused_mut)] mut self,
     ) -> Result<AgentRuntime<P>, OrchestrateError> {
+        #[cfg(feature = "security")]
+        let api_key = {
+            self.secure_api_key
+                .take()
+                .map(|k| k.expose_secret().to_string())
+                .or_else(|| self.api_key.take())
+                .or_else(|| std::env::var("OPENAI_API_KEY").ok())
+        };
+        #[cfg(not(feature = "security"))]
         let api_key = self.api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
         let model = self
             .model
@@ -344,6 +410,9 @@ impl AgentRuntimeBuilder {
             }
         }
 
+        #[cfg(feature = "security")]
+        let audit_bus = AuditBus::default();
+
         #[cfg(feature = "tool")]
         let registry = {
             #[cfg(feature = "security")]
@@ -356,6 +425,44 @@ impl AgentRuntimeBuilder {
             for t in self.tools {
                 reg.add_tool(t);
             }
+
+            // ── Security wiring ─────────────────────────────────
+            #[cfg(feature = "security")]
+            reg.set_audit_bus(audit_bus.clone());
+
+            #[cfg(all(feature = "sandbox", feature = "security"))]
+            if let Some(ref sp) = self.sandbox_policy {
+                if sp.enabled && (!sp.read_paths.is_empty() || !sp.read_write_paths.is_empty()) {
+                    let all_paths: Vec<_> = sp
+                        .read_paths
+                        .iter()
+                        .chain(sp.read_write_paths.iter())
+                        .cloned()
+                        .collect();
+                    if !all_paths.is_empty() {
+                        let path_guard = PathGuard::new(
+                            all_paths.iter().map(|p| p.as_path()),
+                        );
+                        reg.set_path_guard(path_guard);
+                    }
+                }
+                reg.set_sandbox_paths(
+                    sp.read_paths.clone(),
+                    sp.read_write_paths.clone(),
+                );
+            }
+
+            #[cfg(feature = "security")]
+            {
+                if let Some(ref cb) = self.approval_callback {
+                    reg.set_approval_callback(cb.clone());
+                }
+                if let Some(dur) = self.approval_timeout {
+                    reg.set_approval_timeout(Some(dur));
+                }
+            }
+            // ── End security wiring ─────────────────────────────
+
             reg
         };
 
@@ -465,6 +572,8 @@ impl AgentRuntimeBuilder {
             middleware_chain,
             #[cfg(feature = "security")]
             tool_policy: tool_policy_val,
+            #[cfg(feature = "security")]
+            audit_bus,
         })
     }
 }
@@ -502,6 +611,8 @@ pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
     #[cfg(feature = "security")]
     tool_policy: ToolPolicy,
+    #[cfg(feature = "security")]
+    audit_bus: AuditBus,
 }
 
 // ── All state markers share these methods ─────────────────────
@@ -555,6 +666,19 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         self.env_state_tx.subscribe()
     }
 
+    /// Subscribe to security audit events.
+    ///
+    /// The returned receiver yields [`AuditEvent`] notifications for every
+    /// tool execution, denial, policy violation, and sandbox action. This is
+    /// an independent, persistent subscription that is not tied to any
+    /// particular agent call.
+    ///
+    /// Requires the `security` feature.
+    #[cfg(feature = "security")]
+    pub fn subscribe_audit(&self) -> broadcast::Receiver<AuditEvent> {
+        self.audit_bus.subscribe()
+    }
+
     /// Access the middleware chain for event filtering.
     #[cfg(feature = "middleware")]
     pub fn middleware_chain(&self) -> Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>> {
@@ -581,6 +705,8 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
             middleware_chain: self.middleware_chain,
             #[cfg(feature = "security")]
             tool_policy: self.tool_policy,
+            #[cfg(feature = "security")]
+            audit_bus: self.audit_bus,
         }
     }
 
@@ -635,6 +761,8 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
             middleware_chain: self.middleware_chain,
             #[cfg(feature = "security")]
             tool_policy: self.tool_policy,
+            #[cfg(feature = "security")]
+            audit_bus: self.audit_bus,
         }
     }
 }
