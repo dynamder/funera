@@ -1,0 +1,54 @@
+builtin_tools/Cargo.toml
+  s_7d6165506e0dba::t_979f5c95391b34 13
+  s_7d6165506e0dba::t_59a9696a32e799 2,5-6,8
+  s_7d6165506e0dba::t_010e68616e549b 7
+  s_7d6165506e0dba::t_50ca65324215e2 23
+funera-orchestrate/Cargo.toml
+  s_7d6165506e0dba::t_8a16955e5a3fd3 25-29,31-33
+  s_7d6165506e0dba::t_1f4360b1336cf6 10-11
+  s_7d6165506e0dba::t_ea5d2df827d817 7
+src/lib.rs
+  s_7d6165506e0dba::t_13052044ca9828 29,31
+funera_core/src/chat/session.rs
+  s_7d6165506e0dba::t_85d06c93486949 120
+Cargo.toml
+  s_7d6165506e0dba::t_95a486d3f2855a 17-18
+  s_8ed6ea876f9466::t_1b996eadf363ba 5,7-10,14
+funera_core/Cargo.toml
+  s_7d6165506e0dba::t_458fcacf7bf8a8 7
+  s_7d6165506e0dba::t_e4706ce06fb0d8 45
+  s_7d6165506e0dba::t_b85b27c19c67dc 2,5-6,8
+funera-orchestrate/src/lib.rs
+  s_7d6165506e0dba::t_13a7563bc835dd 135,137
+builtin_tools/src/lib.rs
+  s_7d6165506e0dba::t_c476e17c0317bc 1
+README.md
+  s_7d6165506e0dba::t_929959360628bf 53
+  s_7d6165506e0dba::t_15e4b311fbe40b 92-95,97-99,101-105,107
+funera_core/src/re_act.rs
+  s_7d6165506e0dba::t_1a5db03f3b8a65 32-35,37,39,41,43,46,48,50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ed34b8c4872650c78b67c3c30ad611011f1d0b00",
+  "prompts": {},
+  "sessions": {
+    "s_7d6165506e0dba": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_09722824affezFy6kF7aw7DXX1",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_8ed6ea876f9466": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c99a833dffetAIErcXyS7u7kN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
