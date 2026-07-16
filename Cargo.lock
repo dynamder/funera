@@ -335,12 +335,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "builtin_tools"
+name = "builtin-tools"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "funera_core",
+ "funera-core",
  "nono",
  "serde",
  "serde_json",
@@ -932,30 +932,12 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 name = "funera"
 version = "0.1.0"
 dependencies = [
+ "funera-core",
  "funera-orchestrate",
- "funera_core",
 ]
 
 [[package]]
-name = "funera-orchestrate"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-openai",
- "async-trait",
- "builtin_tools",
- "funera_core",
- "futures",
- "parking_lot",
- "serde_json",
- "thiserror",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "funera_core"
+name = "funera-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -977,6 +959,24 @@ dependencies = [
  "uuid",
  "windows",
  "zeroize",
+]
+
+[[package]]
+name = "funera-orchestrate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-openai",
+ "async-trait",
+ "builtin-tools",
+ "funera-core",
+ "futures",
+ "parking_lot",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -3280,10 +3280,6 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
-
-[[package]]
-name = "tui"
-version = "0.1.0"
 
 [[package]]
 name = "twox-hash"

@@ -132,9 +132,9 @@
 //! Requires the `security` feature (and optionally `builtin-tools`, `sandbox`).
 //!
 //! ```rust,no_run,ignore
-//! # use funera_orchestrate::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
+//! # use funera_orchestrate::{AgentRuntime, DeepSeekProvider, ToolPolicy, ShellPolicy};
 //! # fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! let runtime = AgentRuntimeBuilder::new()
+//! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
 //!     .model("deepseek-v4-flash")
 //!     .with_builtin_tools()

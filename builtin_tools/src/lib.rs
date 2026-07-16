@@ -1,4 +1,4 @@
-//! # builtin_tools
+//! # builtin-tools
 //!
 //! Default tool implementations for the funera agent framework.
 //!

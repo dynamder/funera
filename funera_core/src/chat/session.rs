@@ -117,7 +117,7 @@ impl FuneraSession {
     /// 通过 `session_tx.clone()` 传递给 `ReActLoop`，使其可在循环期间
     /// 读写 session 而不移出所有权。
     ///
-    /// 完成后返回 `()``。session 数据保留在 actor 中（外部通过 `session_context()` 查询）。
+    /// 完成后返回 `()`。session 数据保留在 actor 中（外部通过 `session_context()` 查询）。
     pub async fn react_loop<P: crate::provider::ChatProvider, E: MiddlewareEvent>(
         &self,
         init_msg: FuneraMessage,

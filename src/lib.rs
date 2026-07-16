@@ -26,9 +26,9 @@
 //! Enable the `security` feature to restrict tool execution:
 //!
 //! ```rust,ignore
-//! use funera::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
+//! use funera::{AgentRuntime, DeepSeekProvider, ToolPolicy, ShellPolicy};
 //!
-//! let runtime = AgentRuntimeBuilder::new()
+//! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
 //!     .model("deepseek-v4-flash")
 //!     .with_tool_policy(ToolPolicy::strict())

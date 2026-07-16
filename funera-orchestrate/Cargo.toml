@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2024"
 description = "Easy-to-use orchestration layer for funera-core — build LLM agents with a simple builder API"
 license = "MIT"
-repository = "https://github.com/anomalyco/funera"
+repository = "https://github.com/dynamder/funera"
 
 [dependencies]
-funera_core = { path = "../funera_core" }
-builtin_tools = { path = "../builtin_tools", optional = true }
+funera-core = { path = "../funera_core", version = "0.1.0" }
+builtin-tools = { path = "../builtin_tools", version = "0.1.0", optional = true }
 tokio = { version = "1.52.3", features = ["full"] }
 async-openai = { version = "0.41.1", features = ["_api", "chat-completion", "responses", "skill"] }
 parking_lot = { version = "0.12.5", features = ["serde"] }
@@ -22,15 +22,15 @@ tracing = "0.1"
 
 [features]
 default = ["deepseek", "tool"]
-builtin-tools = ["dep:builtin_tools", "funera_core/tool"]
-sandbox = ["funera_core/sandbox", "builtin_tools?/sandbox"]
-security = ["funera_core/security"]
-deepseek = ["funera_core/deepseek"]
-openai = ["funera_core/openai"]
+builtin-tools = ["dep:builtin-tools", "funera-core/tool"]
+sandbox = ["funera-core/sandbox", "builtin-tools?/sandbox"]
+security = ["funera-core/security"]
+deepseek = ["funera-core/deepseek"]
+openai = ["funera-core/openai"]
 real-llm = []
-middleware = ["funera_core/middleware"]
-tool = ["funera_core/tool"]
-skill = ["funera_core/skill"]
+middleware = ["funera-core/middleware"]
+tool = ["funera-core/tool"]
+skill = ["funera-core/skill"]
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["full", "test-util"] }

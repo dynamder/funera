@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use crate::chat::message::FuneraMessage;
 use serde_json::Value as JsonValue;
 use tokio::sync::broadcast;

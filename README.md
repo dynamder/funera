@@ -1,7 +1,10 @@
 # Funera
 
 An LLM agent framework for Rust. Build AI agents with tools, skills, middleware, and pluggable
-LLM backends — all with multi-layered security.
+LLM backends — all with multi-layered security and flexible pipeline.
+
+WARNING: This crate is still under development, the documentation may be incomplete or wrong. And the API may change.
+WARNING: The security features are still under development and testing, and cannot be trusted to be secure.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/edition-2024-orange)](https://rust-lang.org)
@@ -39,7 +42,7 @@ Add the root crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-funera = { git = "https://github.com/dynamder/Funera" }
+funera = { git = "https://github.com/dynamder/funera" }
 ```
 
 ### Features
@@ -47,6 +50,7 @@ funera = { git = "https://github.com/dynamder/Funera" }
 | Feature | Default | Description |
 |---------|:-------:|-------------|
 | `builtin-tools` | ❌ | Bundled Read, Write, Edit, Shell tools |
+| `tool` | ✅ | Tool system (trait, registry, executor) |
 | `deepseek` | ✅ | DeepSeek provider |
 | `openai` | ❌ | OpenAI provider |
 | `security` | ❌ | Tool policy enforcement, path guards, audit logging |
@@ -85,22 +89,22 @@ use funera::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-    .api_key(std::env::var("DEEPSEEK_API_KEY")?)
-    .model("deepseek-v4-flash")
-    .build()?;
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+        .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+        .model("deepseek-v4-flash")
+        .build()?;
 
-let agent = Agent::builder()
-    .on_token(|t| print!("{t}"))
-    .build();
+    let agent = Agent::builder()
+        .on_token(|t| print!("{t}"))
+        .build();
 
-let mut rx = agent.fire_stream("Explain Rust ownership", &runtime).await?;
-while let Some(event) = rx.recv().await {
-    if let AgentEvent::Text(t) = event {
-        print!("{t}");
+    let mut rx = agent.fire_stream("Explain Rust ownership", &runtime).await?;
+    while let Some(event) = rx.recv().await {
+        if let AgentEvent::Text(t) = event {
+            print!("{t}");
+        }
     }
-}
-Ok(())
+    Ok(())
 }
 ```
 
@@ -221,7 +225,6 @@ funera/
 │       ├── write.rs      WriteTool (auto parent dirs)
 │       ├── edit.rs       EditTool (hashline-anchored editing)
 │       └── shell.rs      ShellTool (cross-platform, timeout)
-└── tui/                  TUI frontend (stub)
 ```
 
 ## License

@@ -29,14 +29,25 @@ pub mod tool;
 #[cfg(feature = "tool")]
 pub mod tool_executor;
 
+/// Configuration for the ReAct loop execution.
+///
+/// Controls buffer sizes, iteration limits, environment watchers, event buses,
+/// and optional session integration.
 pub struct ReActLoopConfig {
+    /// Internal channel buffer size for event buses (e.g. token stream relay).
     pub buffer: usize,
+    /// Maximum number of ReAct iterations per call (tool-calling cycles).
     pub max_iteration: usize,
+    /// Watcher for dynamic environment changes (client, model, tools, skills, sandbox).
     pub env_watcher: FuneraEnvWatcher,
+    /// Channel for sending tool execution commands to the background executor.
     #[cfg(feature = "tool")]
     pub tool_bus: ToolBus,
+    /// Sender for environment state events (session lifecycle, tool changes).
     pub env_state_tx: broadcast::Sender<EnvStateEvent>,
+    /// Handle for the per-turn highway protocol (allocates per-turn event buses).
     pub turn_highway_handle: TurnHighWayHandle,
+    /// Optional sender to the session actor — enables message history persistence.
     pub session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
 }
 
