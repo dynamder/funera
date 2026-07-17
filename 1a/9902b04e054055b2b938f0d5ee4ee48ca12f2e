@@ -1,0 +1,53 @@
+funera-orchestrate/examples/sandbox.rs
+  s_ff336b6a81ec5d::t_96eee200ee562b 69
+funera-orchestrate/src/lib.rs
+  s_ff336b6a81ec5d::t_1af2278a14bb2c 132
+funera-orchestrate/examples/security.rs
+  s_ff336b6a81ec5d::t_b901966a9b9dcb 5
+funera_builtin_tools/Cargo.toml
+  s_ff336b6a81ec5d::t_d3339554f7d3de 2
+funera_builtin_tools/src/lib.rs
+  s_ff336b6a81ec5d::t_5a2b272ee91bcc 1-17
+README.md
+  s_ff336b6a81ec5d::t_73a2eb34f7b8a6 23
+  s_ff336b6a81ec5d::t_ecf9fd723c0055 52
+  s_ff336b6a81ec5d::t_c92497ad4bf78f 222
+funera-orchestrate/examples/builtin_tools.rs
+  s_ff336b6a81ec5d::t_45381f20f43c21 4,7
+funera-orchestrate/Cargo.toml
+  s_ff336b6a81ec5d::t_6fbad145aa0054 26
+  s_ff336b6a81ec5d::t_b36b75335b0435 44
+  s_ff336b6a81ec5d::t_ec35ee87e5eac1 25
+  s_ff336b6a81ec5d::t_5812e9cc8cec9e 64
+  s_ff336b6a81ec5d::t_67eb9348fad1c8 11
+funera-orchestrate/src/runtime.rs
+  s_ff336b6a81ec5d::t_cba4bb5351b5cf 328,332,334
+Cargo.toml
+  s_ff336b6a81ec5d::t_7943e14be253e9 22
+  s_ff336b6a81ec5d::t_b9f57efa99c61f 25
+  s_8ed6ea876f9466::t_34f39811c29b64 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "1a9902b04e054055b2b938f0d5ee4ee48ca12f2e",
+  "prompts": {},
+  "sessions": {
+    "s_8ed6ea876f9466": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0c99a833dffetAIErcXyS7u7kN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    },
+    "s_ff336b6a81ec5d": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_090bc8e93ffediB2ZNIAVlh72X",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
