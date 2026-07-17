@@ -1,10 +1,10 @@
 //! Using built-in file/shell tools.
 //!
 //! ```bash
-//! cargo run --example builtin_tools --features builtin-tools
+//! cargo run --example builtin_tools --features funera-builtin-tools
 //! ```
 //!
-//! The `builtin-tools` feature bundles Read, Write, Edit, and Shell tools
+//! The `funera-builtin-tools` feature bundles Read, Write, Edit, and Shell tools
 //! that the agent can use to interact with the filesystem and shell.
 
 use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};

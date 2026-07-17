@@ -2,7 +2,7 @@
 //! tool policies, shell restrictions, audit logging, and approval workflows.
 //!
 //! ```bash
-//! cargo run -p funera-orchestrate --example security --features security,builtin-tools
+//! cargo run -p funera-orchestrate --example security --features security,funera-builtin-tools
 //! ```
 //!
 //! Requires `OPENAI_API_KEY` (or set via `.api_key()` in code).

@@ -1,4 +1,4 @@
-//! # builtin-tools
+//! # funera-builtin-tools
 //!
 //! Default tool implementations for the funera agent framework.
 //!
@@ -14,7 +14,7 @@
 //! ## Quick start
 //!
 //! ```rust,ignore
-//! use builtin_tools::register_all_tools;
+//! use funera_builtin_tools::register_all_tools;
 //! use funera_core::re_act::tool::ToolRegistry;
 //!
 //! let mut registry = ToolRegistry::new();

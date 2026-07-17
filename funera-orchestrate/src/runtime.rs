@@ -325,13 +325,13 @@ impl AgentRuntimeBuilder {
     }
 
     /// Register all builtin tools (Read, Write, Edit, Shell).
-    /// Requires the `builtin-tools` feature.
+    /// Requires the `funera-builtin-tools` feature.
     ///
     /// If a sandbox policy was configured via [`with_sandbox_policy`],
     /// the `shell` tool will apply kernel-level isolation to each subprocess.
-    #[cfg(feature = "builtin-tools")]
+    #[cfg(feature = "funera-builtin-tools")]
     pub fn with_builtin_tools(mut self) -> Self {
-        use builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
+        use funera_builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
         self.tools.push(Box::new(ReadTool));
         self.tools.push(Box::new(WriteTool));
         self.tools.push(Box::new(EditTool));

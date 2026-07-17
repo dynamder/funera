@@ -1,5 +1,5 @@
 [package]
-name = "builtin-tools"
+name = "funera-builtin-tools"
 version = "0.1.1"
 edition = "2024"
 description = "Default tool implementations for funera — Read, Write, Edit, Shell"

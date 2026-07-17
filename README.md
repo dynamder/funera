@@ -20,7 +20,7 @@ WARNING: The security features are still under development and testing, and cann
 │  ReActLoop · Session · EventBus · Middleware        │
 │  Security · Provider · Tools · Skills               │
 ├─────────────────────────────────────────────────────┤
-│  builtin_tools         default tool implementations │
+│  funera_builtin_tools  default tool implementations │
 │  ReadTool · WriteTool · EditTool · ShellTool        │
 └─────────────────────────────────────────────────────┘
 ```
@@ -49,7 +49,7 @@ funera = { git = "https://github.com/dynamder/funera" }
 
 | Feature | Default | Description |
 |---------|:-------:|-------------|
-| `builtin-tools` | ❌ | Bundled Read, Write, Edit, Shell tools |
+| `funera-builtin-tools` | ❌ | Bundled Read, Write, Edit, Shell tools |
 | `tool` | ✅ | Tool system (trait, registry, executor) |
 | `deepseek` | ✅ | DeepSeek provider |
 | `openai` | ❌ | OpenAI provider |
@@ -171,7 +171,7 @@ let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 
 ### Security configuration
 
-Requires the `security` feature (and optionally `builtin-tools`, `sandbox`):
+Requires the `security` feature (and optionally `funera-builtin-tools`, `sandbox`):
 
 ```rust
 use funera::{Agent, AgentRuntime, DeepSeekProvider, ToolPolicy, ShellPolicy};
@@ -219,7 +219,7 @@ funera/
 │   │   ├── dispatcher.rs  Callback dispatch
 │   │   └── send_handle.rs Ownership handles
 │   └── examples/         Example programs
-├── builtin_tools/        Default tool implementations
+├── funera_builtin_tools/  Default tool implementations
 │   └── src/
 │       ├── read.rs       ReadTool (file/dir, hashline output)
 │       ├── write.rs      WriteTool (auto parent dirs)

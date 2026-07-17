@@ -2,7 +2,7 @@
 //! Write-Restricted Token on Windows).
 //!
 //! ```bash
-//! cargo run --example sandbox --features sandbox,builtin-tools
+//! cargo run --example sandbox --features sandbox,funera-builtin-tools
 //! ```
 //!
 //! The sandbox restricts the Shell tool subprocess to only the
@@ -66,7 +66,7 @@ async fn main() {
         Ok(k) => k,
         Err(_) => {
             eprintln!("error: OPENAI_API_KEY environment variable is required");
-            eprintln!("usage: OPENAI_API_KEY=sk-... cargo run --example sandbox -p funera-orchestrate --features sandbox,builtin-tools");
+            eprintln!("usage: OPENAI_API_KEY=sk-... cargo run --example sandbox -p funera-orchestrate --features sandbox,funera-builtin-tools");
             std::process::exit(1);
         }
     };

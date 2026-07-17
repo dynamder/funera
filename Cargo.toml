@@ -11,7 +11,7 @@ categories = ["artificial-intelligence", "asynchronous"]
 
 [workspace]
 resolver = "3"
-members = ["builtin_tools", "funera_core", "funera-orchestrate"]
+members = ["funera_builtin_tools", "funera_core", "funera-orchestrate"]
 
 [dependencies]
 funera-orchestrate = { path = "./funera-orchestrate", version = "0.1.1" }
@@ -19,10 +19,10 @@ funera-core = { path = "./funera_core", version = "0.1.1" }
 
 [features]
 default = ["tool", "deepseek"]
-builtin-tools = ["funera-orchestrate/builtin-tools"]
+funera-builtin-tools = ["funera-orchestrate/funera-builtin-tools"]
 openai = ["funera-orchestrate/openai"]
 middleware = ["funera-orchestrate/middleware"]
-sandbox = ["funera-orchestrate/sandbox", "builtin-tools"]
+sandbox = ["funera-orchestrate/sandbox", "funera-builtin-tools"]
 security = ["funera-orchestrate/security"]
 skill = ["funera-orchestrate/skill"]
 tool = ["funera-orchestrate/tool"]

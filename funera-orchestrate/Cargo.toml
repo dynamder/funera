@@ -8,7 +8,7 @@ repository = "https://github.com/dynamder/funera"
 
 [dependencies]
 funera-core = { path = "../funera_core", version = "0.1.1" }
-builtin-tools = { path = "../builtin_tools", version = "0.1.1", optional = true }
+funera-builtin-tools = { path = "../funera_builtin_tools", version = "0.1.1", optional = true }
 tokio = { version = "1.52.3", features = ["full"] }
 async-openai = { version = "0.41.1", features = ["_api", "chat-completion", "responses", "skill"] }
 parking_lot = { version = "0.12.5", features = ["serde"] }
@@ -22,8 +22,8 @@ tracing = "0.1"
 
 [features]
 default = ["deepseek", "tool"]
-builtin-tools = ["dep:builtin-tools", "funera-core/tool"]
-sandbox = ["funera-core/sandbox", "builtin-tools?/sandbox"]
+funera-builtin-tools = ["dep:funera-builtin-tools", "funera-core/tool"]
+sandbox = ["funera-core/sandbox", "funera-builtin-tools?/sandbox"]
 security = ["funera-core/security"]
 deepseek = ["funera-core/deepseek"]
 openai = ["funera-core/openai"]
@@ -41,7 +41,7 @@ path = "src/lib.rs"
 
 [[example]]
 name = "builtin_tools"
-required-features = ["builtin-tools"]
+required-features = ["funera-builtin-tools"]
 
 [[example]]
 name = "middleware"
@@ -53,7 +53,7 @@ required-features = ["skill"]
 
 [[example]]
 name = "sandbox"
-required-features = ["sandbox", "builtin-tools"]
+required-features = ["sandbox", "funera-builtin-tools"]
 
 [[example]]
 name = "tool_policy"
@@ -61,7 +61,7 @@ required-features = ["security"]
 
 [[example]]
 name = "security"
-required-features = ["security", "builtin-tools"]
+required-features = ["security", "funera-builtin-tools"]
 
 [[example]]
 name = "custom_tool"

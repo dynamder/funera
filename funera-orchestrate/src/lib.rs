@@ -13,7 +13,7 @@
 //! | `deepseek` | ✅ | DeepSeek provider |
 //! | `openai` | ❌ | OpenAI provider |
 //! | `tool` | ✅ | Tool system (trait, registry, executor) |
-//! | `builtin-tools` | ❌ | Built-in tools (Read, Write, Edit, Shell) |
+//! | `funera-builtin-tools` | ❌ | Built-in tools (Read, Write, Edit, Shell) |
 //! | `security` | ❌ | Tool policy enforcement |
 //! | `middleware` | ❌ | Event interception pipeline (Inspector + Mutator) |
 //! | `skill` | ❌ | Skill loading and prompt injection |
@@ -129,7 +129,7 @@
 //!
 //! ### Security configuration
 //!
-//! Requires the `security` feature (and optionally `builtin-tools`, `sandbox`).
+//! Requires the `security` feature (and optionally `funera-builtin-tools`, `sandbox`).
 //!
 //! ```rust,no_run,ignore
 //! # use funera_orchestrate::{AgentRuntime, DeepSeekProvider, ToolPolicy, ShellPolicy};

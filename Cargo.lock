@@ -335,20 +335,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "builtin-tools"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "funera-core",
- "nono",
- "serde",
- "serde_json",
- "tokio",
- "twox-hash",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -937,6 +923,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "funera-builtin-tools"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "funera-core",
+ "nono",
+ "serde",
+ "serde_json",
+ "tokio",
+ "twox-hash",
+]
+
+[[package]]
 name = "funera-core"
 version = "0.1.1"
 dependencies = [
@@ -968,7 +968,7 @@ dependencies = [
  "anyhow",
  "async-openai",
  "async-trait",
- "builtin-tools",
+ "funera-builtin-tools",
  "funera-core",
  "futures",
  "parking_lot",
