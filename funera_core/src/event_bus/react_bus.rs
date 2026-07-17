@@ -2,6 +2,9 @@ use crate::chat::message::FuneraMessage;
 use serde_json::Value as JsonValue;
 use tokio::sync::broadcast;
 
+#[cfg(feature = "security")]
+use std::path::PathBuf;
+
 #[derive(Debug, Clone)]
 pub struct ToolCallRequest {
     pub index: usize,

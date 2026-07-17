@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "builtin-tools"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -930,7 +930,7 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "funera"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "funera-core",
  "funera-orchestrate",
@@ -938,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "funera-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -963,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "funera-orchestrate"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-openai",
