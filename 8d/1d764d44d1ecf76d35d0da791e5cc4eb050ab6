@@ -1,0 +1,29 @@
+funera_core/src/security/sandbox.rs
+  s_55275269be1cbe::t_c565d26f804b4a 309
+.github/workflows/cd.yml
+  s_55275269be1cbe::t_d3f5e5ca6cbdc3 70,75
+  s_55275269be1cbe::t_a5608e976d0606 55
+  s_55275269be1cbe::t_e36c223dfdbff2 89
+.github/workflows/audit.yml
+  s_55275269be1cbe::t_cebe69320966c2 15
+.github/workflows/ci.yml
+  s_55275269be1cbe::t_c90405e11b7e40 36
+  s_55275269be1cbe::t_ad301d350bfdbf 86
+  s_55275269be1cbe::t_d84f32e3e8ca29 60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8d1d764d44d1ecf76d35d0da791e5cc4eb050ab6",
+  "prompts": {},
+  "sessions": {
+    "s_55275269be1cbe": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_075824014ffeqFx5JSVsJA2QX0",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
