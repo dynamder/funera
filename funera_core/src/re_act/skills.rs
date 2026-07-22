@@ -273,9 +273,7 @@ impl SkillRegistry {
     pub fn get_active_skills_prompt(&self) -> String {
         let mut parts = Vec::new();
         for skill in self.active_skills() {
-            if !skill.disable_model_invocation
-                && !skill.content.is_empty()
-            {
+            if !skill.disable_model_invocation && !skill.content.is_empty() {
                 parts.push(skill.content.clone());
             }
         }

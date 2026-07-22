@@ -79,9 +79,7 @@ pub enum ToolCallError {
 
     /// The tool call was rejected after an approval request was denied.
     #[error("tool call rejected: {reason}")]
-    Rejected {
-        reason: String,
-    },
+    Rejected { reason: String },
 }
 
 /// An entry in the tool registry, pairing a tool with its availability status.

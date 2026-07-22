@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .model("deepseek-v4-flash")
         .with_builtin_tools()
         .with_tool_policy(tool_policy)
-        .with_approval_handler(move |call_id, tool, reason| {
+        .on_approval_required(move |call_id, tool, reason| {
             eprintln!("[approval] \"{tool}\" 需要审批: {reason}");
             eprintln!("[approval] 自动批准");
             let _ = approval_tx.send(call_id.to_string());

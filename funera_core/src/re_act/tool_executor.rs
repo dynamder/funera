@@ -27,6 +27,8 @@ impl ToolExecutor {
         while let Some(cmd) = self.exec_rx.recv().await {
             let result = {
                 let registry = self.tool_registry.read().await;
+                #[cfg(feature = "security")]
+                registry.set_react_bus(cmd.react_bus.clone());
                 registry.call_tool(&cmd.name, cmd.args).await
             };
             let _ = cmd.resp_tx.send(result);

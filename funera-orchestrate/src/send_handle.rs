@@ -187,10 +187,19 @@ async fn aggregate_from_broadcast(
     loop {
         match event_rx.recv().await {
             Ok(AgentEvent::Text(t)) => content = t,
-            Ok(AgentEvent::ToolCallRequest { call_id, name, args, .. }) => {
+            Ok(AgentEvent::ToolCallRequest {
+                call_id,
+                name,
+                args,
+                ..
+            }) => {
                 pending.push((call_id, name, args));
             }
-            Ok(AgentEvent::ToolCallResult { call_id, name: _, result }) => {
+            Ok(AgentEvent::ToolCallResult {
+                call_id,
+                name: _,
+                result,
+            }) => {
                 if let Some(pos) = pending.iter().position(|(id, _, _)| *id == call_id) {
                     let (_, name, args) = pending.remove(pos);
                     tool_calls.push(ToolCallInfo { name, args, result });
@@ -205,5 +214,10 @@ async fn aggregate_from_broadcast(
         }
     }
 
-    Ok(ChatResponse { content, tool_calls, iterations, finish_reason })
+    Ok(ChatResponse {
+        content,
+        tool_calls,
+        iterations,
+        finish_reason,
+    })
 }

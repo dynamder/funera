@@ -59,10 +59,7 @@ pub fn register_all_tools(registry: &mut ToolRegistry) {
 ///
 /// Unsupported platforms/kernels gracefully degrade to normal execution.
 #[cfg(feature = "sandbox")]
-pub fn register_all_tools_with_sandbox(
-    registry: &mut ToolRegistry,
-    policy: SandboxPolicy,
-) {
+pub fn register_all_tools_with_sandbox(registry: &mut ToolRegistry, policy: SandboxPolicy) {
     registry.add_tool(Box::new(ReadTool));
     registry.add_tool(Box::new(WriteTool));
     registry.add_tool(Box::new(EditTool));

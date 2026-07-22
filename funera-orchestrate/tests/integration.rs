@@ -35,8 +35,14 @@ async fn fire_simple_response() {
         .system_prompt("You are a concise assistant.")
         .build();
 
-    let resp = agent.fire("Say exactly: hello world", &runtime).await.unwrap();
-    assert!(non_empty(&resp.content), "response should contain meaningful text");
+    let resp = agent
+        .fire("Say exactly: hello world", &runtime)
+        .await
+        .unwrap();
+    assert!(
+        non_empty(&resp.content),
+        "response should contain meaningful text"
+    );
     assert!(resp.iterations >= 1);
 }
 
@@ -60,9 +66,7 @@ async fn fire_respects_max_iterations() {
         .max_iterations(5)
         .build()
         .unwrap();
-    let agent = Agent::builder()
-        .system_prompt("You are concise.")
-        .build();
+    let agent = Agent::builder().system_prompt("You are concise.").build();
 
     let resp = agent.fire("What is Rust?", &runtime).await.unwrap();
     assert!(non_empty(&resp.content));
@@ -91,9 +95,7 @@ async fn send_multi_turn_memory() {
 #[tokio::test]
 async fn send_reset_forgets() {
     let mut runtime = make_runtime("gpt-4o-mini");
-    let agent = Agent::builder()
-        .system_prompt("You are helpful.")
-        .build();
+    let agent = Agent::builder().system_prompt("You are helpful.").build();
 
     agent.send("My name is Bob.", &mut runtime).await.unwrap();
     runtime.reset();
@@ -111,9 +113,7 @@ async fn send_reset_forgets() {
 #[tokio::test]
 async fn fire_stream_receives_tokens() {
     let runtime = make_runtime("gpt-4o-mini");
-    let agent = Agent::builder()
-        .system_prompt("Be concise.")
-        .build();
+    let agent = Agent::builder().system_prompt("Be concise.").build();
 
     let mut rx = agent
         .fire_stream("Count to three: 1 2 3", &runtime)
@@ -140,16 +140,18 @@ async fn fire_stream_receives_tokens() {
 async fn switch_runtime_isolation() {
     let mut rt1 = make_runtime("gpt-4o-mini");
     let mut rt2 = make_runtime("gpt-4o-mini");
-    let agent = Agent::builder()
-        .system_prompt("You are helpful.")
-        .build();
+    let agent = Agent::builder().system_prompt("You are helpful.").build();
 
-    agent.send("Remember: the secret word is 'banana'.", &mut rt1)
+    agent
+        .send("Remember: the secret word is 'banana'.", &mut rt1)
         .await
         .unwrap();
 
     // rt2 should NOT know the secret
-    let resp = agent.send("What is the secret word?", &mut rt2).await.unwrap();
+    let resp = agent
+        .send("What is the secret word?", &mut rt2)
+        .await
+        .unwrap();
     let answer = resp.content.to_lowercase();
     assert!(
         !answer.contains("banana"),
@@ -157,7 +159,10 @@ async fn switch_runtime_isolation() {
     );
 
     // rt1 still remembers
-    let resp = agent.send("What is the secret word?", &mut rt1).await.unwrap();
+    let resp = agent
+        .send("What is the secret word?", &mut rt1)
+        .await
+        .unwrap();
     let answer = resp.content.to_lowercase();
     assert!(
         answer.contains("banana"),
@@ -172,9 +177,7 @@ async fn build_without_key_fails() {
     let original_key = std::env::var("OPENAI_API_KEY").ok();
     std::env::remove_var("OPENAI_API_KEY");
 
-    let result = AgentRuntime::builder()
-        .model("gpt-4o-mini")
-        .build();
+    let result = AgentRuntime::builder().model("gpt-4o-mini").build();
 
     assert!(result.is_err(), "building without API key should fail");
 

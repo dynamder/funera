@@ -66,7 +66,9 @@ async fn main() {
         Ok(k) => k,
         Err(_) => {
             eprintln!("error: OPENAI_API_KEY environment variable is required");
-            eprintln!("usage: OPENAI_API_KEY=sk-... cargo run --example sandbox -p funera-orchestrate --features sandbox,funera-builtin-tools");
+            eprintln!(
+                "usage: OPENAI_API_KEY=sk-... cargo run --example sandbox -p funera-orchestrate --features sandbox,funera-builtin-tools"
+            );
             std::process::exit(1);
         }
     };
@@ -161,7 +163,11 @@ async fn main() {
     {
         Ok(resp) => {
             println!("=== Agent Response ===\n{}", resp.content);
-            eprintln!("[debug] agent response: {} chars, {} iterations", resp.content.len(), resp.iterations);
+            eprintln!(
+                "[debug] agent response: {} chars, {} iterations",
+                resp.content.len(),
+                resp.iterations
+            );
             println!("=== Completed in {} iterations ===", resp.iterations);
             println!();
             sandbox_enforcement_summary();

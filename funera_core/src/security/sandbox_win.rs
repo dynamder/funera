@@ -96,7 +96,9 @@ impl WindowsSandbox {
                 // CreateRestrictedToken / CreateProcessAsUserW failing
                 // due to missing admin privileges) is expected on some
                 // Windows configurations. We degrade to network-only.
-                tracing::warn!("sandbox creation failed, falling back to network-only isolation: {e}");
+                tracing::warn!(
+                    "sandbox creation failed, falling back to network-only isolation: {e}"
+                );
             }
         }
         execute_fallback(
@@ -340,7 +342,11 @@ fn make_everyone_sid() -> anyhow::Result<PSID> {
             &windows::Win32::Security::SECURITY_WORLD_SID_AUTHORITY,
             1u8,
             0u32,
-            0, 0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
+            0,
             0,
             0,
             &mut sid,
@@ -404,7 +410,13 @@ fn try_full_sandbox(
 ) -> anyhow::Result<(String, String, i32)> {
     let token = create_write_restricted_token(sid)?;
     let result = launch_restricted(
-        token, shell, shell_flag, command, workdir, timeout, block_network,
+        token,
+        shell,
+        shell_flag,
+        command,
+        workdir,
+        timeout,
+        block_network,
     );
     // SAFETY: CloseHandle must be called once per HANDLE. token was
     // obtained from create_write_restricted_token and is not used
@@ -439,12 +451,16 @@ fn launch_restricted(
     let mut stdout_write = HANDLE::default();
     // SAFETY: CreatePipe allocates kernel pipe objects. The handles are
     // wrapped in PipeGuard which closes them on any early-exit path.
-    unsafe { CreatePipe(&mut stdout_read, &mut stdout_write, Some(&sa), 0)?; }
+    unsafe {
+        CreatePipe(&mut stdout_read, &mut stdout_write, Some(&sa), 0)?;
+    }
 
     let mut stderr_read = HANDLE::default();
     let mut stderr_write = HANDLE::default();
     // SAFETY: Same as above — second pipe pair for stderr.
-    unsafe { CreatePipe(&mut stderr_read, &mut stderr_write, Some(&sa), 0)?; }
+    unsafe {
+        CreatePipe(&mut stderr_read, &mut stderr_write, Some(&sa), 0)?;
+    }
 
     // Drop-guard: if we return early, this guard closes all four handles.
     let mut guard = PipeGuard {
@@ -483,8 +499,8 @@ fn launch_restricted(
     // SAFETY: GetStdHandle returns the current process's stdin handle.
     // This handle is valid for the lifetime of the process and is
     // inherited by the child via STARTF_USESTDHANDLES below.
-    let stdin_handle =
-        unsafe { GetStdHandle(STD_INPUT_HANDLE) }.map_err(|e| anyhow!("GetStdHandle failed: {e}"))?;
+    let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE) }
+        .map_err(|e| anyhow!("GetStdHandle failed: {e}"))?;
 
     // SAFETY: zeroed() is safe for STARTUPINFOW — all fields are
     // explicitly set below before the struct is passed to the API.
@@ -1136,10 +1152,8 @@ mod tests {
         let policy = SandboxPolicy::default();
         let sandbox = WindowsSandbox::new(&policy).expect("create sandbox");
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(sandbox.execute(
-            "cmd", "/c", "echo hello",
-            None, Duration::from_secs(10),
-        ));
+        let result =
+            rt.block_on(sandbox.execute("cmd", "/c", "echo hello", None, Duration::from_secs(10)));
         // On non-admin, try_full_sandbox fails → execute_fallback runs.
         // Either way the result should not panic.
         assert!(result.is_ok(), "expected ok but got: {:?}", result.err());

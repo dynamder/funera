@@ -401,7 +401,12 @@ async fn handle_turn_finish(
                 join_all(accums.iter().map(|acc| {
                     let args: JsonValue =
                         serde_json::from_str(&acc.args).unwrap_or(JsonValue::Null);
-                    tool_bus.execute(acc.call_id.clone(), acc.name.clone(), args)
+                    tool_bus.execute(
+                        acc.call_id.clone(),
+                        acc.name.clone(),
+                        args,
+                        Some(react_bus.clone()),
+                    )
                 }))
                 .await;
 

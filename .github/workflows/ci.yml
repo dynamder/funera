@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check --all
+
+  doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --no-deps --all-features
+
+  clippy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [funera_core, funera-orchestrate]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p ${{ matrix.crate }} --all-features -- -D warnings
+
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+
+  test-core:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - { name: default, flags: "" }
+          - { name: security, flags: "--features deepseek,tool,security" }
+          - { name: sec-mid, flags: "--features deepseek,tool,security,middleware" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --lib ${{ matrix.features.flags }} -p funera_core
+
+  test-orchestrate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - { name: minimal, flags: "--no-default-features --features deepseek" }
+          - { name: default, flags: "--features deepseek,tool" }
+          - { name: security, flags: "--features deepseek,tool,security" }
+          - { name: sec-mid, flags: "--features deepseek,tool,security,middleware" }
+          - { name: sec-sb, flags: "--features deepseek,tool,security,sandbox,funera-builtin-tools" }
+          - { name: all, flags: "--features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --lib ${{ matrix.features.flags }} -p funera-orchestrate
+
+  test-cross:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        crate:
+          - { name: funera_core, flags: "--all-features" }
+          - { name: funera-orchestrate, flags: "--features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --lib ${{ matrix.crate.flags }} -p ${{ matrix.crate.name }}

@@ -6,6 +6,7 @@ use std::time::Instant;
 use serde_json::Value as JsonValue;
 use tokio::sync::oneshot;
 
+use crate::event_bus::react_bus::{ReactBus, ReactEvent};
 use crate::re_act::tool::{RawToolRegistry, Tool, ToolCallError, ToolRegistryEntry};
 use crate::security::audit::{AuditBus, AuditEvent};
 use crate::security::boundary::BoundaryDecision;
@@ -25,6 +26,7 @@ pub struct GuardedToolRegistry {
     pending_approvals: std::sync::Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<bool>>>>,
     approval_timeout: Option<std::time::Duration>,
     approval_callback: Option<ApprovalCallback>,
+    react_bus: std::sync::Mutex<Option<ReactBus>>,
 }
 
 impl GuardedToolRegistry {
@@ -39,6 +41,7 @@ impl GuardedToolRegistry {
             pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             approval_timeout: None,
             approval_callback: None,
+            react_bus: std::sync::Mutex::new(None),
         }
     }
 
@@ -53,6 +56,7 @@ impl GuardedToolRegistry {
             pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             approval_timeout: None,
             approval_callback: None,
+            react_bus: std::sync::Mutex::new(None),
         }
     }
 
@@ -103,6 +107,11 @@ impl GuardedToolRegistry {
     /// The callback receives (call_id, tool_name, reason, paths).
     pub fn set_approval_callback(&mut self, cb: ApprovalCallback) {
         self.approval_callback = Some(cb);
+    }
+
+    /// Set the per-turn ReactBus used to broadcast approval events.
+    pub fn set_react_bus(&self, bus: Option<ReactBus>) {
+        *self.react_bus.lock().unwrap() = bus;
     }
 
     /// Approve or reject a tool call that is awaiting approval.
@@ -226,6 +235,15 @@ impl GuardedToolRegistry {
                 // Notify the approval callback, if registered.
                 if let Some(ref cb) = self.approval_callback {
                     cb(&call_id, name, &reason, &paths);
+                }
+                // Broadcast the approval request to the per-turn ReactBus.
+                if let Some(ref bus) = *self.react_bus.lock().unwrap() {
+                    let _ = bus.send(ReactEvent::ToolApprovalRequired {
+                        call_id: call_id.clone(),
+                        tool_name: name.to_string(),
+                        paths: paths.clone(),
+                        reason: reason.clone(),
+                    });
                 }
                 // Await the approval response.
                 let approved = match self.approval_timeout {

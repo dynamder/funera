@@ -4,37 +4,37 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{RwLock, broadcast, mpsc};
 use tokio::task::JoinHandle;
 
-#[cfg(feature = "sandbox")]
-use funera_core::security::sandbox::SandboxPolicy;
-#[cfg(feature = "security")]
-use funera_core::security::audit::{AuditBus, AuditEvent};
-#[cfg(feature = "security")]
-use funera_core::security::policy::ToolPolicy;
-#[cfg(feature = "security")]
-use funera_core::security::registry::ApprovalCallback;
-#[cfg(feature = "security")]
-use funera_core::security::secret::SecureApiKey;
-#[cfg(all(feature = "sandbox", feature = "security"))]
-use funera_core::security::path_guard::PathGuard;
-use funera_core::chat::session::{spawn_session_actor, SessionCmd};
 #[cfg(test)]
 use funera_core::chat::session::FuneraSession;
-#[cfg(feature = "deepseek")]
-use funera_core::provider::deepseek::DeepSeekProvider;
+use funera_core::chat::session::{SessionCmd, spawn_session_actor};
 use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "tool")]
 use funera_core::event_bus::tool_bus::ToolBus;
 use funera_core::provider::ChatProvider;
+#[cfg(feature = "deepseek")]
+use funera_core::provider::deepseek::DeepSeekProvider;
 #[cfg(feature = "skill")]
 use funera_core::re_act::skills::{Skill, SkillRegistry};
 #[cfg(feature = "tool")]
 use funera_core::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "tool")]
 use funera_core::re_act::tool_executor::ToolExecutor;
+#[cfg(feature = "security")]
+use funera_core::security::audit::{AuditBus, AuditEvent};
+#[cfg(all(feature = "sandbox", feature = "security"))]
+use funera_core::security::path_guard::PathGuard;
+#[cfg(feature = "security")]
+use funera_core::security::policy::ToolPolicy;
+#[cfg(feature = "security")]
+use funera_core::security::registry::ApprovalCallback;
+#[cfg(feature = "sandbox")]
+use funera_core::security::sandbox::SandboxPolicy;
+#[cfg(feature = "security")]
+use funera_core::security::secret::SecureApiKey;
 
 #[cfg(feature = "middleware")]
 use crate::event::AgentEvent;
@@ -292,23 +292,28 @@ impl AgentRuntimeBuilder {
         self
     }
 
-    /// Register a handler that fires when a tool call requires user approval.
+    /// Register a notification callback fired when a tool call requires user approval.
     ///
     /// When a tool call targets a path outside the [`PathGuard`] trusted zone but
     /// within the sandbox boundary, the registry pauses execution and invokes this
-    /// handler with `(call_id, tool_name, reason)`. The caller must call
-    /// [`GuardedToolRegistry::approve_tool_call`](funera_core::security::registry::GuardedToolRegistry::approve_tool_call)
-    /// to approve or reject the pending call.
+    /// callback with `(call_id, tool_name, reason)`. **This is a notification only — do not
+    /// call [`AgentRuntime::approve_tool_call`] inside this callback.** Instead, store the
+    /// call_id and call `approve_tool_call` from your own async context (e.g. a channel
+    /// receiver task or an event handler).
     ///
     /// Requires the `security` feature.
     #[cfg(feature = "security")]
-    pub fn with_approval_handler(
+    pub fn on_approval_required(
         mut self,
-        cb: impl Fn(String, String, String) + Send + Sync + 'static,
+        cb: impl Fn(Arc<str>, String, String) + Send + Sync + 'static,
     ) -> Self {
         self.approval_callback = Some(std::sync::Arc::new(
             move |call_id: &str, tool_name: &str, reason: &str, _paths: &[std::path::PathBuf]| {
-                cb(call_id.to_string(), tool_name.to_string(), reason.to_string());
+                cb(
+                    Arc::from(call_id),
+                    tool_name.to_string(),
+                    reason.to_string(),
+                );
             },
         ));
         self
@@ -337,7 +342,8 @@ impl AgentRuntimeBuilder {
         self.tools.push(Box::new(EditTool));
         #[cfg(feature = "sandbox")]
         if let Some(ref policy) = self.sandbox_policy {
-            self.tools.push(Box::new(ShellTool::with_sandbox(policy.clone())));
+            self.tools
+                .push(Box::new(ShellTool::with_sandbox(policy.clone())));
         } else {
             self.tools.push(Box::new(ShellTool::new()));
         }
@@ -376,7 +382,9 @@ impl AgentRuntimeBuilder {
                 .or_else(|| std::env::var("OPENAI_API_KEY").ok())
         };
         #[cfg(not(feature = "security"))]
-        let api_key = self.api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
+        let api_key = self
+            .api_key
+            .or_else(|| std::env::var("OPENAI_API_KEY").ok());
         let model = self
             .model
             .or_else(|| std::env::var("OPENAI_MODEL").ok())
@@ -440,16 +448,11 @@ impl AgentRuntimeBuilder {
                         .cloned()
                         .collect();
                     if !all_paths.is_empty() {
-                        let path_guard = PathGuard::new(
-                            all_paths.iter().map(|p| p.as_path()),
-                        );
+                        let path_guard = PathGuard::new(all_paths.iter().map(|p| p.as_path()));
                         reg.set_path_guard(path_guard);
                     }
                 }
-                reg.set_sandbox_paths(
-                    sp.read_paths.clone(),
-                    sp.read_write_paths.clone(),
-                );
+                reg.set_sandbox_paths(sp.read_paths.clone(), sp.read_write_paths.clone());
             }
 
             #[cfg(feature = "security")]
@@ -737,6 +740,21 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
     pub fn tool_policy(&self) -> &ToolPolicy {
         &self.tool_policy
     }
+
+    /// Approve or reject a pending tool call that is awaiting user approval.
+    ///
+    /// Call this from your async context (channel receiver, event handler) using
+    /// the `call_id` received via [`on_approval_required`] or
+    /// [`AgentEvent::ToolApprovalRequired`].
+    ///
+    /// Returns `Ok(())` if the approval was delivered, or `Err(String)` if no
+    /// pending approval was found for the given `call_id`.
+    #[cfg(all(feature = "tool", feature = "security"))]
+    pub fn approve_tool_call(&self, call_id: &str, approved: bool) -> Result<(), String> {
+        self.tool_registry()
+            .blocking_read()
+            .approve_tool_call(call_id, approved)
+    }
 }
 
 // ── Acquired → Idle ─────────────────────────────────────────
@@ -815,8 +833,7 @@ mod tests {
 
         #[test]
         fn builder_with_tool_instance() {
-            let b = AgentRuntimeBuilder::new()
-                .with_tool_instance(Box::new(MockTool));
+            let b = AgentRuntimeBuilder::new().with_tool_instance(Box::new(MockTool));
             assert_eq!(b.tools.len(), 1);
         }
 
@@ -854,8 +871,7 @@ mod tests {
 
         #[test]
         fn builder_with_skill_inline() {
-            let b = AgentRuntimeBuilder::new()
-                .with_skill("s1", "desc", "content");
+            let b = AgentRuntimeBuilder::new().with_skill("s1", "desc", "content");
             assert_eq!(b.skills.len(), 1);
             assert_eq!(b.skills[0].name, "s1");
             assert_eq!(b.skills[0].description, "desc");
@@ -1003,9 +1019,7 @@ mod tests {
             .model("x")
             .build()
             .unwrap();
-        let ctx = FuneraSession::new(rt.session_tx())
-            .session_context()
-            .await;
+        let ctx = FuneraSession::new(rt.session_tx()).session_context().await;
         assert!(ctx.is_empty());
     }
 
@@ -1019,7 +1033,10 @@ mod tests {
         let session = FuneraSession::new(rt.session_tx());
         session.push_message(FuneraMessage::new(
             Role::User,
-            MsgVariant::Text(TextMessage { text: "hi".into(), reasoning_content: None }),
+            MsgVariant::Text(TextMessage {
+                text: "hi".into(),
+                reasoning_content: None,
+            }),
         ));
         let ctx_before = session.session_context().await;
         assert_eq!(ctx_before.len(), 1);

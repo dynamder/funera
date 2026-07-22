@@ -58,6 +58,11 @@ impl InspectorMiddleware<AgentEvent> for EventLogger {
             AgentEvent::TurnEnd { .. } => eprintln!("[log] --- turn end ---"),
             AgentEvent::Done => eprintln!("[log] done"),
             AgentEvent::Error(e) => eprintln!("[log] error: {e}"),
+            AgentEvent::ToolApprovalRequired {
+                tool_name, reason, ..
+            } => {
+                eprintln!("[log] approval required: {tool_name} — {reason}")
+            }
         }
         Ok(())
     }
@@ -189,10 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 测试发送
     let (_runtime, response) = agent
-        .send(
-            "Say hello! Also, my password is 'my_secret_123'.",
-            runtime,
-        )
+        .send("Say hello! Also, my password is 'my_secret_123'.", runtime)
         .await?
         .await?;
     println!("Response: {}", response.content);

@@ -68,7 +68,9 @@ mod tests {
     use async_openai::types::chat::CreateChatCompletionStreamResponse;
 
     fn make_bus() -> TokenBus<CreateChatCompletionStreamResponse> {
-        let stream = Box::pin(futures::stream::empty::<Result<CreateChatCompletionStreamResponse, async_openai::error::OpenAIError>>());
+        let stream = Box::pin(futures::stream::empty::<
+            Result<CreateChatCompletionStreamResponse, async_openai::error::OpenAIError>,
+        >());
         TokenBus::new(stream)
     }
 
@@ -87,7 +89,9 @@ mod tests {
         let mut rx1 = bus.subscribe();
         let mut rx2 = bus.subscribe();
 
-        bus.send(TokenEvent::Text("broadcast".into())).await.unwrap();
+        bus.send(TokenEvent::Text("broadcast".into()))
+            .await
+            .unwrap();
         assert!(rx1.try_recv().is_ok());
         assert!(rx2.try_recv().is_ok());
     }
@@ -97,14 +101,22 @@ mod tests {
         let bus = make_bus();
         let mut rx = bus.subscribe();
 
-        bus.send(TokenEvent::Reasoning("thinking...".into())).await.unwrap();
-        bus.send(TokenEvent::Finish(async_openai::types::chat::FinishReason::Stop)).await.unwrap();
+        bus.send(TokenEvent::Reasoning("thinking...".into()))
+            .await
+            .unwrap();
+        bus.send(TokenEvent::Finish(
+            async_openai::types::chat::FinishReason::Stop,
+        ))
+        .await
+        .unwrap();
         bus.send(TokenEvent::ToolDelta {
             index: 0,
             call_id: "call_1".into(),
             name: Some("tool".into()),
             args_chunk: Some("{}".into()),
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         let events: Vec<TokenEvent> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
         assert_eq!(events.len(), 3);
@@ -116,11 +128,15 @@ mod tests {
     #[tokio::test]
     async fn token_bus_with_sender() {
         let (tx, _rx) = tokio::sync::broadcast::channel(50);
-        let stream = Box::pin(futures::stream::empty::<Result<CreateChatCompletionStreamResponse, async_openai::error::OpenAIError>>());
+        let stream = Box::pin(futures::stream::empty::<
+            Result<CreateChatCompletionStreamResponse, async_openai::error::OpenAIError>,
+        >());
         let bus = TokenBus::<CreateChatCompletionStreamResponse>::with_sender(tx, stream);
 
         let mut rx = bus.subscribe();
-        bus.send(TokenEvent::Text("custom sender".into())).await.unwrap();
+        bus.send(TokenEvent::Text("custom sender".into()))
+            .await
+            .unwrap();
         assert!(matches!(rx.try_recv(), Ok(TokenEvent::Text(t)) if t == "custom sender"));
     }
 }

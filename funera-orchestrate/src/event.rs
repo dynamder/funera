@@ -32,6 +32,11 @@ pub enum AgentEvent {
         finish_reason: Option<String>,
     },
     Error(String),
+    ToolApprovalRequired {
+        call_id: Arc<str>,
+        tool_name: String,
+        reason: String,
+    },
     Done,
 }
 

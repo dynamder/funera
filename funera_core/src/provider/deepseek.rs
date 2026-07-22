@@ -1,17 +1,17 @@
 use async_openai::{
+    Client,
     config::OpenAIConfig,
     error::OpenAIError,
     types::{
         chat::{ChatCompletionMessageToolCallChunk, FinishReason, Role},
         stream::StreamResponse,
     },
-    Client,
 };
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
 use crate::event_bus::token_bus::TokenEvent;
-use crate::provider::{build_standard_request_json, ChatProvider, StreamChunkExt};
+use crate::provider::{ChatProvider, StreamChunkExt, build_standard_request_json};
 
 #[derive(Debug, Deserialize)]
 pub struct Delta {
@@ -54,7 +54,10 @@ impl StreamChunkExt for StreamChunk {
             {
                 events.push(TokenEvent::Reasoning(reasoning.clone()));
             }
-            match (choice.delta.content.as_deref(), choice.delta.tool_calls.as_ref()) {
+            match (
+                choice.delta.content.as_deref(),
+                choice.delta.tool_calls.as_ref(),
+            ) {
                 (Some(text), Some(tool_calls)) => {
                     if !text.is_empty() {
                         events.push(TokenEvent::Text(text.to_string()));
@@ -113,7 +116,8 @@ impl ChatProvider for DeepSeekProvider {
                 let msg = &msgs[i];
                 let role = msg["role"].as_str().unwrap_or("");
 
-                if role == "assistant" && msg.get("tool_calls").and_then(|t| t.as_array()).is_some() {
+                if role == "assistant" && msg.get("tool_calls").and_then(|t| t.as_array()).is_some()
+                {
                     let mut combined_calls = Vec::new();
                     let mut reasoning = None;
 
@@ -128,7 +132,10 @@ impl ChatProvider for DeepSeekProvider {
                             combined_calls.extend(calls.iter().cloned());
                         }
                         if reasoning.is_none() {
-                            reasoning = cur.get("reasoning_content").and_then(|r| r.as_str()).map(|s| s.to_string());
+                            reasoning = cur
+                                .get("reasoning_content")
+                                .and_then(|r| r.as_str())
+                                .map(|s| s.to_string());
                         }
                         i += 1;
                     }
@@ -146,9 +153,12 @@ impl ChatProvider for DeepSeekProvider {
                     let mut m = msg.clone();
                     if role == "assistant"
                         && let Some(arr) = m.get("tool_calls").and_then(|t| t.as_array())
-                        && !arr.is_empty() && !m.as_object().unwrap().contains_key("content")
+                        && !arr.is_empty()
+                        && !m.as_object().unwrap().contains_key("content")
                     {
-                        m.as_object_mut().unwrap().insert("content".into(), JsonValue::Null);
+                        m.as_object_mut()
+                            .unwrap()
+                            .insert("content".into(), JsonValue::Null);
                     }
                     merged.push(m);
                     i += 1;
@@ -193,7 +203,11 @@ mod tests {
         ];
         let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
         let msgs_out = result["messages"].as_array().unwrap();
-        assert_eq!(msgs_out.len(), 5, "expected 5: user + 1 merged assistant + 3 tool");
+        assert_eq!(
+            msgs_out.len(),
+            5,
+            "expected 5: user + 1 merged assistant + 3 tool"
+        );
         assert_eq!(msgs_out[0]["role"], "user");
         assert_eq!(msgs_out[1]["role"], "assistant");
         let calls = msgs_out[1]["tool_calls"].as_array().unwrap();
@@ -219,7 +233,10 @@ mod tests {
         ];
         let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
         let msgs_out = result["messages"].as_array().unwrap();
-        assert_eq!(msgs_out[1]["reasoning_content"].as_str().unwrap(), "Let me think...");
+        assert_eq!(
+            msgs_out[1]["reasoning_content"].as_str().unwrap(),
+            "Let me think..."
+        );
         assert_eq!(msgs_out[1]["tool_calls"].as_array().unwrap().len(), 2);
     }
 

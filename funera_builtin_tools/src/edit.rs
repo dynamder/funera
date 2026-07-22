@@ -3,7 +3,7 @@ use std::path::Path;
 use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use serde::Deserialize;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 
 use crate::hashline;
 
@@ -58,11 +58,7 @@ impl EditTool {
         Some((line_num, hash))
     }
 
-    fn verify_anchor(
-        line_num: usize,
-        expected_hash: &str,
-        lines: &[String],
-    ) -> Result<(), String> {
+    fn verify_anchor(line_num: usize, expected_hash: &str, lines: &[String]) -> Result<(), String> {
         let idx = line_num.saturating_sub(1);
         if idx >= lines.len() {
             return Err(format!(
@@ -71,7 +67,11 @@ impl EditTool {
                 lines.len()
             ));
         }
-        let prev = if idx > 0 { &lines[idx - 1] } else { &String::new() };
+        let prev = if idx > 0 {
+            &lines[idx - 1]
+        } else {
+            &String::new()
+        };
         let curr = &lines[idx];
         let next = if idx + 1 < lines.len() {
             &lines[idx + 1]
@@ -119,22 +119,21 @@ impl EditTool {
                     ops.push((0, edit));
                 }
                 _ => {
-                    let pos = edit.pos.as_deref().ok_or_else(|| {
-                        "[E_INVALID_PATCH] edit requires pos anchor".to_string()
-                    })?;
+                    let pos = edit
+                        .pos
+                        .as_deref()
+                        .ok_or_else(|| "[E_INVALID_PATCH] edit requires pos anchor".to_string())?;
                     let (line_num, hash) = Self::parse_anchor(pos)
                         .ok_or_else(|| format!("[E_INVALID_PATCH] invalid anchor: {}", pos))?;
                     Self::verify_anchor(line_num, &hash, &lines)?;
                     if let Some(end_anchor) = &edit.end {
-                        let (end_line, end_hash) = Self::parse_anchor(end_anchor)
-                            .ok_or_else(|| {
+                        let (end_line, end_hash) =
+                            Self::parse_anchor(end_anchor).ok_or_else(|| {
                                 format!("[E_INVALID_PATCH] invalid end anchor: {}", end_anchor)
                             })?;
                         Self::verify_anchor(end_line, &end_hash, &lines)?;
                         if end_line < line_num {
-                            return Err(
-                                "[E_INVALID_PATCH] end line before start line".to_string()
-                            );
+                            return Err("[E_INVALID_PATCH] end line before start line".to_string());
                         }
                     }
                     ops.push((line_num, edit));
@@ -191,10 +190,7 @@ impl EditTool {
         Ok(lines.join("\n") + file_end)
     }
 
-    fn build_result_anchors(
-        new_content: &str,
-        edits: &[Edit],
-    ) -> String {
+    fn build_result_anchors(new_content: &str, edits: &[Edit]) -> String {
         let new_lines: Vec<&str> = new_content.lines().collect();
 
         let mut affected_range = None;
@@ -307,17 +303,24 @@ impl Tool for EditTool {
     }
 
     async fn execute(&self, args: JsonValue) -> Result<String, ToolCallError> {
-        let file_path = args.get("filePath").and_then(|v| v.as_str()).ok_or_else(|| {
-            ToolCallError::ParameterMismatch(json!({"error": "missing filePath"}))
-        })?;
-
-        let edits: Vec<Edit> = serde_json::from_value(args.get("edits").cloned().unwrap_or_default())
-            .map_err(|e| {
-                ToolCallError::ParameterMismatch(json!({"error": format!("invalid edits: {}", e)}))
+        let file_path = args
+            .get("filePath")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| {
+                ToolCallError::ParameterMismatch(json!({"error": "missing filePath"}))
             })?;
 
+        let edits: Vec<Edit> = serde_json::from_value(
+            args.get("edits").cloned().unwrap_or_default(),
+        )
+        .map_err(|e| {
+            ToolCallError::ParameterMismatch(json!({"error": format!("invalid edits: {}", e)}))
+        })?;
+
         if edits.is_empty() {
-            return Err(ToolCallError::ParameterMismatch(json!({"error": "no edits provided"})));
+            return Err(ToolCallError::ParameterMismatch(
+                json!({"error": "no edits provided"}),
+            ));
         }
 
         let path = Path::new(file_path);
@@ -334,10 +337,11 @@ impl Tool for EditTool {
                         let after_hash = parts[1];
                         if after_hash.len() >= 2 {
                             let hash_chars: Vec<char> = after_hash.chars().collect();
-                            if hash_chars[0].is_ascii_uppercase() && hash_chars[1].is_ascii_uppercase()
+                            if hash_chars[0].is_ascii_uppercase()
+                                && hash_chars[1].is_ascii_uppercase()
                             {
                                 return Err(ToolCallError::ParameterMismatch(
-                                    json!({"error": "[E_INVALID_PATCH] line contains LINE#HASH prefix"})
+                                    json!({"error": "[E_INVALID_PATCH] line contains LINE#HASH prefix"}),
                                 ));
                             }
                         }
@@ -346,9 +350,8 @@ impl Tool for EditTool {
             }
         }
 
-        let new_content = Self::apply_ops(&content, &edits).map_err(|e| {
-            ToolCallError::ToolExecutionError(anyhow::anyhow!("{}", e))
-        })?;
+        let new_content = Self::apply_ops(&content, &edits)
+            .map_err(|e| ToolCallError::ToolExecutionError(anyhow::anyhow!("{}", e)))?;
 
         let changed = new_content != content;
         if !changed {
@@ -363,9 +366,11 @@ impl Tool for EditTool {
             path.file_name().unwrap_or_default().to_string_lossy()
         ));
 
-        tokio::fs::write(&temp_file, &new_content).await.map_err(|e| {
-            ToolCallError::ToolExecutionError(anyhow::anyhow!("cannot write temp file: {}", e))
-        })?;
+        tokio::fs::write(&temp_file, &new_content)
+            .await
+            .map_err(|e| {
+                ToolCallError::ToolExecutionError(anyhow::anyhow!("cannot write temp file: {}", e))
+            })?;
 
         tokio::fs::rename(&temp_file, path).await.map_err(|e| {
             #[allow(clippy::let_underscore_future)]
@@ -391,7 +396,13 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn make_edit(op: &str, pos: Option<&str>, lines: Vec<&str>, old_text: Option<&str>, new_text: Option<&str>) -> Edit {
+    fn make_edit(
+        op: &str,
+        pos: Option<&str>,
+        lines: Vec<&str>,
+        old_text: Option<&str>,
+        new_text: Option<&str>,
+    ) -> Edit {
         Edit {
             operation: serde_json::from_value(json!(op)).unwrap(),
             pos: pos.map(|s| s.to_string()),
@@ -420,9 +431,17 @@ mod tests {
 
     fn compute_line_anchor(lines: &[String], line_num: usize) -> String {
         let idx = line_num.saturating_sub(1);
-        let prev = if idx > 0 { &lines[idx - 1] } else { &String::new() };
+        let prev = if idx > 0 {
+            &lines[idx - 1]
+        } else {
+            &String::new()
+        };
         let curr = &lines[idx];
-        let next = if idx + 1 < lines.len() { &lines[idx + 1] } else { &String::new() };
+        let next = if idx + 1 < lines.len() {
+            &lines[idx + 1]
+        } else {
+            &String::new()
+        };
         hashline::compute_anchor(prev, curr, next)
     }
 
@@ -482,7 +501,13 @@ mod tests {
     fn replace_single_line() {
         let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
         let hash = compute_line_anchor(&lines, 2);
-        let edit = make_edit("replace", Some(&format!("2#{}", hash)), vec!["x", "y"], None, None);
+        let edit = make_edit(
+            "replace",
+            Some(&format!("2#{}", hash)),
+            vec!["x", "y"],
+            None,
+            None,
+        );
         let result = EditTool::apply_ops("a\nb\nc", &[edit]).unwrap();
         assert_eq!(result, "a\nx\ny\nc");
     }
@@ -493,7 +518,13 @@ mod tests {
     fn append_after_line() {
         let lines: Vec<String> = vec!["a".into(), "b".into()];
         let hash = compute_line_anchor(&lines, 1);
-        let edit = make_edit("append", Some(&format!("1#{}", hash)), vec!["x"], None, None);
+        let edit = make_edit(
+            "append",
+            Some(&format!("1#{}", hash)),
+            vec!["x"],
+            None,
+            None,
+        );
         let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
         assert_eq!(result, "a\nx\nb");
     }
@@ -502,7 +533,13 @@ mod tests {
     fn append_at_end() {
         let lines: Vec<String> = vec!["a".into(), "b".into()];
         let hash = compute_line_anchor(&lines, 2);
-        let edit = make_edit("append", Some(&format!("2#{}", hash)), vec!["c"], None, None);
+        let edit = make_edit(
+            "append",
+            Some(&format!("2#{}", hash)),
+            vec!["c"],
+            None,
+            None,
+        );
         let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
         assert_eq!(result, "a\nb\nc");
     }
@@ -513,7 +550,13 @@ mod tests {
     fn prepend_before_line() {
         let lines: Vec<String> = vec!["a".into(), "b".into()];
         let hash = compute_line_anchor(&lines, 2);
-        let edit = make_edit("prepend", Some(&format!("2#{}", hash)), vec!["x"], None, None);
+        let edit = make_edit(
+            "prepend",
+            Some(&format!("2#{}", hash)),
+            vec!["x"],
+            None,
+            None,
+        );
         let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
         assert_eq!(result, "a\nx\nb");
     }
@@ -576,14 +619,16 @@ mod tests {
         let hash = compute_line_anchor(&lines, 2);
 
         let tool = EditTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "edits": [{
-                "op": "replace",
-                "pos": format!("2#{}", hash),
-                "lines": ["modified!"]
-            }]
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{
+                    "op": "replace",
+                    "pos": format!("2#{}", hash),
+                    "lines": ["modified!"]
+                }]
+            }))
+            .await;
         assert!(result.is_ok(), "replace failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "line1\nmodified!\nline3\n");
@@ -594,14 +639,16 @@ mod tests {
     async fn edit_execute_replace_text() {
         let path = write_test_file("replacetext", "exec_replacetext.txt", "hello world\n").await;
         let tool = EditTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "edits": [{
-                "op": "replace_text",
-                "oldText": "hello",
-                "newText": "hi"
-            }]
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{
+                    "op": "replace_text",
+                    "oldText": "hello",
+                    "newText": "hi"
+                }]
+            }))
+            .await;
         assert!(result.is_ok(), "replace_text failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "hi world\n");
@@ -611,10 +658,12 @@ mod tests {
     #[tokio::test]
     async fn edit_execute_missing_file() {
         let tool = EditTool;
-        let result = tool.execute(json!({
-            "filePath": "C:\\nonexistent_edit_test_file_xyz.txt",
-            "edits": [{"op": "replace", "pos": "1#KT", "lines": ["x"]}]
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": "C:\\nonexistent_edit_test_file_xyz.txt",
+                "edits": [{"op": "replace", "pos": "1#KT", "lines": ["x"]}]
+            }))
+            .await;
         assert!(result.is_err());
     }
 
@@ -633,10 +682,12 @@ mod tests {
     async fn edit_execute_noop_loop() {
         let path = write_test_file("noop", "noop.txt", "hello\n").await;
         let tool = EditTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "edits": [{"op": "replace_text", "oldText": "hello", "newText": "hello"}]
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{"op": "replace_text", "oldText": "hello", "newText": "hello"}]
+            }))
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("NOOP_LOOP"));
         cleanup("noop").await;
@@ -650,10 +701,12 @@ mod tests {
         let hash = compute_line_anchor(&lines, 2);
 
         let tool = EditTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "edits": [{"op": "append", "pos": format!("2#{}", hash), "lines": ["c"]}]
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{"op": "append", "pos": format!("2#{}", hash), "lines": ["c"]}]
+            }))
+            .await;
         assert!(result.is_ok(), "append failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "a\nb\nc\n");
@@ -675,10 +728,12 @@ mod tests {
         let hash = compute_line_anchor(&lines, 1);
 
         let tool = EditTool;
-        let result = tool.execute(json!({
-            "filePath": path.to_string_lossy(),
-            "edits": [{"op": "prepend", "pos": format!("1#{}", hash), "lines": ["a"]}]
-        })).await;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{"op": "prepend", "pos": format!("1#{}", hash), "lines": ["a"]}]
+            }))
+            .await;
         assert!(result.is_ok(), "prepend failed: {:?}", result.err());
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "a\nb\nc\n");

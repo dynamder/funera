@@ -1,6 +1,7 @@
 use serde_json::Value as JsonValue;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::event_bus::react_bus::ReactBus;
 use crate::re_act::tool::ToolCallError;
 
 pub struct ToolExecCommand {
@@ -8,6 +9,7 @@ pub struct ToolExecCommand {
     pub name: String,
     pub args: JsonValue,
     pub resp_tx: oneshot::Sender<Result<String, ToolCallError>>,
+    pub react_bus: Option<ReactBus>,
 }
 
 #[derive(Clone)]
@@ -26,6 +28,7 @@ impl ToolBus {
         call_id: String,
         name: String,
         args: JsonValue,
+        react_bus: Option<ReactBus>,
     ) -> Result<String, ToolCallError> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.exec_tx
@@ -34,6 +37,7 @@ impl ToolBus {
                 name,
                 args,
                 resp_tx,
+                react_bus,
             })
             .await
             .map_err(|_| ToolCallError::ToolExecutionError(anyhow::anyhow!("tool bus closed")))?;

@@ -192,7 +192,9 @@ pub use funera_core::security::policy::{PolicyError, ShellPolicy, ToolPolicy};
 
 // Re-export core event types for direct access
 pub use funera_core::event_bus::env_state_bus::EnvStateEvent;
-pub use funera_core::event_bus::react_bus::{ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
+pub use funera_core::event_bus::react_bus::{
+    ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse,
+};
 pub use funera_core::event_bus::token_bus::TokenEvent;
 
 /// Middleware 相关的类型和 trait。
@@ -209,6 +211,6 @@ pub use funera_core::event_bus::token_bus::TokenEvent;
 /// ```
 #[cfg(feature = "middleware")]
 pub mod middleware {
-    pub use funera_core::middleware::*;
     pub use crate::middleware_bundle::MiddlewareBundle;
+    pub use funera_core::middleware::*;
 }

@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
 
-#[cfg(feature = "tool")]
-use crate::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "skill")]
 use crate::re_act::skills::{Skill, SkillRegistry};
+#[cfg(feature = "tool")]
+use crate::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "sandbox")]
 use crate::security::sandbox::SandboxPolicy;
 use serde_json::Value as JsonValue;
 use tokio::sync::{
-    watch::{self, error::RecvError},
     RwLock,
+    watch::{self, error::RecvError},
 };
 
 pub struct FuneraEnv {
@@ -92,10 +92,7 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub fn with_tool_registry(
-        self,
-        tool_registry: ToolRegistry,
-    ) -> Self {
+    pub fn with_tool_registry(self, tool_registry: ToolRegistry) -> Self {
         let snapshot = tool_registry.available_tools_json();
         let _ = self.tool_tx.send(snapshot);
         Self {
@@ -105,10 +102,7 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub fn with_skill_registry(
-        self,
-        skill_registry: SkillRegistry,
-    ) -> Self {
+    pub fn with_skill_registry(self, skill_registry: SkillRegistry) -> Self {
         let prompt = skill_registry.get_active_skills_prompt();
         let _ = self.skill_tx.send(prompt);
         Self {

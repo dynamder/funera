@@ -1,15 +1,12 @@
 use async_openai::{
+    Client,
     config::OpenAIConfig,
     error::OpenAIError,
-    types::{
-        chat::CreateChatCompletionStreamResponse,
-        stream::StreamResponse,
-    },
-    Client,
+    types::{chat::CreateChatCompletionStreamResponse, stream::StreamResponse},
 };
 use serde_json::Value as JsonValue;
 
-use crate::provider::{build_standard_request_json, ChatProvider};
+use crate::provider::{ChatProvider, build_standard_request_json};
 
 pub struct OpenAIProvider;
 

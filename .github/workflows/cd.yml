@@ -1,0 +1,93 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump level'
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install cargo-release
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-release
+
+      - name: Bump version
+        run: cargo release ${{ inputs.bump }} --execute --no-confirm
+
+      - name: Verify formatting
+        run: cargo fmt --check --all
+
+      - name: Run clippy
+        run: cargo clippy --all-features -- -D warnings
+
+      - name: Test funera_core
+        run: cargo test --lib --all-features -p funera_core
+
+      - name: Test funera-orchestrate
+        run: cargo test --lib --features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools -p funera-orchestrate
+
+      - name: Build docs
+        run: cargo doc --no-deps --all-features
+
+      - name: Semver check
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+
+      - name: Push tag
+        run: git push origin main --follow-tags
+
+      - name: Publish funera_core
+        run: cargo publish -p funera_core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish funera_builtin_tools
+        run: |
+          sleep 15
+          cargo publish -p funera_builtin_tools --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish funera-orchestrate
+        run: |
+          sleep 15
+          cargo publish -p funera-orchestrate --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish funera (root crate)
+        run: |
+          sleep 15
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Create GitHub Release
+        run: |
+          VERSION=$(grep '^version' funera_core/Cargo.toml | head -1 | cut -d'"' -f2)
+          git fetch --tags
+          gh release create "v$VERSION" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

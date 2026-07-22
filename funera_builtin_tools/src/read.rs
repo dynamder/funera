@@ -2,7 +2,7 @@ use std::path::Path;
 
 use async_trait::async_trait;
 use funera_core::re_act::tool::{Tool, ToolCallError};
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 
 use crate::hashline;
 
@@ -63,7 +63,11 @@ impl Tool for ReadTool {
                 ToolCallError::ParameterMismatch(json!({"error": "missing filePath"}))
             })?;
 
-        let offset = args.get("offset").and_then(|v| v.as_i64()).unwrap_or(1).max(1) as usize;
+        let offset = args
+            .get("offset")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(1)
+            .max(1) as usize;
         let limit = args.get("limit").and_then(|v| v.as_i64());
         let raw = args.get("raw").and_then(|v| v.as_bool()).unwrap_or(false);
         let path = Path::new(file_path);
@@ -114,7 +118,11 @@ impl Tool for ReadTool {
         for i in start..end {
             let prev = if i > 0 { lines[i - 1] } else { "" };
             let curr = lines[i];
-            let next = if i + 1 < total_lines { lines[i + 1] } else { "" };
+            let next = if i + 1 < total_lines {
+                lines[i + 1]
+            } else {
+                ""
+            };
             let anchor = hashline::compute_anchor(prev, curr, next);
             output.push_str(&hashline::format_line_trimmed(i + 1, &anchor, curr));
             output.push('\n');
@@ -159,7 +167,9 @@ mod tests {
     #[tokio::test]
     async fn read_nonexistent_file() {
         let tool = ReadTool;
-        let result = tool.execute(json!({"filePath": "C:\\nonexistent_file_xyz\\test.txt"})).await;
+        let result = tool
+            .execute(json!({"filePath": "C:\\nonexistent_file_xyz\\test.txt"}))
+            .await;
         assert!(result.is_err());
     }
 
@@ -167,7 +177,9 @@ mod tests {
     async fn read_simple_file() {
         let path = setup_file("simple", "simple.txt", "hello\nworld\n").await;
         let tool = ReadTool;
-        let result = tool.execute(json!({"filePath": path.to_string_lossy()})).await;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy()}))
+            .await;
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("hello"));
@@ -180,7 +192,9 @@ mod tests {
     async fn read_raw_mode() {
         let path = setup_file("raw", "raw_test.txt", "line1\nline2\nline3\n").await;
         let tool = ReadTool;
-        let result = tool.execute(json!({"filePath": path.to_string_lossy(), "raw": true})).await;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy(), "raw": true}))
+            .await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "line1\nline2\nline3");
         cleanup("raw").await;
@@ -190,9 +204,9 @@ mod tests {
     async fn read_with_offset() {
         let path = setup_file("offset", "offset.txt", "a\nb\nc\nd\n").await;
         let tool = ReadTool;
-        let result = tool.execute(
-            json!({"filePath": path.to_string_lossy(), "offset": 3})
-        ).await;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy(), "offset": 3}))
+            .await;
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(!output.contains("a"));
@@ -205,9 +219,9 @@ mod tests {
     async fn read_with_limit() {
         let path = setup_file("limit", "limit.txt", "1\n2\n3\n4\n5\n").await;
         let tool = ReadTool;
-        let result = tool.execute(
-            json!({"filePath": path.to_string_lossy(), "limit": 2})
-        ).await;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy(), "limit": 2}))
+            .await;
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("1"));
@@ -220,7 +234,9 @@ mod tests {
     async fn read_empty_file() {
         let path = setup_file("empty", "empty.txt", "").await;
         let tool = ReadTool;
-        let result = tool.execute(json!({"filePath": path.to_string_lossy()})).await;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy()}))
+            .await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("empty file"));
         cleanup("empty").await;
@@ -233,7 +249,9 @@ mod tests {
         tokio::fs::write(dir.join("a.txt"), "").await.unwrap();
         tokio::fs::write(dir.join("b.txt"), "").await.unwrap();
         let tool = ReadTool;
-        let result = tool.execute(json!({"filePath": dir.to_string_lossy()})).await;
+        let result = tool
+            .execute(json!({"filePath": dir.to_string_lossy()}))
+            .await;
         assert!(result.is_ok());
         let output = result.unwrap();
         assert!(output.contains("a.txt"));

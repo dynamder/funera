@@ -426,7 +426,8 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
     ///
     /// 每个 `with_mutator` 调用创建一个新层。同一层内的 mutator 按顺序执行。
     pub fn with_mutator(mut self, m: impl MutatorMiddleware<Evt> + 'static) -> Self {
-        self.layers.push(MiddlewareLayer::Mutator(vec![Arc::new(m)]));
+        self.layers
+            .push(MiddlewareLayer::Mutator(vec![Arc::new(m)]));
         self
     }
 
@@ -506,11 +507,7 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
         Ok(current)
     }
 
-    fn run_inspectors(
-        &self,
-        inspectors: &[Arc<dyn InspectorMiddleware<Evt>>],
-        event: Evt,
-    ) -> Evt {
+    fn run_inspectors(&self, inspectors: &[Arc<dyn InspectorMiddleware<Evt>>], event: Evt) -> Evt {
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             for insp in inspectors {
                 let name = insp.name().to_string();
@@ -620,11 +617,7 @@ pub trait MiddlewareEvent: Clone + Send + 'static {
     fn tool_call_request(call_id: Arc<str>, name: String, args: JsonValue) -> Self;
 
     /// Factory：单个工具执行结果。
-    fn tool_response(
-        call_id: Arc<str>,
-        name: String,
-        result: Result<String, Self::Error>,
-    ) -> Self;
+    fn tool_response(call_id: Arc<str>, name: String, result: Result<String, Self::Error>) -> Self;
 
     /// Factory：turn 开始。
     fn turn_start() -> Self;
@@ -722,24 +715,25 @@ mod tests {
 
     #[test]
     fn pass_then_modify() {
-        let chain = MiddlewareChain::<String>::new()
-            .with_mutators((PassMutator, UpperMutator));
+        let chain = MiddlewareChain::<String>::new().with_mutators((PassMutator, UpperMutator));
         let result = chain.process("hello".into()).unwrap();
         assert_eq!(result, "HELLO");
     }
 
     #[test]
     fn modify_then_block() {
-        let chain = MiddlewareChain::<String>::new()
-            .with_mutators((UpperMutator, BlockMutator));
+        let chain = MiddlewareChain::<String>::new().with_mutators((UpperMutator, BlockMutator));
         let err = chain.process("hello".into()).unwrap_err();
         assert_eq!(err.middleware_name, "blocker");
     }
 
     #[test]
     fn tuple_arity_3() {
-        let chain = MiddlewareChain::<String>::new()
-            .with_mutators((UpperMutator, PassMutator, PassMutator));
+        let chain = MiddlewareChain::<String>::new().with_mutators((
+            UpperMutator,
+            PassMutator,
+            PassMutator,
+        ));
         let result = chain.process("hello".into()).unwrap();
         assert_eq!(result, "HELLO");
     }
@@ -761,15 +755,14 @@ mod tests {
 
     #[test]
     fn with_inspectors_tuple() {
-        let chain = MiddlewareChain::<String>::new()
-            .with_inspectors((NoopInspector, NoopInspector));
+        let chain =
+            MiddlewareChain::<String>::new().with_inspectors((NoopInspector, NoopInspector));
         assert_eq!(chain.len(), 1);
     }
 
     #[test]
     fn single_inspector_tuple() {
-        let chain = MiddlewareChain::<String>::new()
-            .with_inspectors((NoopInspector,));
+        let chain = MiddlewareChain::<String>::new().with_inspectors((NoopInspector,));
         assert_eq!(chain.len(), 1);
     }
 
@@ -779,8 +772,7 @@ mod tests {
             .build()
             .unwrap();
         rt.block_on(async {
-            let chain = MiddlewareChain::<String>::new()
-                .with_inspector(NoopInspector);
+            let chain = MiddlewareChain::<String>::new().with_inspector(NoopInspector);
             let result = chain.process("hi".into()).unwrap();
             assert_eq!(result, "hi");
         });

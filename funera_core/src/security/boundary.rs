@@ -123,44 +123,78 @@ mod tests {
         #[test]
         fn auto_approved_within_pathguard() {
             let guard = guard_with_root(".");
-            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml")], Some(&guard), true, always_inside);
+            let d = check_boundary(
+                "tool",
+                &[PathBuf::from("Cargo.toml")],
+                Some(&guard),
+                true,
+                always_inside,
+            );
             assert_eq!(d, BoundaryDecision::AutoApproved);
         }
 
         #[test]
         fn auto_approved_sandbox_disabled_in_guard() {
             let guard = guard_with_root(".");
-            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml")], Some(&guard), false, always_inside);
+            let d = check_boundary(
+                "tool",
+                &[PathBuf::from("Cargo.toml")],
+                Some(&guard),
+                false,
+                always_inside,
+            );
             assert_eq!(d, BoundaryDecision::AutoApproved);
         }
 
         #[test]
         fn requires_approval_outside_guard_sandbox_off() {
             let guard = guard_with_root("src");
-            let d = check_boundary("tool", &[PathBuf::from("/nonexistent")], Some(&guard), false, always_inside);
+            let d = check_boundary(
+                "tool",
+                &[PathBuf::from("/nonexistent")],
+                Some(&guard),
+                false,
+                always_inside,
+            );
             assert!(matches!(d, BoundaryDecision::RequiresApproval { .. }));
         }
 
         #[test]
         fn requires_approval_inside_sandbox_outside_guard() {
             let guard = guard_with_root("src");
-            let d = check_boundary("tool", &[PathBuf::from("/nonexistent")], Some(&guard), true, always_inside);
+            let d = check_boundary(
+                "tool",
+                &[PathBuf::from("/nonexistent")],
+                Some(&guard),
+                true,
+                always_inside,
+            );
             assert!(matches!(d, BoundaryDecision::RequiresApproval { .. }));
         }
 
         #[test]
         fn rejected_outside_sandbox() {
             let guard = guard_with_root(".");
-            let d = check_boundary("tool", &[PathBuf::from("/etc")], Some(&guard), true, never_inside);
+            let d = check_boundary(
+                "tool",
+                &[PathBuf::from("/etc")],
+                Some(&guard),
+                true,
+                never_inside,
+            );
             assert!(matches!(d, BoundaryDecision::Rejected { .. }));
         }
 
         #[test]
         fn rejected_multiple_paths_one_outside() {
             let guard = guard_with_root(".");
-            let d = check_boundary("tool", &[PathBuf::from("Cargo.toml"), PathBuf::from("/etc")], Some(&guard), true, |p| {
-                p.to_string_lossy().contains("Cargo")
-            });
+            let d = check_boundary(
+                "tool",
+                &[PathBuf::from("Cargo.toml"), PathBuf::from("/etc")],
+                Some(&guard),
+                true,
+                |p| p.to_string_lossy().contains("Cargo"),
+            );
             assert!(matches!(d, BoundaryDecision::Rejected { .. }));
         }
     }

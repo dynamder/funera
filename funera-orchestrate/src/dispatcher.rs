@@ -3,6 +3,8 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
+#[cfg(feature = "security")]
+use funera_core::event_bus::react_bus::ReactEvent;
 
 use crate::event::{AgentEvent, RawAgentEvent};
 
@@ -77,16 +79,36 @@ impl CallbackDispatcher {
     ) {
         loop {
             match rx.recv().await {
-                Ok(EnvStateEvent::PerTurnBusReady {
-                    token_tx,
-                    react_tx,
-                }) => {
+                Ok(EnvStateEvent::PerTurnBusReady { token_tx, react_tx }) => {
                     let _ = raw_event_tx.send(RawAgentEvent::EnvState(
                         EnvStateEvent::PerTurnBusReady {
                             token_tx,
-                            react_tx,
+                            react_tx: react_tx.clone(),
                         },
                     ));
+
+                    #[cfg(all(feature = "tool", feature = "security"))]
+                    {
+                        let event_tx = event_tx.clone();
+                        let mut react_rx = react_tx.subscribe();
+                        tokio::spawn(async move {
+                            while let Ok(event) = react_rx.recv().await {
+                                if let ReactEvent::ToolApprovalRequired {
+                                    call_id,
+                                    tool_name,
+                                    reason,
+                                    ..
+                                } = event
+                                {
+                                    let _ = event_tx.send(AgentEvent::ToolApprovalRequired {
+                                        call_id: Arc::from(call_id.as_str()),
+                                        tool_name,
+                                        reason,
+                                    });
+                                }
+                            }
+                        });
+                    }
                 }
                 Ok(EnvStateEvent::SessionClosed) => {
                     let _ =
@@ -145,11 +167,15 @@ mod tests {
         let c2 = Arc::new(AtomicUsize::new(0));
         {
             let c = c1.clone();
-            r.add(Arc::new(move |_| { c.fetch_add(1, Ordering::SeqCst); }));
+            r.add(Arc::new(move |_| {
+                c.fetch_add(1, Ordering::SeqCst);
+            }));
         }
         {
             let c = c2.clone();
-            r.add(Arc::new(move |_| { c.fetch_add(1, Ordering::SeqCst); }));
+            r.add(Arc::new(move |_| {
+                c.fetch_add(1, Ordering::SeqCst);
+            }));
         }
         r.dispatch(AgentEvent::Done);
         assert_eq!(c1.load(Ordering::SeqCst), 1);
@@ -189,15 +215,21 @@ mod tests {
         let c = Arc::new(AtomicUsize::new(0));
         {
             let cnt = c.clone();
-            r1.add(Arc::new(move |_| { cnt.fetch_add(1, Ordering::SeqCst); }));
+            r1.add(Arc::new(move |_| {
+                cnt.fetch_add(1, Ordering::SeqCst);
+            }));
         }
         {
             let cnt = c.clone();
-            r2.add(Arc::new(move |_| { cnt.fetch_add(1, Ordering::SeqCst); }));
+            r2.add(Arc::new(move |_| {
+                cnt.fetch_add(1, Ordering::SeqCst);
+            }));
         }
         {
             let cnt = c.clone();
-            r2.add(Arc::new(move |_| { cnt.fetch_add(1, Ordering::SeqCst); }));
+            r2.add(Arc::new(move |_| {
+                cnt.fetch_add(1, Ordering::SeqCst);
+            }));
         }
         r1.combine(r2);
         r1.dispatch(AgentEvent::Done);
@@ -221,6 +253,9 @@ mod tests {
         assert!(matches!(got, Ok(Ok(AgentEvent::Done))));
 
         let raw = tokio::time::timeout(std::time::Duration::from_secs(1), raw_rx.recv()).await;
-        assert!(matches!(raw, Ok(Ok(RawAgentEvent::EnvState(EnvStateEvent::SessionClosed)))));
+        assert!(matches!(
+            raw,
+            Ok(Ok(RawAgentEvent::EnvState(EnvStateEvent::SessionClosed)))
+        ));
     }
 }
