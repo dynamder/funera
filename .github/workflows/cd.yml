@@ -52,7 +52,7 @@ jobs:
         run: cargo clippy --all-features -- -D warnings
 
       - name: Test funera_core
-        run: cargo test --lib --all-features -p funera_core
+        run: cargo test --lib --all-features -p funera-core
 
       - name: Test funera-orchestrate
         run: cargo test --lib --features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools -p funera-orchestrate
@@ -67,12 +67,12 @@ jobs:
         run: git push origin main --follow-tags
 
       - name: Publish funera_core
-        run: cargo publish -p funera_core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p funera-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish funera_builtin_tools
         run: |
           sleep 15
-          cargo publish -p funera_builtin_tools --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          cargo publish -p funera-builtin-tools --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish funera-orchestrate
         run: |
@@ -86,7 +86,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          VERSION=$(grep '^version' funera_core/Cargo.toml | head -1 | cut -d'"' -f2)
+          VERSION=$(grep '^version' funera-core/Cargo.toml | head -1 | cut -d'"' -f2)
           git fetch --tags
           gh release create "v$VERSION" --generate-notes
         env:

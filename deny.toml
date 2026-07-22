@@ -1,10 +1,7 @@
 [licenses]
 allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
-copyleft = "deny"
 
 [advisories]
-vulnerability = "deny"
-unmaintained = "warn"
 yanked = "deny"
 
 [bans]

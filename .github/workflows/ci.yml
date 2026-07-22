@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [funera_core, funera-orchestrate]
+        crate: [funera-core, funera-orchestrate]
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
@@ -57,7 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --lib ${{ matrix.features.flags }} -p funera_core
+      - run: cargo test --lib ${{ matrix.features.flags }} -p funera-core
 
   test-orchestrate:
     runs-on: ubuntu-latest
@@ -83,7 +83,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         crate:
-          - { name: funera_core, flags: "--all-features" }
+          - { name: funera-core, flags: "--all-features" }
           - { name: funera-orchestrate, flags: "--features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools" }
     steps:
       - uses: actions/checkout@v4

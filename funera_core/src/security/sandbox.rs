@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(all(feature = "sandbox", not(target_os = "windows")))]
 use nono::{AccessMode, CapabilitySet};
 
+#[cfg(all(feature = "sandbox", not(target_os = "windows")))]
+use std::os::unix::process::CommandExt;
+
 #[cfg(all(feature = "sandbox", target_os = "windows"))]
 use super::sandbox_win::WindowsSandbox;
 
@@ -303,7 +306,7 @@ async fn execute_unix_sandbox(
 
     unsafe {
         std_cmd.pre_exec(move || match nono::Sandbox::is_supported() {
-            true => nono::Sandbox::apply_auto(&caps).map_err(|e| {
+            true => nono::Sandbox::apply_auto(&caps).map(|_| ()).map_err(|e| {
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("sandbox apply failed: {e}"),
