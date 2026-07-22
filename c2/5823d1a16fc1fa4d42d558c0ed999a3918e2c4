@@ -1,0 +1,94 @@
+release.toml
+  s_55275269be1cbe::t_2a7d5d65238006 1-5
+funera-orchestrate/src/event.rs
+  s_55275269be1cbe::t_8c0efc728bbc96 35-39
+funera_core/src/event_bus/tool_bus.rs
+  s_55275269be1cbe::t_aaa4f42edbd1c4 4,12,31,40
+.github/workflows/ci.yml
+  s_55275269be1cbe::t_047675d5dd0974 1-91
+funera_builtin_tools/src/read.rs
+  s_55275269be1cbe::t_42e37767a7d147 5,66-70,121-125,170-172,180-182,195-197,207-209,222-224,237-239,252-254
+funera_core/src/re_act/tool_executor.rs
+  s_55275269be1cbe::t_9bf996a94ee0f9 30-31
+funera-orchestrate/src/send_handle.rs
+  s_55275269be1cbe::t_42e37767a7d147 190-195,198-202,217-222
+funera_builtin_tools/src/lib.rs
+  s_55275269be1cbe::t_42e37767a7d147 62
+funera_core/src/lib.rs
+  s_55275269be1cbe::t_42e37767a7d147 22
+funera-orchestrate/tests/integration.rs
+  s_55275269be1cbe::t_42e37767a7d147 38-45,69,98,116,143,145-146,151-154,162-165,180
+funera_core/src/security/registry.rs
+  s_55275269be1cbe::t_37b16b8676ca00 239-247
+  s_55275269be1cbe::t_85441730f6c042 29
+  s_55275269be1cbe::t_d078b56f7e0d87 44,59
+funera-orchestrate/examples/sandbox.rs
+  s_55275269be1cbe::t_42e37767a7d147 69-71,166-170
+funera-orchestrate/examples/security.rs
+  s_55275269be1cbe::t_cfa0b65f9ba6bf 48
+funera-orchestrate/examples/middleware.rs
+  s_55275269be1cbe::t_42e37767a7d147 61-63,197
+  s_55275269be1cbe::t_0f41998cc32e4a 64-65
+funera-orchestrate/examples/session_reset.rs
+  s_55275269be1cbe::t_42e37767a7d147 20,24-27,35-38
+funera_core/src/event_bus/token_bus.rs
+  s_55275269be1cbe::t_42e37767a7d147 71-73,92-94,104-111,117-119,131-133,137-139
+.github/workflows/audit.yml
+  s_55275269be1cbe::t_4893f97fbf7197 1-17
+funera_core/src/security/boundary.rs
+  s_55275269be1cbe::t_42e37767a7d147 126-132,139-145,152-158,165-171,178-184,191-197
+funera_builtin_tools/src/edit.rs
+  s_55275269be1cbe::t_42e37767a7d147 6,61,70-74,122-125,130-131,136,193,306-310,313-319,321-323,340-341,344,353-354,369-373,399-405,434-438,440-444,504-510,521-527,536-542,553-559,622-631,642-651,661-666,685-690,704-709,731-736
+funera_core/src/chat/message.rs
+  s_55275269be1cbe::t_42e37767a7d147 5
+funera_core/src/provider/deepseek.rs
+  s_55275269be1cbe::t_42e37767a7d147 2,14,57-60,119-120,135-138,156-157,159-161,206-210,236-239
+funera_core/src/security/sandbox_win.rs
+  s_55275269be1cbe::t_42e37767a7d147 99-101,345-349,413-419,454-456,461-463,502-503,1155-1156
+funera-orchestrate/src/lib.rs
+  s_55275269be1cbe::t_42e37767a7d147 195-197,215
+funera_core/src/re_act/skills.rs
+  s_55275269be1cbe::t_42e37767a7d147 276
+funera_core/src/re_act/tool.rs
+  s_55275269be1cbe::t_42e37767a7d147 82
+funera_core/src/env.rs
+  s_55275269be1cbe::t_42e37767a7d147 7-8,14,95,105
+funera-orchestrate/src/runtime.rs
+  s_55275269be1cbe::t_42e37767a7d147 7,12,18-19,26-37,312-316,345-346,385-387,451,455,754-756,836,874,1022,1036-1039
+  s_55275269be1cbe::t_af5fd6efee88ed 743-753,757
+  s_55275269be1cbe::t_a2806acb6a89dd 295,299-302,306,308
+funera-orchestrate/examples/builtin_tools.rs
+  s_55275269be1cbe::t_42e37767a7d147 27-29
+funera-orchestrate/src/dispatcher.rs
+  s_55275269be1cbe::t_47250d97156515 6-7
+  s_55275269be1cbe::t_42e37767a7d147 82,170-172,176-178,218-220,224-226,230-232,256-259
+  s_55275269be1cbe::t_e3849b9f1bd79e 86,89-111
+funera_core/src/middleware.rs
+  s_55275269be1cbe::t_42e37767a7d147 429-430,510,620,718,725,732-736,758-759,765,775
+deny.toml
+  s_55275269be1cbe::t_7b13db1cd53401 1-11
+funera_core/src/re_act.rs
+  s_55275269be1cbe::t_42e37767a7d147 404-409
+rust-toolchain.toml
+  s_55275269be1cbe::t_e6bdce98ba77ca 1-3
+.github/workflows/cd.yml
+  s_55275269be1cbe::t_c2d49a8379209d 1-93
+funera_core/src/provider/openai.rs
+  s_55275269be1cbe::t_42e37767a7d147 2,5,9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c25823d1a16fc1fa4d42d558c0ed999a3918e2c4",
+  "prompts": {},
+  "sessions": {
+    "s_55275269be1cbe": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_075824014ffeqFx5JSVsJA2QX0",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
