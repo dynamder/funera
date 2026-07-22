@@ -59,7 +59,6 @@ pub fn mock_finish_chunk(reason: FinishReason) -> Chunk {
 }
 
 #[allow(deprecated)]
-#[allow(deprecated)]
 pub fn mock_tool_call_chunk(index: u32, call_id: &str, name: &str, args: &str) -> Chunk {
     Chunk {
         choices: vec![Choice {

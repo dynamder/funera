@@ -306,12 +306,9 @@ async fn execute_unix_sandbox(
 
     unsafe {
         std_cmd.pre_exec(move || match nono::Sandbox::is_supported() {
-            true => nono::Sandbox::apply_auto(&caps).map(|_| ()).map_err(|e| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("sandbox apply failed: {e}"),
-                )
-            }),
+            true => nono::Sandbox::apply_auto(&caps)
+                .map(|_| ())
+                .map_err(|e| std::io::Error::other(format!("sandbox apply failed: {e}"))),
             false => Ok(()),
         });
     }

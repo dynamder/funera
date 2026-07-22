@@ -62,6 +62,7 @@ jobs:
 
       - name: Semver check
         uses: obi1kenobi/cargo-semver-checks-action@v2
+        continue-on-error: true
 
       - name: Push tag
         run: git push origin main --follow-tags

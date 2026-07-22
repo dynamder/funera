@@ -409,12 +409,13 @@ impl AgentRuntimeBuilder {
         // Sync sandbox policy into tool policy when only sandbox was configured.
         #[cfg(all(feature = "sandbox", feature = "security"))]
         {
-            if self.tool_policy.is_none() {
-                if let Some(ref sp) = self.sandbox_policy {
-                    let mut tp = ToolPolicy::default();
-                    tp.sandbox = sp.clone();
-                    self.tool_policy = Some(tp);
-                }
+            if self.tool_policy.is_none()
+                && let Some(ref sp) = self.sandbox_policy
+            {
+                self.tool_policy = Some(ToolPolicy {
+                    sandbox: sp.clone(),
+                    ..Default::default()
+                });
             }
         }
 

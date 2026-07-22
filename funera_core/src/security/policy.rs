@@ -222,7 +222,7 @@ impl ShellPolicy {
 
     #[cfg(feature = "regex")]
     fn match_pattern(&self, command: &str, pattern: &str) -> bool {
-        Regex::new(pattern).map_or(false, |re| re.is_match(command))
+        Regex::new(pattern).is_ok_and(|re| re.is_match(command))
     }
 
     #[cfg(not(feature = "regex"))]
@@ -265,13 +265,13 @@ impl ShellPolicy {
             ];
 
             for pattern in dangerous {
-                if let Ok(re) = Regex::new(pattern) {
-                    if re.is_match(cmd) {
-                        return Err(PolicyError::CommandDenied(
-                            cmd.to_string(),
-                            pattern.to_string(),
-                        ));
-                    }
+                if let Ok(re) = Regex::new(pattern)
+                    && re.is_match(cmd)
+                {
+                    return Err(PolicyError::CommandDenied(
+                        cmd.to_string(),
+                        pattern.to_string(),
+                    ));
                 }
             }
         }
