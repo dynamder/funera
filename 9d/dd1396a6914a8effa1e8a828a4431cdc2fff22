@@ -1,0 +1,27 @@
+funera_core/src/security/sandbox.rs
+  s_55275269be1cbe::t_a109c305b3a3fb 309-311
+funera-orchestrate/src/runtime.rs
+  s_55275269be1cbe::t_db4cdf1f0c316d 412-418
+.github/workflows/cd.yml
+  s_55275269be1cbe::t_4cc304cad75b14 65
+.github/workflows/ci.yml
+  s_55275269be1cbe::t_e3ba4fd7cc95d8 44
+funera_core/src/security/policy.rs
+  s_55275269be1cbe::t_47fef2df492044 268-274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "9ddd1396a6914a8effa1e8a828a4431cdc2fff22",
+  "prompts": {},
+  "sessions": {
+    "s_55275269be1cbe": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_075824014ffeqFx5JSVsJA2QX0",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
