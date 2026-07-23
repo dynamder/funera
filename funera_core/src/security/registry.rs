@@ -349,12 +349,6 @@ fn extract_paths_from_args(args: &JsonValue) -> Vec<PathBuf> {
     if let Some(fp) = args.get("filePath").and_then(|v| v.as_str()) {
         paths.push(std::path::PathBuf::from(fp));
     }
-    if let Some(_command) = args.get("command").and_then(|v| v.as_str()) {
-        // For shell commands, the sandbox operates on the process level
-        // via pre_exec / CreateProcessAsUserW.  The boundary check is
-        // advisory — we extract the command string for reference.
-        paths.push(std::path::PathBuf::from("shell-command"));
-    }
     paths
 }
 
@@ -633,5 +627,79 @@ mod tests {
             .await;
         assert!(result.is_ok(), "got error: {result:?}");
         assert_eq!(result.unwrap(), "approved");
+    }
+
+    // ── shell boundary: command arg should NOT cause rejection ────
+    //
+    // Shell sandbox enforcement happens at the OS process level
+    // (Landlock / Seatbelt / Restricted Token), not via the
+    // path-based boundary check.  The `command` argument must not
+    // be treated as a file path.
+
+    /// Shell commands without a `filePath` must not be rejected
+    /// when no sandbox / path_guard is configured.
+    #[tokio::test]
+    async fn shell_cmd_no_pathguard_no_sandbox_not_rejected() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        let result = registry
+            .call_tool("approvable", json!({"command": "echo hello"}))
+            .await;
+        assert!(
+            result.is_ok(),
+            "shell-like command should not be rejected; got: {result:?}"
+        );
+    }
+
+    /// Shell commands with a path_guard but no `filePath` must NOT
+    /// be rejected. (An empty `paths` vec passes `all()` trivially.)
+    #[tokio::test]
+    async fn shell_cmd_with_pathguard_not_rejected() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        registry.set_path_guard(PathGuard::new(["."]));
+        let result = registry
+            .call_tool("approvable", json!({"command": "echo hello"}))
+            .await;
+        assert!(
+            result.is_ok(),
+            "shell-like command with path_guard must not be rejected; got: {result:?}"
+        );
+    }
+
+    /// Shell commands with sandbox enabled but no `filePath` must
+    /// NOT be rejected.  The empty path list causes the boundary
+    /// check to return AutoApproved.
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn shell_cmd_with_sandbox_not_rejected() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        registry.set_sandbox_paths(vec![], vec!["src".into()]);
+        let result = registry
+            .call_tool("approvable", json!({"command": "echo hello"}))
+            .await;
+        assert!(
+            result.is_ok(),
+            "shell-like command with sandbox enabled must not be rejected; got: {result:?}"
+        );
+    }
+
+    /// Full combination: sandbox + path_guard + shell command.
+    /// Must not be rejected.
+    #[cfg(feature = "sandbox")]
+    #[tokio::test]
+    async fn shell_cmd_sandbox_plus_pathguard_not_rejected() {
+        let mut registry = GuardedToolRegistry::new();
+        registry.add_tool(Box::new(ApprovableTool));
+        registry.set_sandbox_paths(vec![], vec!["src".into()]);
+        registry.set_path_guard(PathGuard::new(["."]));
+        let result = registry
+            .call_tool("approvable", json!({"command": "echo hello"}))
+            .await;
+        assert!(
+            result.is_ok(),
+            "shell-like command with sandbox+path_guard must not be rejected; got: {result:?}"
+        );
     }
 }
