@@ -1,0 +1,19 @@
+funera_core/src/security/registry.rs
+  s_5f3d6df4c322d2::t_168f1e2b2b309e 631-704
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "58028d7977d0dba8d37ae503cde9835799c666d9",
+  "prompts": {},
+  "sessions": {
+    "s_5f3d6df4c322d2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_070a2f242ffeayJxbgcs2NNjAN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
