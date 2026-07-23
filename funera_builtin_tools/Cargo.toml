@@ -1,16 +1,16 @@
 [package]
 name = "funera-builtin-tools"
-version = "0.2.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Default tool implementations for funera — Read, Write, Edit, Shell"
-license = "MIT"
-repository = "https://github.com/dynamder/funera"
+license.workspace = true
+repository.workspace = true
 readme = "../README.md"
 
 [dependencies]
 anyhow = "1.0.103"
 async-trait = "0.1.89"
-funera-core = { version = "0.2.0", path = "../funera_core", features = ["tool"] }
+funera-core = { version = "0.2.1", path = "../funera_core", features = ["tool"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 tokio = { version = "1.52.3", features = ["process", "fs", "io-util"] }

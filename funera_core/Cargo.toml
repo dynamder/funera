@@ -1,10 +1,10 @@
 [package]
 name = "funera-core"
-version = "0.2.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Core LLM agent engine — ReAct loop, providers, tools, skills, middleware, security"
-license = "MIT"
-repository = "https://github.com/dynamder/funera"
+license.workspace = true
+repository.workspace = true
 readme = "../README.md"
 
 [dependencies]
