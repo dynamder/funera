@@ -9,7 +9,8 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`mod@chat`] | Message types and session actor for conversation history |
-//! | [`mod@env`] | Shared runtime environment (tool registry, skill registry, LLM client) |
+//! | [`mod@env`] | Shared runtime environment with watch-based hot-reload (FuneraEnv, FuneraEnvWatcher) |
+//! | [`mod@env_actor`] | EnvActor — single source of truth owning all env state, mutations, and ToolExecutor |
 //! | [`mod@event_bus`] | Event buses for streaming tokens, ReAct cycle events, session lifecycle, and tool commands |
 //! | [`mod@provider`] | Provider abstraction over LLM backends (OpenAI, DeepSeek) |
 //! | [`mod@re_act`] | The ReAct execution loop, [`Tool`](re_act::tool::Tool) trait and registry, and skill system |
@@ -18,6 +19,7 @@
 
 pub mod chat;
 pub mod env;
+pub mod env_actor;
 pub mod event_bus;
 pub mod middleware;
 pub mod provider;

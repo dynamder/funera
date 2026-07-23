@@ -7,6 +7,7 @@
 //!
 //! Requires `OPENAI_API_KEY` (or set via `.api_key()` in code).
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use funera_core::security::audit::AuditEvent;
@@ -40,32 +41,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_key = std::env::var("OPENAI_API_KEY")?;
 
     // ── 5. 构建运行时 ──────────────────────────────────────────────
-    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
-        .api_key(api_key)
-        .model("deepseek-v4-flash")
-        .with_builtin_tools()
-        .with_tool_policy(tool_policy)
-        .on_approval_required(move |call_id, tool, reason| {
-            eprintln!("[approval] \"{tool}\" 需要审批: {reason}");
-            eprintln!("[approval] 自动批准");
-            let _ = approval_tx.send(call_id.to_string());
-        })
-        .with_approval_timeout(Duration::from_secs(30))
-        .build()?;
+    let runtime = Arc::new(
+        AgentRuntime::<DeepSeekProvider>::builder()
+            .api_key(api_key)
+            .model("deepseek-v4-flash")
+            .with_builtin_tools()
+            .with_tool_policy(tool_policy)
+            .on_approval_required(move |call_id, tool, reason| {
+                eprintln!("[approval] \"{tool}\" 需要审批: {reason}");
+                eprintln!("[approval] 自动批准");
+                let _ = approval_tx.send(call_id.to_string());
+            })
+            .with_approval_timeout(Duration::from_secs(30))
+            .build()?,
+    );
 
     // ── 6. 审批后台 ────────────────────────────────────────────────
-    let tool_registry = runtime.tool_registry();
+    let rt = runtime.clone();
     tokio::spawn(async move {
         while let Some(call_id) = approval_rx.recv().await {
-            let reg = tool_registry.read().await;
-            if let Err(e) = reg.approve_tool_call(&call_id, true) {
+            if let Err(e) = rt.approve_tool_call(&call_id, true).await {
                 eprintln!("[approval] 批准失败: {e}");
             }
         }
     });
 
     // ── 7. 审计订阅 ────────────────────────────────────────────────
-    let mut audit_rx = runtime.subscribe_audit();
+    let mut audit_rx = runtime.subscribe_audit().await;
     tokio::spawn(async move {
         while let Ok(event) = audit_rx.recv().await {
             match event {
@@ -94,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     let resp = agent
-        .fire("列出当前目录下的所有 .rs 文件", &runtime)
+        .fire("列出当前目录下的所有 .rs 文件", &*runtime)
         .await?;
     println!("Agent: {}", resp.content);
 

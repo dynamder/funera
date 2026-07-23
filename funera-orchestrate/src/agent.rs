@@ -280,16 +280,17 @@ impl Agent {
             }),
         );
 
+        let react = runtime.get_react_config().await;
         let mut config = ReActLoopConfig::new(
-            runtime.channel_buffer(),
-            runtime.max_iterations(),
-            runtime.env_watcher(),
+            react.channel_buffer,
+            react.max_iterations,
+            react.env_watcher,
             env_state_tx.clone(),
             turn_highway_handle,
         );
         #[cfg(feature = "tool")]
         {
-            config = config.with_tool_bus(runtime.tool_bus.clone());
+            config = config.with_tool_bus(react.tool_bus);
         }
 
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
@@ -357,16 +358,17 @@ impl Agent {
                 reasoning_content: None,
             }),
         );
+        let react = runtime.get_react_config().await;
         let mut config = ReActLoopConfig::new(
-            runtime.channel_buffer(),
-            runtime.max_iterations(),
-            runtime.env_watcher(),
+            react.channel_buffer,
+            react.max_iterations,
+            react.env_watcher,
             env_state_tx.clone(),
             turn_highway_handle,
         );
         #[cfg(feature = "tool")]
         {
-            config = config.with_tool_bus(runtime.tool_bus.clone());
+            config = config.with_tool_bus(react.tool_bus);
         }
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
@@ -433,16 +435,17 @@ impl Agent {
                 reasoning_content: None,
             }),
         );
+        let react = runtime.get_react_config().await;
         let mut config = ReActLoopConfig::new(
-            runtime.channel_buffer(),
-            runtime.max_iterations(),
-            runtime.env_watcher(),
+            react.channel_buffer,
+            react.max_iterations,
+            react.env_watcher,
             env_state_tx.clone(),
             turn_highway_handle,
         );
         #[cfg(feature = "tool")]
         {
-            config = config.with_tool_bus(runtime.tool_bus.clone());
+            config = config.with_tool_bus(react.tool_bus);
         }
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
@@ -510,16 +513,17 @@ impl Agent {
                 reasoning_content: None,
             }),
         );
+        let react = runtime.get_react_config().await;
         let mut config = ReActLoopConfig::new(
-            runtime.channel_buffer(),
-            runtime.max_iterations(),
-            runtime.env_watcher(),
+            react.channel_buffer,
+            react.max_iterations,
+            react.env_watcher,
             env_state_tx.clone(),
             turn_highway_handle,
         );
         #[cfg(feature = "tool")]
         {
-            config = config.with_tool_bus(runtime.tool_bus.clone());
+            config = config.with_tool_bus(react.tool_bus);
         }
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 

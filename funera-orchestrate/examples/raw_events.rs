@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── Runtime-level env state events ──────────────────────────────
     // subscribe_env_state() captures events emitted during build()
     // (ToolAdded, SkillAdded) and any future runtime changes.
-    let mut env_rx = runtime.subscribe_env_state();
+    let mut env_rx = runtime.subscribe_env_state().await;
 
     eprintln!("── Runtime env state events ──");
     loop {

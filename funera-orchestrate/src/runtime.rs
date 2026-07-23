@@ -1,16 +1,17 @@
 use std::marker::PhantomData;
 #[cfg(feature = "skill")]
 use std::path::PathBuf;
+#[cfg(any(feature = "middleware", feature = "security"))]
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
-use tokio::sync::{RwLock, broadcast, mpsc};
-use tokio::task::JoinHandle;
+use tokio::sync::{broadcast, mpsc};
 
 #[cfg(test)]
 use funera_core::chat::session::FuneraSession;
 use funera_core::chat::session::{SessionCmd, spawn_session_actor};
-use funera_core::env::{FuneraEnv, FuneraEnvWatcher};
+use funera_core::env::FuneraEnv;
+use funera_core::env_actor::{EnvCmd, ReActConfig, spawn_env_actor};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "tool")]
 use funera_core::event_bus::tool_bus::ToolBus;
@@ -21,8 +22,6 @@ use funera_core::provider::deepseek::DeepSeekProvider;
 use funera_core::re_act::skills::{Skill, SkillRegistry};
 #[cfg(feature = "tool")]
 use funera_core::re_act::tool::{Tool, ToolRegistry};
-#[cfg(feature = "tool")]
-use funera_core::re_act::tool_executor::ToolExecutor;
 #[cfg(feature = "security")]
 use funera_core::security::audit::{AuditBus, AuditEvent};
 #[cfg(all(feature = "sandbox", feature = "security"))]
@@ -248,44 +247,13 @@ impl AgentRuntimeBuilder {
     }
 
     /// Set a kernel-enforced sandbox policy for tool subprocesses.
-    ///
-    /// When enabled, tool subprocesses are isolated via Landlock
-    /// (Linux 5.13+), Seatbelt (macOS), or Write-Restricted Token
-    /// (Windows 8+). Unsupported configurations gracefully degrade
-    /// without full isolation.
     #[cfg(feature = "sandbox")]
     pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {
         self.sandbox_policy = Some(policy);
         self
     }
 
-    /// Set an application-level tool policy for controlling which tools
-    /// are allowed/denied, shell command restrictions, argument size
-    /// limits, timeout bounds, and working directory restrictions.
-    ///
-    /// The policy is enforced by the guarded tool registry before each
-    /// tool call.  Combine with [`with_sandbox_policy`](Self::with_sandbox_policy)
-    /// for defence-in-depth (application-level + kernel-enforced isolation).
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// # use funera_orchestrate::{AgentRuntimeBuilder, ToolPolicy, ShellPolicy};
-    /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let policy = ToolPolicy {
-    ///     denied_tools: ["shell".into()].into_iter().collect(),
-    ///     shell_policy: Some(ShellPolicy::strict()),
-    ///     ..ToolPolicy::default()
-    /// };
-    ///
-    /// let runtime = AgentRuntimeBuilder::new()
-    ///     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
-    ///     .model("deepseek-v4-flash")
-    ///     .with_tool_policy(policy)
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Set an application-level tool policy.
     #[cfg(feature = "security")]
     pub fn with_tool_policy(mut self, policy: ToolPolicy) -> Self {
         self.tool_policy = Some(policy);
@@ -293,21 +261,12 @@ impl AgentRuntimeBuilder {
     }
 
     /// Register a notification callback fired when a tool call requires user approval.
-    ///
-    /// When a tool call targets a path outside the [`PathGuard`] trusted zone but
-    /// within the sandbox boundary, the registry pauses execution and invokes this
-    /// callback with `(call_id, tool_name, reason)`. **This is a notification only — do not
-    /// call [`AgentRuntime::approve_tool_call`] inside this callback.** Instead, store the
-    /// call_id and call `approve_tool_call` from your own async context (e.g. a channel
-    /// receiver task or an event handler).
-    ///
-    /// Requires the `security` feature.
     #[cfg(feature = "security")]
     pub fn on_approval_required(
         mut self,
         cb: impl Fn(Arc<str>, String, String) + Send + Sync + 'static,
     ) -> Self {
-        self.approval_callback = Some(std::sync::Arc::new(
+        self.approval_callback = Some(Arc::new(
             move |call_id: &str, tool_name: &str, reason: &str, _paths: &[std::path::PathBuf]| {
                 cb(
                     Arc::from(call_id),
@@ -319,10 +278,7 @@ impl AgentRuntimeBuilder {
         self
     }
 
-    /// Set a timeout for tool call approval. If not set, the registry waits indefinitely.
-    /// When the timeout elapses, the tool call is automatically rejected.
-    ///
-    /// Requires the `security` feature.
+    /// Set a timeout for tool call approval.
     #[cfg(feature = "security")]
     pub fn with_approval_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.approval_timeout = Some(timeout);
@@ -330,10 +286,6 @@ impl AgentRuntimeBuilder {
     }
 
     /// Register all builtin tools (Read, Write, Edit, Shell).
-    /// Requires the `funera-builtin-tools` feature.
-    ///
-    /// If a sandbox policy was configured via [`with_sandbox_policy`],
-    /// the `shell` tool will apply kernel-level isolation to each subprocess.
     #[cfg(feature = "funera-builtin-tools")]
     pub fn with_builtin_tools(mut self) -> Self {
         use funera_builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
@@ -353,9 +305,6 @@ impl AgentRuntimeBuilder {
     }
 
     /// Build the runtime with the default DeepSeek provider.
-    ///
-    /// Spawns a background `ToolExecutor` task that lives for the runtime's
-    /// lifetime and processes tool calls from the ReAct loop.
     #[cfg(feature = "deepseek")]
     pub fn build(self) -> Result<AgentRuntime<DeepSeekProvider>, OrchestrateError> {
         self.build_with::<DeepSeekProvider>()
@@ -435,7 +384,6 @@ impl AgentRuntimeBuilder {
                 reg.add_tool(t);
             }
 
-            // ── Security wiring ─────────────────────────────────
             #[cfg(feature = "security")]
             reg.set_audit_bus(audit_bus.clone());
 
@@ -465,7 +413,6 @@ impl AgentRuntimeBuilder {
                     reg.set_approval_timeout(Some(dur));
                 }
             }
-            // ── End security wiring ─────────────────────────────
 
             reg
         };
@@ -505,24 +452,7 @@ impl AgentRuntimeBuilder {
         #[cfg(feature = "skill")]
         let env = env.with_skill_registry(skill_registry);
 
-        let (env_state_tx, _) = broadcast::channel(32);
-
-        #[cfg(feature = "tool")]
-        if let Ok(guard) = env.tool_registry.try_read() {
-            let tools = guard.get_all_tools();
-            for name in tools.keys() {
-                let _ = env_state_tx.send(EnvStateEvent::ToolAdded(name.clone()));
-            }
-        }
-
-        #[cfg(feature = "skill")]
-        if let Ok(guard) = env.skill_registry.try_read() {
-            let skills = guard.all_skills();
-            for name in skills.keys() {
-                let _ = env_state_tx.send(EnvStateEvent::SkillAdded(name.clone()));
-            }
-        }
-
+        // Build middleware chain
         #[cfg(feature = "middleware")]
         let middleware_chain = if let Some(bundle) = self.middleware_bundle.take() {
             let MiddlewareBundle { chain, error_rx } = bundle;
@@ -544,40 +474,46 @@ impl AgentRuntimeBuilder {
             Arc::new(chain)
         };
 
+        // Create tool bus for ToolExecutor
         #[cfg(feature = "tool")]
         let (tool_bus, exec_rx) = ToolBus::new();
-        #[cfg(feature = "tool")]
-        let reg = env.tool_registry.clone();
-        #[cfg(feature = "tool")]
-        let handle = tokio::spawn(async move {
-            ToolExecutor::new(reg, exec_rx).run().await;
-        });
 
-        let session_tx = spawn_session_actor();
-
+        // Snapshot build-time config for the env actor
+        #[cfg(feature = "sandbox")]
+        let sandbox_policy = self.sandbox_policy.clone().unwrap_or_default();
         #[cfg(feature = "security")]
         let tool_policy_val = self.tool_policy.clone().unwrap_or_default();
 
-        Ok(AgentRuntime::<P> {
+        let max_iters = self.max_iterations;
+        let chan_buf = self.channel_buffer;
+
+        // Spawn env actor — owns FuneraEnv, watcher, ToolExecutor, all config
+        let env_cmd_tx = spawn_env_actor(
             env,
             env_watcher,
+            max_iters,
+            chan_buf,
             #[cfg(feature = "tool")]
             tool_bus,
-            model,
-            max_iterations: self.max_iterations,
-            channel_buffer: self.channel_buffer,
-            env_state_tx,
             #[cfg(feature = "tool")]
-            _executor_handle: handle,
-            session_tx,
-            _state: PhantomData,
-            _phantom: PhantomData,
-            #[cfg(feature = "middleware")]
-            middleware_chain,
+            exec_rx,
+            #[cfg(feature = "sandbox")]
+            sandbox_policy,
             #[cfg(feature = "security")]
-            tool_policy: tool_policy_val,
+            tool_policy_val,
             #[cfg(feature = "security")]
             audit_bus,
+        );
+
+        let session_tx = spawn_session_actor();
+
+        Ok(AgentRuntime::<P> {
+            env_cmd_tx,
+            session_tx,
+            #[cfg(feature = "middleware")]
+            middleware_chain,
+            _state: PhantomData,
+            _phantom: PhantomData,
         })
     }
 }
@@ -590,33 +526,46 @@ pub struct Idle;
 /// Marker type-state: a `send`/`send_stream` call is in progress.
 pub struct Acquired;
 
-/// `AgentRuntime` owns the shared infrastructure (LLM client, tool registry,
-/// tool executor) and a persistent session (backed by a session actor).
+/// Thin wrapper around session and env actors.
+///
+/// `AgentRuntime` owns **no mutable data** — all persistent state lives in
+/// background actors:
+///
+/// - [`EnvActor`](funera_core::env_actor) — owns [`FuneraEnv`](funera_core::env::FuneraEnv)
+///   (model, client, tool/skill registries, sandbox policy), the
+///   [`FuneraEnvWatcher`](funera_core::env::FuneraEnvWatcher) (watch-based
+///   hot-reload), [`ToolBus`](funera_core::event_bus::tool_bus::ToolBus) +
+///   [`ToolExecutor`](funera_core::re_act::tool_executor::ToolExecutor), audit bus,
+///   and env state broadcast channel.
+/// - [`SessionActor`](funera_core::chat::session) — owns `Vec<FuneraMessage>`.
 ///
 /// The generic parameter `S` is a type-state marker — [`Idle`] means
 /// no `send`/`send_stream` is in progress, [`Acquired`] means one is active.
 /// Send operations consume `AgentRuntime<P, Idle>` and return a handle that
 /// eventually yields back `AgentRuntime<P, Idle>`.
+///
+/// # Mutation
+///
+/// All env mutations (e.g., [`set_model`](Self::set_model),
+/// [`add_tool`](Self::add_tool)) send an [`EnvCmd`](funera_core::env_actor::EnvCmd)
+/// to the actor, which atomically updates the internal state, pushes to the
+/// watch channel (picked up by the ReAct loop on the next iteration), and
+/// broadcasts an [`EnvStateEvent`](funera_core::event_bus::env_state_bus::EnvStateEvent).
+///
+/// # Hot-Reload
+///
+/// The ReAct loop calls [`get_react_config`](Self::get_react_config) once per
+/// `fire`/`send` call to obtain a [`ReActConfig`](funera_core::env_actor::ReActConfig)
+/// bundle containing the [`FuneraEnvWatcher`]. Every iteration, the watcher
+/// snapshots the latest model, client, tools, and skills from the watch
+/// channels — enabling zero-coordination runtime changes.
 pub struct AgentRuntime<P: ChatProvider, S = Idle> {
-    env: FuneraEnv,
-    pub(crate) env_watcher: FuneraEnvWatcher,
-    #[cfg(feature = "tool")]
-    pub(crate) tool_bus: ToolBus,
-    pub(crate) model: String,
-    pub(crate) max_iterations: usize,
-    pub(crate) channel_buffer: usize,
-    env_state_tx: broadcast::Sender<EnvStateEvent>,
-    #[cfg(feature = "tool")]
-    _executor_handle: JoinHandle<()>,
+    pub(crate) env_cmd_tx: mpsc::UnboundedSender<EnvCmd>,
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
+    #[cfg(feature = "middleware")]
+    pub(crate) middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
     _state: PhantomData<S>,
     _phantom: PhantomData<fn() -> P>,
-    #[cfg(feature = "middleware")]
-    middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
-    #[cfg(feature = "security")]
-    tool_policy: ToolPolicy,
-    #[cfg(feature = "security")]
-    audit_bus: AuditBus,
 }
 
 // ── All state markers share these methods ─────────────────────
@@ -637,51 +586,131 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         self.session_tx.clone()
     }
 
-    /// The LLM model name configured for this runtime.
-    pub fn model(&self) -> &str {
-        &self.model
-    }
-
-    /// Maximum ReAct iterations per call.
-    pub fn max_iterations(&self) -> usize {
-        self.max_iterations
-    }
-
-    /// Channel buffer size.
-    pub fn channel_buffer(&self) -> usize {
-        self.channel_buffer
-    }
-
-    /// Clone the env watcher for a session.
-    pub(crate) fn env_watcher(&self) -> FuneraEnvWatcher {
-        self.env_watcher.clone()
-    }
-
     /// Subscribe to runtime-level environment state events.
-    ///
-    /// The returned receiver yields [`EnvStateEvent`] notifications about
-    /// tool/skill registration changes, LLM model changes, etc. that occur
-    /// during the runtime's lifetime.
-    ///
-    /// Unlike [`Agent::subscribe_raw_events`](crate::Agent::subscribe_raw_events)
-    /// which only delivers events during a `fire`/`send` call, this subscription
-    /// is persistent and independent of any agent call.
-    pub fn subscribe_env_state(&self) -> broadcast::Receiver<EnvStateEvent> {
-        self.env_state_tx.subscribe()
+    pub async fn subscribe_env_state(&self) -> broadcast::Receiver<EnvStateEvent> {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::SubscribeEnvState { respond });
+        rx.await
+            .unwrap_or_else(|_| broadcast::channel::<EnvStateEvent>(1).1)
     }
 
     /// Subscribe to security audit events.
-    ///
-    /// The returned receiver yields [`AuditEvent`] notifications for every
-    /// tool execution, denial, policy violation, and sandbox action. This is
-    /// an independent, persistent subscription that is not tied to any
-    /// particular agent call.
-    ///
-    /// Requires the `security` feature.
     #[cfg(feature = "security")]
-    pub fn subscribe_audit(&self) -> broadcast::Receiver<AuditEvent> {
-        self.audit_bus.subscribe()
+    pub async fn subscribe_audit(&self) -> broadcast::Receiver<AuditEvent> {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::SubscribeAudit { respond });
+        rx.await
+            .unwrap_or_else(|_| broadcast::channel::<AuditEvent>(1).1)
     }
+
+    /// Query the current LLM model name from the env actor.
+    pub async fn model(&self) -> String {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::GetModel { respond });
+        rx.await.unwrap_or_default()
+    }
+
+    /// Query the current sandbox policy from the env actor.
+    #[cfg(feature = "sandbox")]
+    pub async fn sandbox_policy(&self) -> SandboxPolicy {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::GetSandboxPolicy { respond });
+        rx.await.unwrap_or_default()
+    }
+
+    /// List registered tool names from the env actor.
+    #[cfg(feature = "tool")]
+    pub async fn tool_names(&self) -> Vec<String> {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::GetToolNames { respond });
+        rx.await.unwrap_or_default()
+    }
+
+    // ── Env mutation proxy methods ────────────────────────────
+
+    /// Change the LLM model name at runtime.
+    ///
+    /// Pushes to the internal watch channel (picked up by the ReAct loop on
+    /// the next iteration) and broadcasts [`EnvStateEvent::LlmChanged`].
+    pub fn set_model(&self, model: impl Into<String>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::SetModel(model.into()));
+    }
+
+    /// Change the LLM client at runtime (endpoint, key, etc.).
+    pub fn set_client(&self, client: async_openai::Client<OpenAIConfig>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::SetClient(client));
+    }
+
+    /// Register a new tool at runtime.
+    #[cfg(feature = "tool")]
+    pub fn add_tool(&self, tool: Box<dyn Tool>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::AddTool(tool));
+    }
+
+    /// Remove a tool by name at runtime.
+    #[cfg(feature = "tool")]
+    pub fn remove_tool(&self, name: impl Into<String>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::RemoveTool(name.into()));
+    }
+
+    /// Set tool availability (enabled/disabled) at runtime.
+    #[cfg(feature = "tool")]
+    pub fn set_tool_availability(&self, name: impl Into<String>, available: bool) {
+        let _ = self.env_cmd_tx.send(EnvCmd::SetToolAvailability {
+            name: name.into(),
+            available,
+        });
+    }
+
+    /// Register a new skill at runtime.
+    #[cfg(feature = "skill")]
+    pub fn add_skill(&self, skill: Skill) {
+        let _ = self.env_cmd_tx.send(EnvCmd::AddSkill(skill));
+    }
+
+    /// Remove a skill by name at runtime.
+    #[cfg(feature = "skill")]
+    pub fn remove_skill(&self, name: impl Into<String>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::RemoveSkill(name.into()));
+    }
+
+    /// Activate a skill by name at runtime. Returns `true` on success.
+    #[cfg(feature = "skill")]
+    pub async fn activate_skill(&self, name: impl Into<String>) -> bool {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::ActivateSkill {
+            name: name.into(),
+            respond,
+        });
+        rx.await.unwrap_or(false)
+    }
+
+    /// Deactivate a skill by name at runtime. Returns `true` on success.
+    #[cfg(feature = "skill")]
+    pub async fn deactivate_skill(&self, name: impl Into<String>) -> bool {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::DeactivateSkill {
+            name: name.into(),
+            respond,
+        });
+        rx.await.unwrap_or(false)
+    }
+
+    /// Set the skill system prompt at runtime.
+    #[cfg(feature = "skill")]
+    pub fn set_skill_prompt(&self, prompt: impl Into<String>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::SetSkillPrompt(prompt.into()));
+    }
+
+    /// Get the current skill system prompt.
+    #[cfg(feature = "skill")]
+    pub async fn skill_prompt(&self) -> String {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::GetSkillPrompt { respond });
+        rx.await.unwrap_or_default()
+    }
+
+    // ── End env mutation methods ──────────────────────────────
 
     /// Access the middleware chain for event filtering.
     #[cfg(feature = "middleware")]
@@ -689,72 +718,35 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         self.middleware_chain.clone()
     }
 
+    /// Approve or reject a pending tool call that is awaiting user approval.
+    #[cfg(all(feature = "tool", feature = "security"))]
+    pub async fn approve_tool_call(&self, call_id: &str, approved: bool) -> Result<(), String> {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::ApproveToolCall {
+            call_id: call_id.to_string(),
+            approved,
+            respond,
+        });
+        rx.await.unwrap_or(Err("env actor died".into()))
+    }
+
     /// Transform the runtime into `Acquired` state (internal use).
     pub(crate) fn into_acquired(self) -> AgentRuntime<P, Acquired> {
         AgentRuntime::<P, Acquired> {
-            env: self.env,
-            env_watcher: self.env_watcher,
-            #[cfg(feature = "tool")]
-            tool_bus: self.tool_bus,
-            model: self.model,
-            max_iterations: self.max_iterations,
-            channel_buffer: self.channel_buffer,
-            env_state_tx: self.env_state_tx,
-            #[cfg(feature = "tool")]
-            _executor_handle: self._executor_handle,
+            env_cmd_tx: self.env_cmd_tx,
             session_tx: self.session_tx,
-            _state: PhantomData,
-            _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
-            #[cfg(feature = "security")]
-            tool_policy: self.tool_policy,
-            #[cfg(feature = "security")]
-            audit_bus: self.audit_bus,
+            _state: PhantomData,
+            _phantom: PhantomData,
         }
     }
 
-    /// The tool registry (for dynamic tool management).
-    #[cfg(feature = "tool")]
-    pub fn tool_registry(&self) -> Arc<RwLock<ToolRegistry>> {
-        self.env.tool_registry.clone()
-    }
-
-    /// The skill registry (for dynamic skill management).
-    #[cfg(feature = "skill")]
-    pub fn skill_registry(&self) -> Arc<RwLock<SkillRegistry>> {
-        self.env.skill_registry.clone()
-    }
-
-    /// The sandbox policy configured for this runtime.
-    #[cfg(feature = "sandbox")]
-    pub fn sandbox_policy(&self) -> SandboxPolicy {
-        self.env.sandbox_policy().clone()
-    }
-
-    /// The application-level tool policy configured for this runtime.
-    ///
-    /// Returns the [`ToolPolicy`] that controls which tools are allowed,
-    /// shell command restrictions, argument size limits, timeout bounds,
-    /// and working directory restrictions.
-    #[cfg(feature = "security")]
-    pub fn tool_policy(&self) -> &ToolPolicy {
-        &self.tool_policy
-    }
-
-    /// Approve or reject a pending tool call that is awaiting user approval.
-    ///
-    /// Call this from your async context (channel receiver, event handler) using
-    /// the `call_id` received via [`on_approval_required`] or
-    /// [`AgentEvent::ToolApprovalRequired`].
-    ///
-    /// Returns `Ok(())` if the approval was delivered, or `Err(String)` if no
-    /// pending approval was found for the given `call_id`.
-    #[cfg(all(feature = "tool", feature = "security"))]
-    pub fn approve_tool_call(&self, call_id: &str, approved: bool) -> Result<(), String> {
-        self.tool_registry()
-            .blocking_read()
-            .approve_tool_call(call_id, approved)
+    /// Query the env actor for the bundle of resources needed by the ReAct loop.
+    pub(crate) async fn get_react_config(&self) -> ReActConfig {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::GetReActConfig { respond });
+        rx.await.expect("env actor died")
     }
 }
 
@@ -763,25 +755,12 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
 impl<P: ChatProvider> AgentRuntime<P, Acquired> {
     pub(crate) fn into_idle(self) -> AgentRuntime<P, Idle> {
         AgentRuntime::<P, Idle> {
-            env: self.env,
-            env_watcher: self.env_watcher,
-            #[cfg(feature = "tool")]
-            tool_bus: self.tool_bus,
-            model: self.model,
-            max_iterations: self.max_iterations,
-            channel_buffer: self.channel_buffer,
-            env_state_tx: self.env_state_tx,
-            #[cfg(feature = "tool")]
-            _executor_handle: self._executor_handle,
+            env_cmd_tx: self.env_cmd_tx,
             session_tx: self.session_tx,
-            _state: PhantomData,
-            _phantom: PhantomData,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
-            #[cfg(feature = "security")]
-            tool_policy: self.tool_policy,
-            #[cfg(feature = "security")]
-            audit_bus: self.audit_bus,
+            _state: PhantomData,
+            _phantom: PhantomData,
         }
     }
 }
@@ -846,23 +825,19 @@ mod tests {
                 .with_tool::<MockTool>()
                 .build()
                 .unwrap();
-            let registry = rt.tool_registry();
-            let guard = registry.read().await;
-            let tools = guard.get_all_tools();
-            assert!(tools.contains_key("mock_tool"));
+            let names = rt.tool_names().await;
+            assert!(names.contains(&"mock_tool".to_string()));
         }
 
         #[tokio::test]
-        async fn tool_registry_accessor() {
+        async fn tool_names_empty_by_default() {
             let rt = AgentRuntimeBuilder::new()
                 .api_key("sk-test")
                 .model("x")
                 .build()
                 .unwrap();
-            let reg = rt.tool_registry();
-            let guard = reg.read().await;
-            let tools = guard.get_all_tools();
-            assert!(tools.is_empty());
+            let names = rt.tool_names().await;
+            assert!(names.is_empty());
         }
     }
 
@@ -957,9 +932,7 @@ mod tests {
             .model("test-model")
             .build()
             .expect("build should succeed with api_key");
-        assert_eq!(rt.model(), "test-model");
-        assert_eq!(rt.max_iterations(), 10);
-        assert_eq!(rt.channel_buffer(), 32);
+        assert_eq!(rt.model().await, "test-model");
     }
 
     #[tokio::test]
@@ -971,16 +944,13 @@ mod tests {
             .channel_buffer(8)
             .build()
             .unwrap();
-        assert_eq!(rt.model(), "my-model");
-        assert_eq!(rt.max_iterations(), 15);
-        assert_eq!(rt.channel_buffer(), 8);
+        assert_eq!(rt.model().await, "my-model");
     }
 
     #[tokio::test]
     async fn build_fails_without_key() {
         let has_key = std::env::var("OPENAI_API_KEY").is_ok();
         if has_key {
-            // Can't test failure when key is present in env
             return;
         }
         let result = AgentRuntimeBuilder::new().model("x").build();
@@ -997,7 +967,7 @@ mod tests {
             .api_key("sk-test")
             .build()
             .unwrap();
-        assert_eq!(rt.model(), "gpt-4o");
+        assert_eq!(rt.model().await, "gpt-4o");
     }
 
     // ── session management ─────────────────────────────────────────
@@ -1055,11 +1025,8 @@ mod tests {
             .model("x")
             .build()
             .unwrap();
-        let mut rx = rt.subscribe_env_state();
-        // Send an event after subscribing to verify the channel works
-        rt.env_state_tx
-            .send(EnvStateEvent::LlmChanged("new-model".into()))
-            .unwrap();
+        let mut rx = rt.subscribe_env_state().await;
+        rt.set_model("new-model");
         let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
         assert!(matches!(
             got,
@@ -1072,8 +1039,6 @@ mod tests {
     #[cfg(feature = "sandbox")]
     #[tokio::test]
     async fn builder_sandbox_policy_flows_to_env() {
-        use funera_core::security::sandbox::SandboxPolicy;
-
         let custom_policy = SandboxPolicy {
             read_write_paths: vec!["/project".into()],
             block_network: true,
@@ -1087,7 +1052,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let stored = rt.sandbox_policy();
+        let stored = rt.sandbox_policy().await;
         assert_eq!(stored.read_write_paths, custom_policy.read_write_paths);
         assert_eq!(stored.block_network, custom_policy.block_network);
         assert!(stored.enabled);
@@ -1101,8 +1066,7 @@ mod tests {
             .model("x")
             .build()
             .unwrap();
-        let stored = rt.sandbox_policy();
-        // Default policy is enabled with network blocked and empty paths
+        let stored = rt.sandbox_policy().await;
         assert!(stored.enabled);
         assert!(stored.block_network);
         assert!(stored.read_paths.is_empty());
@@ -1113,9 +1077,6 @@ mod tests {
     #[cfg(feature = "sandbox")]
     #[tokio::test]
     async fn builder_sandbox_with_custom_environments() {
-        use funera_core::security::sandbox::SandboxPolicy;
-
-        // Test that a disabled sandbox policy flows correctly
         let rt = AgentRuntimeBuilder::new()
             .api_key("sk-test")
             .model("x")
@@ -1123,7 +1084,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let stored = rt.sandbox_policy();
+        let stored = rt.sandbox_policy().await;
         assert!(!stored.enabled, "disabled policy should stay disabled");
     }
 }

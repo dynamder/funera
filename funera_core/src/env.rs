@@ -16,9 +16,9 @@ use tokio::sync::{
 
 pub struct FuneraEnv {
     #[cfg(feature = "tool")]
-    pub tool_registry: Arc<RwLock<ToolRegistry>>,
+    pub(crate) tool_registry: Arc<RwLock<ToolRegistry>>,
     #[cfg(feature = "skill")]
-    pub skill_registry: Arc<RwLock<SkillRegistry>>,
+    pub(crate) skill_registry: Arc<RwLock<SkillRegistry>>,
     llm_client: async_openai::Client<OpenAIConfig>,
     model: String,
     #[cfg(feature = "tool")]
@@ -78,12 +78,6 @@ impl FuneraEnv {
         )
     }
 
-    /// Access the current sandbox policy.
-    #[cfg(feature = "sandbox")]
-    pub fn sandbox_policy(&self) -> &SandboxPolicy {
-        &self.sandbox_policy
-    }
-
     /// Set a custom sandbox policy.
     #[cfg(feature = "sandbox")]
     pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {
@@ -112,52 +106,52 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub async fn add_tool(&mut self, tool: Box<dyn Tool>) {
+    pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {
         let mut registry = self.tool_registry.write().await;
         registry.add_tool(tool);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub async fn remove_tool(&mut self, name: &str) {
+    pub(crate) async fn remove_tool(&mut self, name: &str) {
         let mut registry = self.tool_registry.write().await;
         registry.remove_tool(name);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
+    pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
         let registry = self.tool_registry.read().await;
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
-    pub fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
+    pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
         self.llm_client = client.clone();
         let _ = self.client_tx.send(client);
     }
 
-    pub fn set_model(&mut self, model: impl Into<String>) {
+    pub(crate) fn set_model(&mut self, model: impl Into<String>) {
         let model = model.into();
         self.model = model.clone();
         let _ = self.model_tx.send(model);
     }
 
     #[cfg(feature = "skill")]
-    pub async fn add_skill(&mut self, skill: Skill) {
+    pub(crate) async fn add_skill(&mut self, skill: Skill) {
         let mut registry = self.skill_registry.write().await;
         registry.add(skill);
         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
     }
 
     #[cfg(feature = "skill")]
-    pub async fn remove_skill(&mut self, name: &str) {
+    pub(crate) async fn remove_skill(&mut self, name: &str) {
         let mut registry = self.skill_registry.write().await;
         registry.remove(name);
         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
     }
 
     #[cfg(feature = "skill")]
-    pub async fn activate_skill(&mut self, name: &str) -> bool {
+    pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {
         let mut registry = self.skill_registry.write().await;
         let ok = registry.activate(name);
         if ok {
@@ -167,7 +161,7 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub async fn deactivate_skill(&mut self, name: &str) -> bool {
+    pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {
         let mut registry = self.skill_registry.write().await;
         let ok = registry.deactivate(name);
         if ok {
@@ -177,13 +171,17 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub fn skill_prompt_now(&self) -> String {
+    pub(crate) fn skill_prompt_now(&self) -> String {
         self.skill_tx.borrow().clone()
     }
 
     #[cfg(feature = "skill")]
-    pub fn set_skill_prompt(&mut self, prompt: String) {
+    pub(crate) fn set_skill_prompt(&mut self, prompt: String) {
         let _ = self.skill_tx.send(prompt);
+    }
+
+    pub(crate) fn model(&self) -> &str {
+        &self.model
     }
 }
 
