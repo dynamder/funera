@@ -924,7 +924,7 @@ dependencies = [
 
 [[package]]
 name = "funera-builtin-tools"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -938,7 +938,7 @@ dependencies = [
 
 [[package]]
 name = "funera-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -963,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "funera-orchestrate"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-openai",
