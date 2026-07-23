@@ -56,6 +56,13 @@ impl<P: ChatProvider> SendHandle<P> {
         rx.await.unwrap_or_default()
     }
 
+    /// Returns a cloneable [`ApprovalHandle`] for approving tool calls
+    /// during react_loop execution.
+    #[cfg(all(feature = "tool", feature = "security"))]
+    pub fn approval_handle(&self) -> ApprovalHandle {
+        ApprovalHandle::new(self.runtime.env_cmd_tx.clone())
+    }
+
     async fn wait(self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
         // Wait for react_loop to complete
         self.handle
@@ -109,6 +116,13 @@ impl<P: ChatProvider> SendStreamHandle<P> {
             .session_tx
             .send(SessionCmd::FetchContext { respond });
         rx.await.unwrap_or_default()
+    }
+
+    /// Returns a cloneable [`ApprovalHandle`] for approving tool calls
+    /// during react_loop execution.
+    #[cfg(all(feature = "tool", feature = "security"))]
+    pub fn approval_handle(&self) -> ApprovalHandle {
+        ApprovalHandle::new(self.runtime.env_cmd_tx.clone())
     }
 
     async fn wait(self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
@@ -220,4 +234,51 @@ async fn aggregate_from_broadcast(
         iterations,
         finish_reason,
     })
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ApprovalHandle — tool call approval for spawned tasks
+// ═══════════════════════════════════════════════════════════════
+
+/// A lightweight, cloneable handle for approving or rejecting tool calls
+/// during agent execution.
+///
+/// Obtain one **before** calling [`send`](crate::Agent::send) /
+/// [`send_stream`](crate::Agent::send_stream) via
+/// [`AgentRuntime::approval_handle`](crate::AgentRuntime::approval_handle),
+/// or afterwards from
+/// [`SendHandle::approval_handle`] / [`SendStreamHandle::approval_handle`].
+///
+/// Because `ApprovalHandle` implements [`Clone`], it can be freely moved
+/// into spawned tasks for background approval while the main task awaits
+/// the send handle's result.
+#[cfg(all(feature = "tool", feature = "security"))]
+#[derive(Clone)]
+pub struct ApprovalHandle {
+    env_cmd_tx: mpsc::UnboundedSender<funera_core::env_actor::EnvCmd>,
+}
+
+#[cfg(all(feature = "tool", feature = "security"))]
+impl ApprovalHandle {
+    pub(crate) fn new(env_cmd_tx: mpsc::UnboundedSender<funera_core::env_actor::EnvCmd>) -> Self {
+        Self { env_cmd_tx }
+    }
+
+    /// Approve or reject a pending tool call identified by `call_id`.
+    ///
+    /// `call_id` is typically obtained from the
+    /// [`on_approval_required`](crate::AgentRuntimeBuilder::on_approval_required)
+    /// callback. Returns `Ok(())` if the approval was processed, or
+    /// `Err(msg)` if the call_id was not found or the env actor has died.
+    pub async fn approve_tool_call(&self, call_id: &str, approved: bool) -> Result<(), String> {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self
+            .env_cmd_tx
+            .send(funera_core::env_actor::EnvCmd::ApproveToolCall {
+                call_id: call_id.to_string(),
+                approved,
+                respond,
+            });
+        rx.await.unwrap_or(Err("env actor died".into()))
+    }
 }

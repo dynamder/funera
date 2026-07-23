@@ -1,25 +1,29 @@
 //! Demonstrates how to configure **security** for an agent runtime:
 //! tool policies, shell restrictions, audit logging, and approval workflows.
 //!
+//! Uses [`ApprovalHandle`] — a lightweight cloneable handle obtained via
+//! [`AgentRuntime::approval_handle`] — to approve tool calls from a
+//! spawned background task.  This works with both `fire()` (one-shot)
+//! and `send()` / `send_stream()` (multi-turn with persistent session).
+//!
 //! ```bash
 //! cargo run -p funera-orchestrate --example security --features security,funera-builtin-tools
 //! ```
 //!
 //! Requires `OPENAI_API_KEY` (or set via `.api_key()` in code).
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use funera_core::security::audit::AuditEvent;
 use funera_core::security::policy::{ShellPolicy, ToolPolicy};
-use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
+use funera_orchestrate::{Agent, AgentRuntime, ApprovalHandle, DeepSeekProvider};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // ── 1. 定义 Shell 策略 ──────────────────────────────────────────
+    // ── 1. Shell policy ─────────────────────────────────────────────
     let shell_policy = ShellPolicy::with_allowed(vec!["git".into(), "cargo".into()]);
 
-    // ── 2. 定义工具策略 ────────────────────────────────────────────
+    // ── 2. Tool policy ─────────────────────────────────────────────
     let tool_policy = ToolPolicy {
         allowed_tools: Some(
             ["read", "write", "edit"]
@@ -34,39 +38,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
 
-    // ── 3. 审批通道：同步回调 → 异步批准 ──────────────────────────
+    // ── 3. Approval channel: callback notifies background task ─────
     let (approval_tx, mut approval_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     // ── 4. API key ──────────────────────────────────────────────────
     let api_key = std::env::var("OPENAI_API_KEY")?;
 
-    // ── 5. 构建运行时 ──────────────────────────────────────────────
-    let runtime = Arc::new(
-        AgentRuntime::<DeepSeekProvider>::builder()
-            .api_key(api_key)
-            .model("deepseek-v4-flash")
-            .with_builtin_tools()
-            .with_tool_policy(tool_policy)
-            .on_approval_required(move |call_id, tool, reason| {
-                eprintln!("[approval] \"{tool}\" 需要审批: {reason}");
-                eprintln!("[approval] 自动批准");
-                let _ = approval_tx.send(call_id.to_string());
-            })
-            .with_approval_timeout(Duration::from_secs(30))
-            .build()?,
-    );
+    // ── 5. Build runtime ───────────────────────────────────────────
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+        .api_key(api_key)
+        .model("deepseek-v4-flash")
+        .with_builtin_tools()
+        .with_tool_policy(tool_policy)
+        .on_approval_required(move |call_id, tool, reason| {
+            eprintln!("[approval] \"{tool}\" needs approval: {reason}");
+            eprintln!("[approval] auto-approving");
+            let _ = approval_tx.send(call_id.to_string());
+        })
+        .with_approval_timeout(Duration::from_secs(30))
+        .build()?;
 
-    // ── 6. 审批后台 ────────────────────────────────────────────────
-    let rt = runtime.clone();
+    // ── 6. ApprovalHandle – cloneable, move into spawned task ──────
+    let approver: ApprovalHandle = runtime.approval_handle();
     tokio::spawn(async move {
         while let Some(call_id) = approval_rx.recv().await {
-            if let Err(e) = rt.approve_tool_call(&call_id, true).await {
-                eprintln!("[approval] 批准失败: {e}");
+            if let Err(e) = approver.approve_tool_call(&call_id, true).await {
+                eprintln!("[approval] failed: {e}");
             }
         }
     });
 
-    // ── 7. 审计订阅 ────────────────────────────────────────────────
+    // ── 7. Audit subscription ──────────────────────────────────────
     let mut audit_rx = runtime.subscribe_audit().await;
     tokio::spawn(async move {
         while let Ok(event) = audit_rx.recv().await {
@@ -83,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 AuditEvent::ToolDenied {
                     tool_name, reason, ..
                 } => {
-                    eprintln!("[audit] {tool_name} 被拒绝: {reason}");
+                    eprintln!("[audit] {tool_name} denied: {reason}");
                 }
                 other => eprintln!("[audit] {other:?}"),
             }
@@ -92,13 +94,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 8. Agent ───────────────────────────────────────────────────
     let agent = Agent::builder()
-        .system_prompt("你可以使用 read 工具来读取文件、write 来写入文件、edit 来修改文件。")
+        .system_prompt("You can use read/write/edit tools.")
         .build();
 
+    // `fire()` borrows the runtime — one-shot, stateless.  Works with
+    // `approve_tool_call` because both go through the shared EnvActor.
     let resp = agent
-        .fire("列出当前目录下的所有 .rs 文件", &*runtime)
+        .fire("List all .rs files in the current directory", &runtime)
         .await?;
     println!("Agent: {}", resp.content);
+
+    // For multi-turn conversations, clone the ApprovalHandle *before*
+    // `send()` consumes the runtime:
+    //   let approver = runtime.approval_handle();
+    //   let (runtime, resp) = agent.send("hello", runtime).await?.await?;
 
     Ok(())
 }

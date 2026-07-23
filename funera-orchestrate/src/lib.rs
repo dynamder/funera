@@ -52,6 +52,7 @@
 //! | **One-shot** | [`Agent::fire`] | Temporary session, discarded after call |
 //! | **Multi-turn** | [`Agent::send`] | Persistent session across calls |
 //! | **Streaming** | [`fire_stream`](Agent::fire_stream) / [`send_stream`](Agent::send_stream) | Token-by-token streaming |
+//! | **Approval** | [`ApprovalHandle`] | Lightweight cloneable handle for tool-call approval |
 //!
 //! ## Examples
 //!
@@ -127,27 +128,39 @@
 //! # }
 //! ```
 //!
-//! ### Security configuration
+//! ### Security with tool-call approval
 //!
 //! Requires the `security` feature (and optionally `funera-builtin-tools`, `sandbox`).
+//! Use [`ApprovalHandle`] to approve or reject tool calls from a spawned task
+//! while the agent is running — works with `fire()`, `send()`, and `send_stream()`.
 //!
-//! ```rust,no_run,ignore
-//! # use funera_orchestrate::{AgentRuntime, DeepSeekProvider, ToolPolicy, ShellPolicy};
-//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! ```rust,no_run
+//! # use funera_orchestrate::{Agent, AgentRuntime, ApprovalHandle, DeepSeekProvider};
+//! # use std::time::Duration;
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let (approval_tx, mut approval_rx) = tokio::sync::mpsc::unbounded_channel();
+//!
 //! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 //!     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
 //!     .model("deepseek-v4-flash")
-//!     .with_builtin_tools()
-//!     .with_tool_policy(
-//!         ToolPolicy {
-//!             denied_tools: ["shell".into()].into_iter().collect(),
-//!             shell_policy: Some(ShellPolicy::with_allowed(
-//!                 vec!["git".into(), "cargo".into()],
-//!             )),
-//!             ..Default::default()
-//!         },
-//!     )
+//!     .on_approval_required(move |call_id, tool, reason| {
+//!         eprintln!("[{tool}] needs approval: {reason}");
+//!         let _ = approval_tx.send(call_id.to_string());
+//!     })
+//!     .with_approval_timeout(Duration::from_secs(30))
 //!     .build()?;
+//!
+//! // Clone the ApprovalHandle *before* send() consumes the runtime.
+//! let approver: ApprovalHandle = runtime.approval_handle();
+//! tokio::spawn(async move {
+//!     while let Some(call_id) = approval_rx.recv().await {
+//!         approver.approve_tool_call(&call_id, true).await.ok();
+//!     }
+//! });
+//!
+//! let agent = Agent::builder().build();
+//! let (_runtime, resp) = agent.send("do something", runtime).await?.await?;
+//! println!("{}", resp.content);
 //! # Ok(())
 //! # }
 //! ```
@@ -156,6 +169,7 @@
 //!
 //! - [`runtime`] — [`AgentRuntimeBuilder`] and [`AgentRuntime`]
 //! - [`agent`] — [`AgentBuilder`] and [`Agent`]
+//! - [`send_handle`] — [`SendHandle`], [`SendStreamHandle`], [`FireStreamHandle`], [`ApprovalHandle`]
 //! - [`dispatcher`] — Event bus subscription and callback dispatch
 //! - [`event`] — [`AgentEvent`] enum
 //! - [`response`] — [`ChatResponse`] and [`ToolCallInfo`]
@@ -182,6 +196,8 @@ pub use funera_core::provider::deepseek::DeepSeekProvider;
 pub use funera_core::provider::openai::OpenAIProvider;
 pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
+#[cfg(all(feature = "tool", feature = "security"))]
+pub use send_handle::ApprovalHandle;
 pub use send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
 
 // Re-export security policy types for convenience.

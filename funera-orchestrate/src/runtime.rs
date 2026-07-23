@@ -747,6 +747,32 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         rx.await.unwrap_or(Err("env actor died".into()))
     }
 
+    /// Returns a cloneable [`ApprovalHandle`](crate::send_handle::ApprovalHandle)
+    /// for approving tool calls from spawned tasks.
+    ///
+    /// Obtain this **before** passing the runtime to
+    /// [`send`](crate::Agent::send) /
+    /// [`send_stream`](crate::Agent::send_stream), which consume it.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use funera_orchestrate::{Agent, AgentRuntime, DeepSeekProvider};
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let rt = AgentRuntime::<DeepSeekProvider>::builder()
+    /// #     .api_key("sk-test").model("x").build()?;
+    /// # let agent = Agent::builder().build();
+    /// let approver = rt.approval_handle();
+    /// // spawn background task to approve tool calls ...
+    /// let (_rt, _resp) = agent.send("hello", rt).await?.await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(all(feature = "tool", feature = "security"))]
+    pub fn approval_handle(&self) -> crate::send_handle::ApprovalHandle {
+        crate::send_handle::ApprovalHandle::new(self.env_cmd_tx.clone())
+    }
+
     /// Transform the runtime into `Acquired` state (internal use).
     pub(crate) fn into_acquired(self) -> AgentRuntime<P, Acquired> {
         AgentRuntime::<P, Acquired> {
@@ -1103,5 +1129,66 @@ mod tests {
 
         let stored = rt.sandbox_policy().await;
         assert!(!stored.enabled, "disabled policy should stay disabled");
+    }
+
+    // ── approval_handle tests ───────────────────────────────────────
+
+    #[cfg(all(feature = "tool", feature = "security"))]
+    mod approval_handle_tests {
+        use super::*;
+        use crate::send_handle::ApprovalHandle;
+
+        #[tokio::test]
+        async fn runtime_provides_approval_handle() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+
+            let handle = rt.approval_handle();
+            // Compile-time check: approval_handle() returns an ApprovalHandle.
+            let _: ApprovalHandle = handle;
+        }
+
+        #[tokio::test]
+        async fn approval_handle_is_cloneable() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+
+            let h1 = rt.approval_handle();
+            let h2 = h1.clone();
+            let h3 = h2.clone();
+
+            // Multiple independent clones share the same underlying channel.
+            drop(h1);
+            drop(h2);
+            drop(h3);
+        }
+
+        #[tokio::test]
+        async fn approval_handle_survives_runtime_drop() {
+            let handle = {
+                let rt = AgentRuntimeBuilder::new()
+                    .api_key("sk-test")
+                    .model("x")
+                    .build()
+                    .unwrap();
+                rt.approval_handle()
+            };
+            // The handle owns its own clone of env_cmd_tx — it stays valid
+            // even after the original runtime is dropped.
+            drop(handle);
+        }
+
+        #[test]
+        fn approval_handle_implements_send_sync() {
+            // ApprovalHandle must be Send + Sync for use in spawned tasks.
+            fn assert_send_sync<T: Send + Sync>() {}
+            assert_send_sync::<ApprovalHandle>();
+        }
     }
 }
