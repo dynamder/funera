@@ -71,6 +71,10 @@ jobs:
         uses: obi1kenobi/cargo-semver-checks-action@v2
         continue-on-error: true
 
+      - name: Cleanup semver-check artifacts
+        if: always()
+        run: rm -rf semver-checks
+
       - name: Push tag
         if: ${{ !inputs.skip_bump }}
         run: git push origin main --follow-tags
