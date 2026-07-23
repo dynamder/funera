@@ -174,6 +174,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "tool")]
     #[test]
     fn tool_call_result_error_preserved_in_session_message() {
         // When a tool call fails, the error must appear in the
@@ -202,6 +203,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "tool")]
     #[test]
     fn tool_call_result_success_not_modified() {
         // A successful tool result should pass through unchanged.

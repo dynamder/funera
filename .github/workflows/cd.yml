@@ -99,7 +99,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          VERSION=$(grep '^version' funera-core/Cargo.toml | head -1 | cut -d'"' -f2)
+          VERSION=$(cargo pkgid -p funera-core | sed 's/.*#//')
           git fetch --tags
           gh release create "v$VERSION" --generate-notes
         env:
