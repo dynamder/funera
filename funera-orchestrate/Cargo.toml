@@ -7,8 +7,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-funera-core = { path = "../funera_core", version = "0.2.3" }
-funera-builtin-tools = { path = "../funera_builtin_tools", version = "0.2.3", optional = true }
+funera-core = { path = "../funera_core", version = "0.2.4" }
+funera-builtin-tools = { path = "../funera_builtin_tools", version = "0.2.4", optional = true }
 tokio = { version = "1.52.3", features = ["full"] }
 async-openai = { version = "0.41.1", features = ["_api", "chat-completion", "responses", "skill"] }
 parking_lot = { version = "0.12.5", features = ["serde"] }
