@@ -1,0 +1,21 @@
+.gitignore
+  s_7f850cd9f52666::t_1cdce42ef357fa 3
+.github/workflows/cd.yml
+  s_7f850cd9f52666::t_9cfa1f9e796ffa 74-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b800e0749ce2c94e550950459f2508b5f6241531",
+  "prompts": {},
+  "sessions": {
+    "s_7f850cd9f52666": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_0728ffe39ffe9X0rPVfQrdmpOo",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
