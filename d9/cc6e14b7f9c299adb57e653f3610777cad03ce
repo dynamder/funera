@@ -1,0 +1,29 @@
+funera_builtin_tools/Cargo.toml
+  s_c6da7ac051d67a::t_c4fe8cafe1bb16 3,13
+release.toml
+  s_c6da7ac051d67a::t_e71b1a4324aef4 3
+funera_core/Cargo.toml
+  s_c6da7ac051d67a::t_9f1fceb029e2da 3
+funera-orchestrate/Cargo.toml
+  s_c6da7ac051d67a::t_0a18b8bc31d924 3,10-11
+Cargo.toml
+  s_c6da7ac051d67a::t_44ee8d25034bb7 17-18
+Cargo.lock
+  s_c6da7ac051d67a::t_d52ed7d900e951 927,941,966
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d9cc6e14b7f9c299adb57e653f3610777cad03ce",
+  "prompts": {},
+  "sessions": {
+    "s_c6da7ac051d67a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_072c233d2ffei5oTB0R5E0ABcX",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
