@@ -20,6 +20,32 @@ use crate::env::{FuneraEnv, FuneraEnvWatcher};
 use crate::event_bus::env_state_bus::EnvStateEvent;
 
 // ═══════════════════════════════════════════════════════════════
+// Config structs — bundle params to keep fn arg count ≤ 7
+// ═══════════════════════════════════════════════════════════════
+
+/// Bundle of tool-system resources for the EnvActor.
+///
+/// Fields are feature-gated internally; the struct always exists so call
+/// sites can pass `Option<EnvToolConfig>` without any `#[cfg]` on the
+/// function signature.
+pub struct EnvToolConfig {
+    #[cfg(feature = "tool")]
+    pub tool_bus: ToolBus,
+    #[cfg(feature = "tool")]
+    pub exec_rx: mpsc::Receiver<crate::event_bus::tool_bus::ToolExecCommand>,
+}
+
+/// Bundle of security resources for the EnvActor.
+pub struct EnvSecurityConfig {
+    #[cfg(feature = "sandbox")]
+    pub sandbox_policy: SandboxPolicy,
+    #[cfg(feature = "security")]
+    pub tool_policy: ToolPolicy,
+    #[cfg(feature = "security")]
+    pub audit_bus: AuditBus,
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ReActConfig — bundled handles the ReAct loop needs each call
 // ═══════════════════════════════════════════════════════════════
 
@@ -115,11 +141,8 @@ pub fn spawn_env_actor(
     env_watcher: FuneraEnvWatcher,
     max_iterations: usize,
     channel_buffer: usize,
-    #[cfg(feature = "tool")] tool_bus: ToolBus,
-    #[cfg(feature = "tool")] exec_rx: mpsc::Receiver<crate::event_bus::tool_bus::ToolExecCommand>,
-    #[cfg(feature = "sandbox")] sandbox_policy: SandboxPolicy,
-    #[cfg(feature = "security")] _tool_policy: ToolPolicy,
-    #[cfg(feature = "security")] audit_bus: AuditBus,
+    tool: Option<EnvToolConfig>,
+    security: Option<EnvSecurityConfig>,
 ) -> mpsc::UnboundedSender<EnvCmd> {
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<EnvCmd>();
     let (state_tx, _) = broadcast::channel::<EnvStateEvent>(32);
@@ -128,12 +151,34 @@ pub fn spawn_env_actor(
 
     // ── Spawn ToolExecutor internally ─────────────────────────
     #[cfg(feature = "tool")]
-    let _executor_handle = {
-        let reg = env.tool_registry.clone();
-        tokio::spawn(async move {
-            ToolExecutor::new(reg, exec_rx).run().await;
-        })
+    let tool_bus_for_react = {
+        if let Some(tc) = tool {
+            let reg = env.tool_registry.clone();
+            let tb = tc.tool_bus.clone();
+            tokio::spawn(async move {
+                ToolExecutor::new(reg, tc.exec_rx).run().await;
+            });
+            Some(tb)
+        } else {
+            None
+        }
     };
+
+    // ── Extract security resources ────────────────────────────
+    #[cfg(feature = "sandbox")]
+    let sandbox_policy = {
+        let _s = &security;
+        _s.as_ref()
+            .map(|s| s.sandbox_policy.clone())
+            .unwrap_or_default()
+    };
+    #[cfg(feature = "security")]
+    let audit_bus = {
+        let _s = &security;
+        _s.as_ref().map(|s| s.audit_bus.clone()).unwrap_or_default()
+    };
+    #[cfg(not(any(feature = "sandbox", feature = "security")))]
+    let _ = &security;
 
     tokio::spawn(async move {
         // ── Broadcast initial state ─────────────────────────────
@@ -221,7 +266,9 @@ pub fn spawn_env_actor(
                     let _ = respond.send(ReActConfig {
                         env_watcher: env_watcher.clone(),
                         #[cfg(feature = "tool")]
-                        tool_bus: tool_bus.clone(),
+                        tool_bus: tool_bus_for_react
+                            .clone()
+                            .expect("tool_bus must be Some when tool feature is enabled"),
                         max_iterations,
                         channel_buffer,
                     });

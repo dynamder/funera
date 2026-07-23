@@ -11,6 +11,10 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::session::FuneraSession;
 use funera_core::chat::session::{SessionCmd, spawn_session_actor};
 use funera_core::env::FuneraEnv;
+#[cfg(any(feature = "sandbox", feature = "security"))]
+use funera_core::env_actor::EnvSecurityConfig;
+#[cfg(feature = "tool")]
+use funera_core::env_actor::EnvToolConfig;
 use funera_core::env_actor::{EnvCmd, ReActConfig, spawn_env_actor};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "tool")]
@@ -478,32 +482,45 @@ impl AgentRuntimeBuilder {
         #[cfg(feature = "tool")]
         let (tool_bus, exec_rx) = ToolBus::new();
 
-        // Snapshot build-time config for the env actor
-        #[cfg(feature = "sandbox")]
-        let sandbox_policy = self.sandbox_policy.clone().unwrap_or_default();
         #[cfg(feature = "security")]
         let tool_policy_val = self.tool_policy.clone().unwrap_or_default();
 
         let max_iters = self.max_iterations;
         let chan_buf = self.channel_buffer;
 
+        // Build config structs — always pass, no #[cfg] on fn args
+        let tool_cfg = {
+            #[cfg(feature = "tool")]
+            {
+                Some(EnvToolConfig { tool_bus, exec_rx })
+            }
+            #[cfg(not(feature = "tool"))]
+            {
+                None
+            }
+        };
+
+        let sec_cfg = {
+            #[cfg(feature = "security")]
+            {
+                #[cfg(feature = "sandbox")]
+                let sp = self.sandbox_policy.clone().unwrap_or_default();
+
+                Some(EnvSecurityConfig {
+                    #[cfg(feature = "sandbox")]
+                    sandbox_policy: sp,
+                    tool_policy: tool_policy_val,
+                    audit_bus,
+                })
+            }
+            #[cfg(not(feature = "security"))]
+            {
+                None
+            }
+        };
+
         // Spawn env actor — owns FuneraEnv, watcher, ToolExecutor, all config
-        let env_cmd_tx = spawn_env_actor(
-            env,
-            env_watcher,
-            max_iters,
-            chan_buf,
-            #[cfg(feature = "tool")]
-            tool_bus,
-            #[cfg(feature = "tool")]
-            exec_rx,
-            #[cfg(feature = "sandbox")]
-            sandbox_policy,
-            #[cfg(feature = "security")]
-            tool_policy_val,
-            #[cfg(feature = "security")]
-            audit_bus,
-        );
+        let env_cmd_tx = spawn_env_actor(env, env_watcher, max_iters, chan_buf, tool_cfg, sec_cfg);
 
         let session_tx = spawn_session_actor();
 
