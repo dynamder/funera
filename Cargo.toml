@@ -14,14 +14,14 @@ resolver = "3"
 members = ["funera_builtin_tools", "funera_core", "funera-orchestrate"]
 
 [workspace.package]
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/dynamder/funera"
 
 [dependencies]
-funera-orchestrate = { path = "./funera-orchestrate", version = "0.2.2" }
-funera-core = { path = "./funera_core", version = "0.2.2" }
+funera-orchestrate = { path = "./funera-orchestrate", version = "0.2.3" }
+funera-core = { path = "./funera_core", version = "0.2.3" }
 
 [features]
 default = ["tool", "deepseek"]
