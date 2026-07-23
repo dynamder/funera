@@ -20,6 +20,7 @@ concurrency: release
 
 jobs:
   release:
+    environment: crates.io
     runs-on: ubuntu-latest
     permissions:
       contents: write
