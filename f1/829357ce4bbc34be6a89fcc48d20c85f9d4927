@@ -1,0 +1,19 @@
+.github/workflows/cd.yml
+  s_c6da7ac051d67a::t_87b86ddbfc7f1f 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f1829357ce4bbc34be6a89fcc48d20c85f9d4927",
+  "prompts": {},
+  "sessions": {
+    "s_c6da7ac051d67a": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_072c233d2ffei5oTB0R5E0ABcX",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
