@@ -1,0 +1,22 @@
+funera-orchestrate/src/event.rs
+  s_5f3d6df4c322d2::t_4a587e28215b11 206
+  s_5f3d6df4c322d2::t_09927d0742af5d 177
+.github/workflows/cd.yml
+  s_5f3d6df4c322d2::t_829727e44466b3 102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "bbeac19ffc38803e4242a5fd0d638697b17c2d22",
+  "prompts": {},
+  "sessions": {
+    "s_5f3d6df4c322d2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_070a2f242ffeayJxbgcs2NNjAN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
