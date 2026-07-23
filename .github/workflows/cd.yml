@@ -12,6 +12,11 @@ on:
           - patch
           - minor
           - major
+      skip_bump:
+        description: 'Skip version bump (publish current version only)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -44,6 +49,7 @@ jobs:
           tool: cargo-release
 
       - name: Bump version
+        if: ${{ !inputs.skip_bump }}
         run: cargo release ${{ inputs.bump }} --execute --no-confirm
 
       - name: Verify formatting
@@ -66,6 +72,7 @@ jobs:
         continue-on-error: true
 
       - name: Push tag
+        if: ${{ !inputs.skip_bump }}
         run: git push origin main --follow-tags
 
       - name: Publish funera_core
