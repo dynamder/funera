@@ -110,7 +110,9 @@ impl MiddlewareEvent for AgentEvent {
                 Role::Tool,
                 MsgVariant::ToolResponse(ToolResponseMessage {
                     tool_call_id: call_id,
-                    result: result.unwrap_or_default().into(),
+                    result: result
+                        .unwrap_or_else(|e| format!("tool call failed: {e}"))
+                        .into(),
                 }),
             )),
             _ => None,
@@ -170,6 +172,51 @@ mod tests {
             e,
             AgentEvent::ToolCallResult { result: Err(_), .. }
         ));
+    }
+
+    #[test]
+    fn tool_call_result_error_preserved_in_session_message() {
+        // When a tool call fails, the error must appear in the
+        // session message so the LLM sees the rejection reason.
+        let event = AgentEvent::ToolCallResult {
+            call_id: "call_1".into(),
+            name: "shell".into(),
+            result: Err("tool call rejected by user".into()),
+        };
+        let (role, variant) = event.into_session_message().unwrap();
+        assert_eq!(role.to_string(), "tool");
+        match variant {
+            MsgVariant::ToolResponse(msg) => {
+                assert!(
+                    msg.result.contains("tool call failed:"),
+                    "result should contain error prefix; got: {}",
+                    msg.result
+                );
+                assert!(
+                    msg.result.contains("tool call rejected by user"),
+                    "result should contain original error; got: {}",
+                    msg.result
+                );
+            }
+            other => panic!("expected ToolResponse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tool_call_result_success_not_modified() {
+        // A successful tool result should pass through unchanged.
+        let event = AgentEvent::ToolCallResult {
+            call_id: "call_2".into(),
+            name: "read".into(),
+            result: Ok("file contents".into()),
+        };
+        let (_role, variant) = event.into_session_message().unwrap();
+        match variant {
+            MsgVariant::ToolResponse(msg) => {
+                assert_eq!(&*msg.result, "file contents");
+            }
+            other => panic!("expected ToolResponse, got {other:?}"),
+        }
     }
 
     #[test]
