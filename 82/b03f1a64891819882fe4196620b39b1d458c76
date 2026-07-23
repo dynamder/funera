@@ -1,0 +1,21 @@
+funera_core/src/env_actor.rs
+  s_5f3d6df4c322d2::t_b4e851972bc059 300-301
+funera-orchestrate/src/runtime.rs
+  s_5f3d6df4c322d2::t_2d0e5b82ae5e97 1193-1237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "82b03f1a64891819882fe4196620b39b1d458c76",
+  "prompts": {},
+  "sessions": {
+    "s_5f3d6df4c322d2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_070a2f242ffeayJxbgcs2NNjAN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
