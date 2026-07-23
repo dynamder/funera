@@ -297,7 +297,8 @@ pub fn spawn_env_actor(
                 } => {
                     let result = env
                         .tool_registry
-                        .blocking_read()
+                        .read()
+                        .await
                         .approve_tool_call(&call_id, approved);
                     let _ = respond.send(result);
                 }

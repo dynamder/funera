@@ -1190,5 +1190,50 @@ mod tests {
             fn assert_send_sync<T: Send + Sync>() {}
             assert_send_sync::<ApprovalHandle>();
         }
+
+        #[tokio::test]
+        async fn approve_nonexistent_call_id_returns_error() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+
+            let handle = rt.approval_handle();
+            let result = handle.approve_tool_call("nonexistent", true).await;
+            assert!(result.is_err());
+        }
+
+        #[tokio::test]
+        async fn reject_nonexistent_call_id_returns_error() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+
+            let handle = rt.approval_handle();
+            let result = handle.approve_tool_call("nonexistent", false).await;
+            assert!(result.is_err());
+        }
+
+        #[tokio::test]
+        async fn cloned_handles_approve_independently() {
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+
+            let h1 = rt.approval_handle();
+            let h2 = h1.clone();
+
+            // Both clones can call approve independently.
+            let r1 = h1.approve_tool_call("a", true).await;
+            let r2 = h2.approve_tool_call("b", false).await;
+
+            assert!(r1.is_err()); // "a" not in pending_approvals
+            assert!(r2.is_err()); // "b" not in pending_approvals
+        }
     }
 }
