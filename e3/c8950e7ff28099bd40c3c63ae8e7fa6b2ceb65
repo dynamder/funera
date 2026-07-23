@@ -1,0 +1,21 @@
+funera-orchestrate/src/event.rs
+  s_5f3d6df4c322d2::t_3016ee798545be 177-215,217-221
+  s_5f3d6df4c322d2::t_b0b18e95252e28 216
+  s_5f3d6df4c322d2::t_6a5952515851a0 113-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e3c8950e7ff28099bd40c3c63ae8e7fa6b2ceb65",
+  "prompts": {},
+  "sessions": {
+    "s_5f3d6df4c322d2": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_070a2f242ffeayJxbgcs2NNjAN",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
