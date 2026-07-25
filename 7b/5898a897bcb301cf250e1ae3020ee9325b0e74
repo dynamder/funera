@@ -1,0 +1,22 @@
+funera_core/src/security/sandbox_win.rs
+  s_cc9253bce853d7::t_afa70387799609 499-506
+  s_cc9253bce853d7::t_e79365f5f8ab86 550-551
+  s_cc9253bce853d7::t_03498828ff93d6 514
+  s_cc9253bce853d7::t_3127baa8f78b8a 498
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "7b5898a897bcb301cf250e1ae3020ee9325b0e74",
+  "prompts": {},
+  "sessions": {
+    "s_cc9253bce853d7": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_067658bf5ffebhtLNhgdRCWLqm",
+        "model": "unknown"
+      },
+      "human_author": "dynamder <igaster@163.com>"
+    }
+  }
+}
