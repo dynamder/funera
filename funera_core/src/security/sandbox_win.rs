@@ -24,6 +24,9 @@ use windows::Win32::Security::{
     GetTokenInformation, PSID, SANDBOX_INERT, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES,
     TOKEN_ACCESS_MASK, TOKEN_DUPLICATE, TOKEN_GROUPS, TOKEN_QUERY, TokenGroups,
 };
+use windows::Win32::System::Console::{
+    CONSOLE_MODE, GetConsoleMode, GetStdHandle, STD_INPUT_HANDLE, SetConsoleMode,
+};
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessAsUserW, GetCurrentProcess,
@@ -140,6 +143,7 @@ async fn execute_fallback(
     cmd.arg(shell_flag).arg(command);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+    cmd.stdin(Stdio::null());
 
     if block_network {
         cmd.env("HTTPS_PROXY", "http://127.0.0.1:9");
@@ -202,6 +206,7 @@ fn apply_write_acls(_sid: PSID, paths: &[PathBuf]) -> anyhow::Result<()> {
             .args(["/c", &grant_cmd])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
             .status();
 
         for protected in &[".git", ".funera", ".agents"] {
@@ -215,6 +220,7 @@ fn apply_write_acls(_sid: PSID, paths: &[PathBuf]) -> anyhow::Result<()> {
                     .args(["/c", &deny_cmd])
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
+                    .stdin(std::process::Stdio::null())
                     .status();
             }
         }
@@ -236,6 +242,7 @@ fn remove_write_acls(_sid: PSID, paths: &[PathBuf]) {
             .args(["/c", &remove_cmd])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null())
             .status();
     }
 }
@@ -505,6 +512,15 @@ fn launch_restricted(
     }
     unsafe { CloseHandle(stdin_write).ok() };
 
+    // Save console input mode to restore after child exits.
+    // Windows: GetStdHandle(STD_INPUT_HANDLE) from within a child
+    // process always returns the real console handle regardless of
+    // STARTF_USESTDHANDLES, so child processes can modify
+    // ENABLE_VIRTUAL_TERMINAL_INPUT etc.
+    let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE)? };
+    let mut saved_mode = CONSOLE_MODE(0);
+    let mode_saved = unsafe { GetConsoleMode(stdin_handle, &mut saved_mode) }.is_ok();
+
     // SAFETY: zeroed() is safe for STARTUPINFOW — all fields are
     // explicitly set below before the struct is passed to the API.
     let mut si: STARTUPINFOW = unsafe { std::mem::zeroed() };
@@ -595,6 +611,10 @@ fn launch_restricted(
     unsafe {
         CloseHandle(pi.hProcess).ok();
         CloseHandle(pi.hThread).ok();
+    }
+    // Restore console input mode in case the child modified it.
+    if mode_saved {
+        unsafe { SetConsoleMode(stdin_handle, saved_mode).ok() };
     }
     Ok((stdout_str, stderr_str, exit_code))
 }
@@ -1186,6 +1206,37 @@ mod tests {
             "expected workdir {dir_str} in output: {stdout}"
         );
         cleanup_temp_dir(&tmpdir);
+    }
+
+    #[test]
+    fn test_console_mode_restored_after_sandbox_execute() {
+        let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE).expect("GetStdHandle") };
+        let mut mode_before = CONSOLE_MODE(0);
+        let have_console = unsafe { GetConsoleMode(stdin_handle, &mut mode_before) }.is_ok();
+        if !have_console {
+            return;
+        }
+
+        let policy = SandboxPolicy {
+            enabled: true,
+            block_network: true,
+            ..Default::default()
+        };
+        let sandbox = WindowsSandbox::new(&policy).expect("create sandbox");
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (_, _, code) = rt
+            .block_on(sandbox.execute("cmd", "/c", "echo test", None, Duration::from_secs(10)))
+            .expect("sandbox execute");
+        assert_eq!(code, 0);
+
+        let mut mode_after = CONSOLE_MODE(0);
+        let got_mode = unsafe { GetConsoleMode(stdin_handle, &mut mode_after) }.is_ok();
+        assert!(got_mode, "failed to read console mode after sandbox");
+        assert_eq!(
+            mode_before.0, mode_after.0,
+            "console mode changed: before=0x{:x}, after=0x{:x}",
+            mode_before.0, mode_after.0,
+        );
     }
 
     // ══════════════════════════════════════════════════════════════════

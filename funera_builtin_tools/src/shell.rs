@@ -145,6 +145,7 @@ impl ShellTool {
         cmd.arg(shell_flag).arg(command_str);
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
+        cmd.stdin(std::process::Stdio::null());
 
         if let Some(dir) = workdir {
             cmd.current_dir(dir);
