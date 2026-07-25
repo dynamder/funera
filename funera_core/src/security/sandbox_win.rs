@@ -24,7 +24,6 @@ use windows::Win32::Security::{
     GetTokenInformation, PSID, SANDBOX_INERT, SECURITY_ATTRIBUTES, SID_AND_ATTRIBUTES,
     TOKEN_ACCESS_MASK, TOKEN_DUPLICATE, TOKEN_GROUPS, TOKEN_QUERY, TokenGroups,
 };
-use windows::Win32::System::Console::{GetStdHandle, STD_INPUT_HANDLE};
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
     CREATE_NO_WINDOW, CREATE_UNICODE_ENVIRONMENT, CreateProcessAsUserW, GetCurrentProcess,
@@ -496,11 +495,15 @@ fn launch_restricted(
         w.push(0);
         w
     });
-    // SAFETY: GetStdHandle returns the current process's stdin handle.
-    // This handle is valid for the lifetime of the process and is
-    // inherited by the child via STARTF_USESTDHANDLES below.
-    let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE) }
-        .map_err(|e| anyhow!("GetStdHandle failed: {e}"))?;
+
+    let mut stdin_read = HANDLE::default();
+    let mut stdin_write = HANDLE::default();
+    // SAFETY: CreatePipe allocates a kernel pipe object for stdin.
+    // The write-end is closed immediately so the child reads EOF.
+    unsafe {
+        CreatePipe(&mut stdin_read, &mut stdin_write, Some(&sa), 0)?;
+    }
+    unsafe { CloseHandle(stdin_write).ok() };
 
     // SAFETY: zeroed() is safe for STARTUPINFOW — all fields are
     // explicitly set below before the struct is passed to the API.
@@ -508,7 +511,7 @@ fn launch_restricted(
     si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
     si.hStdOutput = stdout_write;
     si.hStdError = stderr_write;
-    si.hStdInput = stdin_handle;
+    si.hStdInput = stdin_read;
     si.dwFlags = STARTF_USESTDHANDLES;
 
     // SAFETY: zeroed() is safe for PROCESS_INFORMATION — the fields
@@ -544,6 +547,8 @@ fn launch_restricted(
 
     // The child now has handles to the write-ends; we can close ours.
     guard.close_write_ends();
+    // stdin_read was inherited by the child; close parent's copy.
+    unsafe { CloseHandle(stdin_read).ok() };
 
     if result.is_err() {
         return Err(anyhow!("CreateProcessAsUserW failed: {result:?}"));
