@@ -9,13 +9,15 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`mod@chat`] | Message types and session actor for conversation history |
-//! | [`mod@env`] | Shared runtime environment with watch-based hot-reload (FuneraEnv, FuneraEnvWatcher) |
+//! | [`mod@env`] | Runtime environment: watch-based hot-reload (`FuneraEnv`, `FuneraEnvWatcher`) plus the capability layer (reversible effects + typed services) |
 //! | [`mod@env_actor`] | EnvActor — single source of truth owning all env state, mutations, and ToolExecutor |
 //! | [`mod@event_bus`] | Event buses for streaming tokens, ReAct cycle events, session lifecycle, and tool commands |
+//! | [`mod@loader`] | Declarative plugin loader: reconcile a desired plugin set ([`PluginEntry`](loader::PluginEntry)) with hot replacement |
+//! | [`mod@middleware`] | Pluggable event interception pipeline (Inspector + Mutator) with typestate error channel |
+//! | [`mod@plugin`] | The unified [`Plugin`](plugin::Plugin) abstraction, reactive [`PluginRegistry`](plugin::PluginRegistry), and [`PluginInstance`](plugin::PluginInstance) lifecycle |
 //! | [`mod@provider`] | Provider abstraction over LLM backends (OpenAI, DeepSeek) |
 //! | [`mod@re_act`] | The ReAct execution loop, [`Tool`](re_act::tool::Tool) trait and registry, and skill system |
 //! | [`mod@security`] | Tool/shell policy enforcement, path allowlisting, audit logging, and secure API key storage |
-//! | [`mod@middleware`] | Pluggable event interception pipeline (Inspector + Mutator) with typestate error channel |
 
 pub mod chat;
 pub mod env;

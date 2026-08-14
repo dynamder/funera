@@ -139,6 +139,23 @@ sequenceDiagram
 - **Security layer** — tool/shell policies, path allowlisting, audit logging, secure API key storage
 - **Type-state session** — compile-time enforcement of session ownership (`Idle` / `Acquired`)
 
+## Plugin architecture
+
+funera composes agents from **plugins** — one unified abstraction over tools, providers, skills, and middleware.
+
+- **`Plugin` trait** — `name` (identity), `inject` (dependencies it reads), `provides` (services it writes), `apply` (load hook). `Tool`, `ChatProvider`, `InspectorMiddleware`, and `MutatorMiddleware` are all subtraits of `Plugin`, so any capability is also a mountable plugin.
+- **Capability layer** — a `FuneraEnv` carries a typed service table plus a per-env effect accumulator: `env.effect(..)` registers a reversible effect (the returned disposer runs on unload, in LIFO order), while `env.provide::<T>(..)` / `env.get::<T>()` publish and resolve typed services.
+- **`PluginRegistry`** — drives the reactive lifecycle `Pending → Loading → Active → Unloading → Disposed/Failed`, activating a plugin only once its `inject` requirements are met and deactivating it when they are withdrawn.
+- **`Loader`** — reconciles a declarative plugin set (a list of `PluginEntry`s) against the registry with minimal mount/unmount operations; bumping an entry's `revision` hot-replaces it in place.
+
+Run the end-to-end demo:
+
+```bash
+cargo run -p funera-orchestrate --example plugin_architecture
+```
+
+See `funera-orchestrate/examples/plugin_architecture.rs` for the full reactive-lifecycle walkthrough: dependency-driven activation, deactivation on provider removal, and hot reload.
+
 ## Installation
 
 Add the root crate to your `Cargo.toml`:
@@ -251,14 +268,18 @@ let mut env_rx = runtime.subscribe_env_state().await;
 
 ```rust
 use async_trait::async_trait;
+use funera::core::plugin::Plugin;
 use funera::core::re_act::tool::{Tool, ToolCallError};
 use serde_json::{json, Value as JsonValue};
 
 struct Calculator;
 
+impl Plugin for Calculator {
+    fn name(&self) -> &str { "calculator" }
+}
+
 #[async_trait]
 impl Tool for Calculator {
-    fn name(&self) -> &str { "calculator" }
     fn description(&self) -> &str { "Evaluate a math expression" }
     fn schema(&self) -> JsonValue {
         json!({
@@ -325,10 +346,12 @@ funera/
 ├── funera_core/          Core agent engine
 │   └── src/
 │       ├── chat/         Message types, session actor
-│       ├── env.rs        Runtime environment + watch hot-reload
+│       ├── env.rs        Runtime environment, watch hot-reload, capability layer
 │       ├── env_actor.rs  EnvActor — single source of truth for all env state
 │       ├── event_bus/    Token, React, EnvState, Tool buses
+│       ├── loader.rs     Declarative plugin loader (PluginEntry, Loader, HMR)
 │       ├── middleware.rs  Event interception pipeline
+│       ├── plugin.rs     Plugin trait, PluginRegistry, PluginInstance
 │       ├── provider/     OpenAI & DeepSeek backends
 │       ├── re_act/       ReAct loop, Tool trait, Skill system
 │       └── security/     Policies, path guard, audit, secrets
@@ -339,7 +362,7 @@ funera/
 │   │   ├── event.rs      AgentEvent enum
 │   │   ├── dispatcher.rs  Callback dispatch
 │   │   └── send_handle.rs Ownership handles
-│   └── examples/         Example programs
+│   └── examples/         Example programs (incl. plugin_architecture)
 ├── funera_builtin_tools/  Default tool implementations
 │   └── src/
 │       ├── read.rs       ReadTool (file/dir, hashline output)

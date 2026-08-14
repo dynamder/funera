@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::env::FuneraEnv;
-use crate::plugin::{Plugin, PluginRegistry};
+use crate::plugin::{InstanceState, Plugin, PluginRegistry};
 
 /// A declarative entry describing one desired plugin instance.
 #[derive(Clone)]
@@ -81,6 +81,14 @@ impl Loader {
     /// Number of currently mounted entries.
     pub fn mounted_count(&self) -> usize {
         self.mounted.len()
+    }
+
+    /// Lifecycle state of the mounted entry with the given id.
+    ///
+    /// Returns `None` if the id is not currently mounted.
+    pub fn entry_state(&self, id: &str) -> Option<&InstanceState> {
+        let (inst, _) = self.mounted.get(id)?;
+        self.registry.state(*inst)
     }
 
     /// Reconcile the registry against `entries`.
@@ -211,6 +219,14 @@ mod tests {
         assert_eq!(reloaded, vec!["p".to_string()]);
         assert_eq!(APPLIES.load(Ordering::SeqCst), 2, "reload must re-run apply");
         assert_eq!(l.registry().instance_count(), 1, "reload must not duplicate");
+    }
+
+    #[test]
+    fn entry_state_reports_lifecycle() {
+        let mut l = loader();
+        l.reconcile(&[PluginEntry::new("a", noop("a"))]);
+        assert_eq!(l.entry_state("a"), Some(&InstanceState::Active));
+        assert!(l.entry_state("missing").is_none());
     }
 
     #[test]
