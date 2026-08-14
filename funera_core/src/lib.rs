@@ -21,6 +21,7 @@ pub mod chat;
 pub mod env;
 pub mod env_actor;
 pub mod event_bus;
+pub mod loader;
 pub mod middleware;
 pub mod plugin;
 pub mod provider;
