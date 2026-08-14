@@ -22,25 +22,55 @@ use tokio::sync::{
 /// order when [`FuneraEnv::dispose`] is called (LIFO recovery).
 pub type Disposer = Box<dyn FnOnce() + Send + 'static>;
 
+/// A callback fired when a service is provided (`true`) or removed (`false`).
+///
+/// Subscribed via [`FuneraEnv::on_service_change`]; `provide` and the disposers
+/// registered by `provide` invoke it on the changed key. This is the reactive
+/// notification primitive that drives dependent-plugin refresh.
+pub type ServiceObserver = Arc<dyn Fn(TypeId, bool) + Send + Sync>;
+
 /// Shared state behind a [`FuneraEnv`]'s capability layer.
 ///
 /// `services` is the coeffect context (a typed service table keyed by
-/// [`TypeId`]); `disposers` is the accumulator of effect inverses, recovered
-/// in LIFO order on [`FuneraEnv::dispose`].
+/// [`TypeId`]), shared between a derived env and its children. Each [`FuneraEnv`]
+/// keeps its own effect accumulator (`disposers`) so a child can be torn down
+/// independently of its parent.
 struct EnvShared {
     services: StdRwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
-    disposers: Mutex<Vec<Disposer>>,
+    observers: Mutex<Vec<ServiceObserver>>,
 }
 
 impl EnvShared {
     fn new() -> Self {
         Self {
             services: StdRwLock::new(HashMap::new()),
-            disposers: Mutex::new(Vec::new()),
+            observers: Mutex::new(Vec::new()),
         }
+    }
+
+    fn insert(&self, key: TypeId, value: Arc<dyn Any + Send + Sync>) {
+        self.services.write().unwrap().insert(key, value);
+        self.notify(key, true);
+    }
+
+    fn remove(&self, key: TypeId) {
+        self.services.write().unwrap().remove(&key);
+        self.notify(key, false);
+    }
+
+    fn notify(&self, key: TypeId, present: bool) {
+        let observers = self.observers.lock().unwrap();
+        for observer in observers.iter() {
+            observer(key, present);
+        }
+    }
+
+    fn subscribe(&self, observer: ServiceObserver) {
+        self.observers.lock().unwrap().push(observer);
     }
 }
 
+#[derive(Clone)]
 pub struct FuneraEnv {
     #[cfg(feature = "tool")]
     pub(crate) tool_registry: Arc<RwLock<ToolRegistry>>,
@@ -56,8 +86,10 @@ pub struct FuneraEnv {
     skill_tx: watch::Sender<String>,
     #[cfg(feature = "sandbox")]
     sandbox_policy: SandboxPolicy,
-    /// Shared capability layer (service table + effect accumulator).
+    /// Shared service table (coeffect context) and observers.
     shared: Arc<EnvShared>,
+    /// This env's own effect accumulator (LIFO inverse stack).
+    disposers: Arc<Mutex<Vec<Disposer>>>,
 }
 
 impl FuneraEnv {
@@ -96,6 +128,7 @@ impl FuneraEnv {
                 #[cfg(feature = "sandbox")]
                 sandbox_policy: SandboxPolicy::default(),
                 shared: Arc::new(EnvShared::new()),
+                disposers: Arc::new(Mutex::new(Vec::new())),
             },
             FuneraEnvWatcher {
                 #[cfg(feature = "tool")]
@@ -290,6 +323,26 @@ impl FuneraEnvWatcher {
 // ═══════════════════════════════════════════════════════════════
 
 impl FuneraEnv {
+    /// Derive a child env that shares this env's service table but owns a fresh
+    /// effect accumulator.
+    ///
+    /// A plugin instance runs its `apply` against a derived env, so unloading
+    /// that instance ([`dispose`](Self::dispose)) reverts only the effects it
+    /// registered, while the services it provided remain visible to siblings.
+    pub fn derive(&self) -> FuneraEnv {
+        let mut child = self.clone();
+        child.disposers = Arc::new(Mutex::new(Vec::new()));
+        child
+    }
+
+    /// Subscribe to service provision/removal events.
+    ///
+    /// The observer is called with `(TypeId, true)` when a service is provided
+    /// and `(TypeId, false)` when it is removed.
+    pub fn on_service_change(&self, observer: ServiceObserver) {
+        self.shared.subscribe(observer);
+    }
+
     /// Register a reversible effect.
     ///
     /// `body` runs now (setup) and returns a [`Disposer`] that undoes it. The
@@ -304,14 +357,14 @@ impl FuneraEnv {
     /// ```
     pub fn effect(&self, body: impl FnOnce() -> Disposer) {
         let undo = body();
-        self.shared.disposers.lock().unwrap().push(undo);
+        self.disposers.lock().unwrap().push(undo);
     }
 
     /// Provide a typed service to this env.
     ///
     /// The service is stored under its [`TypeId`] and automatically removed on
     /// [`dispose`](Self::dispose). `provide` is itself an effect: its inverse is
-    /// "remove the service".
+    /// "remove the service", registered in this env's own accumulator.
     ///
     /// ```rust,ignore
     /// #[derive(Clone)]
@@ -323,15 +376,15 @@ impl FuneraEnv {
         let key = TypeId::of::<T>();
         let shared = Arc::clone(&self.shared);
         self.effect(move || {
-            shared.services.write().unwrap().insert(key, Arc::new(value));
+            shared.insert(key, Arc::new(value));
             let teardown_shared = Arc::clone(&shared);
             Box::new(move || {
-                teardown_shared.services.write().unwrap().remove(&key);
+                teardown_shared.remove(key);
             })
         });
     }
 
-    /// Resolve a typed service previously provided to this env.
+    /// Resolve a typed service previously provided to this env (or a parent).
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
         self.shared
             .services
@@ -343,11 +396,15 @@ impl FuneraEnv {
 
     /// Whether a service of type `T` is currently provided.
     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
-        self.shared
-            .services
-            .read()
-            .unwrap()
-            .contains_key(&TypeId::of::<T>())
+        self.contains_typeid(TypeId::of::<T>())
+    }
+
+    /// Whether a service with the given [`TypeId`] is currently provided.
+    ///
+    /// The non-generic counterpart of [`contains`](Self::contains), used by the
+    /// plugin registry to check `inject` requirements (which are [`TypeId`]s).
+    pub fn contains_typeid(&self, key: TypeId) -> bool {
+        self.shared.services.read().unwrap().contains_key(&key)
     }
 
     /// Number of services currently provided.
@@ -358,9 +415,10 @@ impl FuneraEnv {
     /// Run every registered disposer in reverse (LIFO) order.
     ///
     /// This tears the env's capability layer down: each effect is undone in the
-    /// reverse of the order it was registered.
+    /// reverse of the order it was registered. Only this env's own effects are
+    /// reverted; services provided by sibling envs are untouched.
     pub fn dispose(&self) {
-        let disposers = std::mem::take(&mut *self.shared.disposers.lock().unwrap());
+        let disposers = std::mem::take(&mut *self.disposers.lock().unwrap());
         for undo in disposers.into_iter().rev() {
             undo();
         }
