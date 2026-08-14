@@ -6,7 +6,9 @@ LLM backends — all with multi-layered security and a flexible pipeline.
 WARNING: This crate is still under development, the documentation may be incomplete or wrong. And the API may change.
 WARNING: The security features are still under development and testing, and cannot be trusted to be secure.
 
+[![CI](https://github.com/dynamder/funera/actions/workflows/ci.yml/badge.svg)](https://github.com/dynamder/funera/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://github.com/dynamder/funera/blob/main/CONTRIBUTING.md#minimum-supported-rust-version-msrv)
 [![Rust](https://img.shields.io/badge/edition-2024-orange)](https://rust-lang.org)
 
 ## Architecture
@@ -370,6 +372,14 @@ funera/
 │       ├── edit.rs       EditTool (hashline-anchored editing)
 │       └── shell.rs      ShellTool (cross-platform, timeout)
 ```
+
+## Contributing
+
+Contributions are welcome! Please read:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — build, test, and pull-request workflow
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
+- [SECURITY.md](SECURITY.md) — reporting security vulnerabilities
 
 ## License
 
