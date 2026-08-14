@@ -1,0 +1,22 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::set_client with ()
+@@ -190,18 +190,17 @@
+ 
+     #[cfg(feature = "tool")]
+     pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
+         let registry = self.tool_registry.read().await;
+         let _ = self.tool_tx.send(registry.available_tools_json());
+     }
+ 
+     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
+-        self.llm_client = client.clone();
+-        let _ = self.client_tx.send(client);
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub(crate) fn set_model(&mut self, model: impl Into<String>) {
+         let model = model.into();
+         self.model = model.clone();
+         let _ = self.model_tx.send(model);
+     }
+ 

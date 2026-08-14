@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::on_service_change with ()
+@@ -341,17 +341,17 @@
+         child
+     }
+ 
+     /// Subscribe to service provision/removal events.
+     ///
+     /// The observer is called with `(TypeId, true)` when a service is provided
+     /// and `(TypeId, false)` when it is removed.
+     pub fn on_service_change(&self, observer: ServiceObserver) {
+-        self.shared.subscribe(observer);
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Register a reversible effect.
+     ///
+     /// `body` runs now (setup) and returns a [`Disposer`] that undoes it. The
+     /// disposer is pushed onto the env's accumulator and run in reverse (LIFO)
+     /// order by [`dispose`](Self::dispose) when the env is torn down.
+     ///

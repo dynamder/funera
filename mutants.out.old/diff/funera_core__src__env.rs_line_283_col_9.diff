@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::watch_skill -> String with String::new()
+@@ -275,17 +275,17 @@
+     }
+ 
+     pub fn watch_model(&mut self) -> String {
+         self.model_rx.borrow_and_update().clone()
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub fn watch_skill(&mut self) -> String {
+-        self.skill_rx.borrow_and_update().clone()
++        String::new() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub fn has_tool_changed(&self) -> bool {
+         self.tool_rx.has_changed().unwrap_or(false)
+     }
+ 
+     pub fn has_client_changed(&self) -> bool {

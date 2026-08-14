@@ -1,0 +1,24 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::dispose with ()
+@@ -419,20 +419,17 @@
+     }
+ 
+     /// Run every registered disposer in reverse (LIFO) order.
+     ///
+     /// This tears the env's capability layer down: each effect is undone in the
+     /// reverse of the order it was registered. Only this env's own effects are
+     /// reverted; services provided by sibling envs are untouched.
+     pub fn dispose(&self) {
+-        let disposers = std::mem::take(&mut *self.disposers.lock().unwrap());
+-        for undo in disposers.into_iter().rev() {
+-            undo();
+-        }
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+ 
+     fn test_env() -> (FuneraEnv, FuneraEnvWatcher) {

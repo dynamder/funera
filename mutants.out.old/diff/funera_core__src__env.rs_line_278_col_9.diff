@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::watch_model -> String with String::new()
+@@ -270,17 +270,17 @@
+         self.tool_rx.borrow_and_update().clone()
+     }
+ 
+     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {
+         self.client_rx.borrow_and_update().clone()
+     }
+ 
+     pub fn watch_model(&mut self) -> String {
+-        self.model_rx.borrow_and_update().clone()
++        String::new() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub fn watch_skill(&mut self) -> String {
+         self.skill_rx.borrow_and_update().clone()
+     }
+ 
+     #[cfg(feature = "tool")]

@@ -1,0 +1,23 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::add_tool with ()
+@@ -171,19 +171,17 @@
+         Self {
+             skill_registry: Arc::new(RwLock::new(skill_registry)),
+             ..self
+         }
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {
+-        let mut registry = self.tool_registry.write().await;
+-        registry.add_tool(tool);
+-        let _ = self.tool_tx.send(registry.available_tools_json());
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub(crate) async fn remove_tool(&mut self, name: &str) {
+         let mut registry = self.tool_registry.write().await;
+         registry.remove_tool(name);
+         let _ = self.tool_tx.send(registry.available_tools_json());
+     }

@@ -1,0 +1,2050 @@
+[
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace EnvShared::insert with ()\n@@ -44,18 +44,17 @@\n     fn new() -> Self {\n         Self {\n             services: StdRwLock::new(HashMap::new()),\n             observers: Mutex::new(Vec::new()),\n         }\n     }\n \n     fn insert(&self, key: TypeId, value: Arc<dyn Any + Send + Sync>) {\n-        self.services.write().unwrap().insert(key, value);\n-        self.notify(key, true);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     fn remove(&self, key: TypeId) {\n         self.services.write().unwrap().remove(&key);\n         self.notify(key, false);\n     }\n \n     fn notify(&self, key: TypeId, present: bool) {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "EnvShared::insert",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 54
+        },
+        "start": {
+          "column": 5,
+          "line": 51
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:52:9: replace EnvShared::insert with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 32,
+        "line": 53
+      },
+      "start": {
+        "column": 9,
+        "line": 52
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace EnvShared::remove with ()\n@@ -49,18 +49,17 @@\n     }\n \n     fn insert(&self, key: TypeId, value: Arc<dyn Any + Send + Sync>) {\n         self.services.write().unwrap().insert(key, value);\n         self.notify(key, true);\n     }\n \n     fn remove(&self, key: TypeId) {\n-        self.services.write().unwrap().remove(&key);\n-        self.notify(key, false);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     fn notify(&self, key: TypeId, present: bool) {\n         let observers = self.observers.lock().unwrap();\n         for observer in observers.iter() {\n             observer(key, present);\n         }\n     }\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "EnvShared::remove",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 59
+        },
+        "start": {
+          "column": 5,
+          "line": 56
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:57:9: replace EnvShared::remove with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 58
+      },
+      "start": {
+        "column": 9,
+        "line": 57
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace EnvShared::notify with ()\n@@ -54,20 +54,17 @@\n     }\n \n     fn remove(&self, key: TypeId) {\n         self.services.write().unwrap().remove(&key);\n         self.notify(key, false);\n     }\n \n     fn notify(&self, key: TypeId, present: bool) {\n-        let observers = self.observers.lock().unwrap();\n-        for observer in observers.iter() {\n-            observer(key, present);\n-        }\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     fn subscribe(&self, observer: ServiceObserver) {\n         self.observers.lock().unwrap().push(observer);\n     }\n }\n \n #[derive(Clone)]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "EnvShared::notify",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 66
+        },
+        "start": {
+          "column": 5,
+          "line": 61
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:62:9: replace EnvShared::notify with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 65
+      },
+      "start": {
+        "column": 9,
+        "line": 62
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace EnvShared::subscribe with ()\n@@ -61,17 +61,17 @@\n     fn notify(&self, key: TypeId, present: bool) {\n         let observers = self.observers.lock().unwrap();\n         for observer in observers.iter() {\n             observer(key, present);\n         }\n     }\n \n     fn subscribe(&self, observer: ServiceObserver) {\n-        self.observers.lock().unwrap().push(observer);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n #[derive(Clone)]\n pub struct FuneraEnv {\n     #[cfg(feature = \"tool\")]\n     pub(crate) tool_registry: Arc<RwLock<ToolRegistry>>,\n     #[cfg(feature = \"skill\")]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "EnvShared::subscribe",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 70
+        },
+        "start": {
+          "column": 5,
+          "line": 68
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:69:9: replace EnvShared::subscribe with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 55,
+        "line": 69
+      },
+      "start": {
+        "column": 9,
+        "line": 69
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::with_sandbox_policy -> Self with Default::default()\n@@ -139,18 +139,17 @@\n                 skill_rx,\n             },\n         )\n     }\n \n     /// Set a custom sandbox policy.\n     #[cfg(feature = \"sandbox\")]\n     pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {\n-        self.sandbox_policy = policy;\n-        self\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// The configured sandbox policy.\n     #[cfg(feature = \"sandbox\")]\n     pub fn sandbox_policy(&self) -> &SandboxPolicy {\n         &self.sandbox_policy\n     }\n \n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::with_sandbox_policy",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 149
+        },
+        "start": {
+          "column": 5,
+          "line": 144
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:147:9: replace FuneraEnv::with_sandbox_policy -> Self with Default::default()",
+    "package": "funera-core",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 13,
+        "line": 148
+      },
+      "start": {
+        "column": 9,
+        "line": 147
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::sandbox_policy -> &SandboxPolicy with Box::leak(Box::new(Default::default()))\n@@ -146,17 +146,17 @@\n     pub fn with_sandbox_policy(mut self, policy: SandboxPolicy) -> Self {\n         self.sandbox_policy = policy;\n         self\n     }\n \n     /// The configured sandbox policy.\n     #[cfg(feature = \"sandbox\")]\n     pub fn sandbox_policy(&self) -> &SandboxPolicy {\n-        &self.sandbox_policy\n+        Box::leak(Box::new(Default::default())) /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn with_tool_registry(self, tool_registry: ToolRegistry) -> Self {\n         let snapshot = tool_registry.available_tools_json();\n         let _ = self.tool_tx.send(snapshot);\n         Self {\n             tool_registry: Arc::new(RwLock::new(tool_registry)),\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::sandbox_policy",
+      "return_type": "-> &SandboxPolicy",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 155
+        },
+        "start": {
+          "column": 5,
+          "line": 151
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:154:9: replace FuneraEnv::sandbox_policy -> &SandboxPolicy with Box::leak(Box::new(Default::default()))",
+    "package": "funera-core",
+    "replacement": "Box::leak(Box::new(Default::default()))",
+    "span": {
+      "end": {
+        "column": 29,
+        "line": 154
+      },
+      "start": {
+        "column": 9,
+        "line": 154
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::with_tool_registry -> Self with Default::default()\n@@ -151,22 +151,17 @@\n     /// The configured sandbox policy.\n     #[cfg(feature = \"sandbox\")]\n     pub fn sandbox_policy(&self) -> &SandboxPolicy {\n         &self.sandbox_policy\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn with_tool_registry(self, tool_registry: ToolRegistry) -> Self {\n-        let snapshot = tool_registry.available_tools_json();\n-        let _ = self.tool_tx.send(snapshot);\n-        Self {\n-            tool_registry: Arc::new(RwLock::new(tool_registry)),\n-            ..self\n-        }\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn with_skill_registry(self, skill_registry: SkillRegistry) -> Self {\n         let prompt = skill_registry.get_active_skills_prompt();\n         let _ = self.skill_tx.send(prompt);\n         Self {\n             skill_registry: Arc::new(RwLock::new(skill_registry)),\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::with_tool_registry",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 165
+        },
+        "start": {
+          "column": 5,
+          "line": 157
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:159:9: replace FuneraEnv::with_tool_registry -> Self with Default::default()",
+    "package": "funera-core",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 164
+      },
+      "start": {
+        "column": 9,
+        "line": 159
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ delete field tool_registry from struct Self expression in FuneraEnv::with_tool_registry\n@@ -154,17 +154,17 @@\n         &self.sandbox_policy\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn with_tool_registry(self, tool_registry: ToolRegistry) -> Self {\n         let snapshot = tool_registry.available_tools_json();\n         let _ = self.tool_tx.send(snapshot);\n         Self {\n-            tool_registry: Arc::new(RwLock::new(tool_registry)),\n+             /* ~ changed by cargo-mutants ~ */\n             ..self\n         }\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn with_skill_registry(self, skill_registry: SkillRegistry) -> Self {\n         let prompt = skill_registry.get_active_skills_prompt();\n         let _ = self.skill_tx.send(prompt);\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::with_tool_registry",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 165
+        },
+        "start": {
+          "column": 5,
+          "line": 157
+        }
+      }
+    },
+    "genre": "StructField",
+    "name": "funera_core/src/env.rs:162:13: delete field tool_registry from struct Self expression in FuneraEnv::with_tool_registry",
+    "package": "funera-core",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 65,
+        "line": 162
+      },
+      "start": {
+        "column": 13,
+        "line": 162
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::with_skill_registry -> Self with Default::default()\n@@ -161,22 +161,17 @@\n         Self {\n             tool_registry: Arc::new(RwLock::new(tool_registry)),\n             ..self\n         }\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn with_skill_registry(self, skill_registry: SkillRegistry) -> Self {\n-        let prompt = skill_registry.get_active_skills_prompt();\n-        let _ = self.skill_tx.send(prompt);\n-        Self {\n-            skill_registry: Arc::new(RwLock::new(skill_registry)),\n-            ..self\n-        }\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {\n         let mut registry = self.tool_registry.write().await;\n         registry.add_tool(tool);\n         let _ = self.tool_tx.send(registry.available_tools_json());\n     }\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::with_skill_registry",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 175
+        },
+        "start": {
+          "column": 5,
+          "line": 167
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:169:9: replace FuneraEnv::with_skill_registry -> Self with Default::default()",
+    "package": "funera-core",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 174
+      },
+      "start": {
+        "column": 9,
+        "line": 169
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ delete field skill_registry from struct Self expression in FuneraEnv::with_skill_registry\n@@ -164,17 +164,17 @@\n         }\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn with_skill_registry(self, skill_registry: SkillRegistry) -> Self {\n         let prompt = skill_registry.get_active_skills_prompt();\n         let _ = self.skill_tx.send(prompt);\n         Self {\n-            skill_registry: Arc::new(RwLock::new(skill_registry)),\n+             /* ~ changed by cargo-mutants ~ */\n             ..self\n         }\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {\n         let mut registry = self.tool_registry.write().await;\n         registry.add_tool(tool);\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::with_skill_registry",
+      "return_type": "-> Self",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 175
+        },
+        "start": {
+          "column": 5,
+          "line": 167
+        }
+      }
+    },
+    "genre": "StructField",
+    "name": "funera_core/src/env.rs:172:13: delete field skill_registry from struct Self expression in FuneraEnv::with_skill_registry",
+    "package": "funera-core",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 172
+      },
+      "start": {
+        "column": 13,
+        "line": 172
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::add_tool with ()\n@@ -171,19 +171,17 @@\n         Self {\n             skill_registry: Arc::new(RwLock::new(skill_registry)),\n             ..self\n         }\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {\n-        let mut registry = self.tool_registry.write().await;\n-        registry.add_tool(tool);\n-        let _ = self.tool_tx.send(registry.available_tools_json());\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn remove_tool(&mut self, name: &str) {\n         let mut registry = self.tool_registry.write().await;\n         registry.remove_tool(name);\n         let _ = self.tool_tx.send(registry.available_tools_json());\n     }\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::add_tool",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 182
+        },
+        "start": {
+          "column": 5,
+          "line": 177
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:179:9: replace FuneraEnv::add_tool with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 68,
+        "line": 181
+      },
+      "start": {
+        "column": 9,
+        "line": 179
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::remove_tool with ()\n@@ -178,19 +178,17 @@\n     pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {\n         let mut registry = self.tool_registry.write().await;\n         registry.add_tool(tool);\n         let _ = self.tool_tx.send(registry.available_tools_json());\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn remove_tool(&mut self, name: &str) {\n-        let mut registry = self.tool_registry.write().await;\n-        registry.remove_tool(name);\n-        let _ = self.tool_tx.send(registry.available_tools_json());\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {\n         let registry = self.tool_registry.read().await;\n         let _ = self.tool_tx.send(registry.available_tools_json());\n     }\n \n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::remove_tool",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 189
+        },
+        "start": {
+          "column": 5,
+          "line": 184
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:186:9: replace FuneraEnv::remove_tool with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 68,
+        "line": 188
+      },
+      "start": {
+        "column": 9,
+        "line": 186
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::set_tool_availability with ()\n@@ -185,18 +185,17 @@\n     pub(crate) async fn remove_tool(&mut self, name: &str) {\n         let mut registry = self.tool_registry.write().await;\n         registry.remove_tool(name);\n         let _ = self.tool_tx.send(registry.available_tools_json());\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {\n-        let registry = self.tool_registry.read().await;\n-        let _ = self.tool_tx.send(registry.available_tools_json());\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {\n         self.llm_client = client.clone();\n         let _ = self.client_tx.send(client);\n     }\n \n     pub(crate) fn set_model(&mut self, model: impl Into<String>) {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::set_tool_availability",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 195
+        },
+        "start": {
+          "column": 5,
+          "line": 191
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:193:9: replace FuneraEnv::set_tool_availability with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 68,
+        "line": 194
+      },
+      "start": {
+        "column": 9,
+        "line": 193
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::set_client with ()\n@@ -190,18 +190,17 @@\n \n     #[cfg(feature = \"tool\")]\n     pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {\n         let registry = self.tool_registry.read().await;\n         let _ = self.tool_tx.send(registry.available_tools_json());\n     }\n \n     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {\n-        self.llm_client = client.clone();\n-        let _ = self.client_tx.send(client);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub(crate) fn set_model(&mut self, model: impl Into<String>) {\n         let model = model.into();\n         self.model = model.clone();\n         let _ = self.model_tx.send(model);\n     }\n \n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::set_client",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 200
+        },
+        "start": {
+          "column": 5,
+          "line": 197
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:198:9: replace FuneraEnv::set_client with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 45,
+        "line": 199
+      },
+      "start": {
+        "column": 9,
+        "line": 198
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::set_model with ()\n@@ -195,19 +195,17 @@\n     }\n \n     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {\n         self.llm_client = client.clone();\n         let _ = self.client_tx.send(client);\n     }\n \n     pub(crate) fn set_model(&mut self, model: impl Into<String>) {\n-        let model = model.into();\n-        self.model = model.clone();\n-        let _ = self.model_tx.send(model);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn add_skill(&mut self, skill: Skill) {\n         let mut registry = self.skill_registry.write().await;\n         registry.add(skill);\n         let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n     }\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::set_model",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 206
+        },
+        "start": {
+          "column": 5,
+          "line": 202
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:203:9: replace FuneraEnv::set_model with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 43,
+        "line": 205
+      },
+      "start": {
+        "column": 9,
+        "line": 203
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::add_skill with ()\n@@ -202,19 +202,17 @@\n     pub(crate) fn set_model(&mut self, model: impl Into<String>) {\n         let model = model.into();\n         self.model = model.clone();\n         let _ = self.model_tx.send(model);\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn add_skill(&mut self, skill: Skill) {\n-        let mut registry = self.skill_registry.write().await;\n-        registry.add(skill);\n-        let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn remove_skill(&mut self, name: &str) {\n         let mut registry = self.skill_registry.write().await;\n         registry.remove(name);\n         let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n     }\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::add_skill",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 213
+        },
+        "start": {
+          "column": 5,
+          "line": 208
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:210:9: replace FuneraEnv::add_skill with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 73,
+        "line": 212
+      },
+      "start": {
+        "column": 9,
+        "line": 210
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::remove_skill with ()\n@@ -209,19 +209,17 @@\n     pub(crate) async fn add_skill(&mut self, skill: Skill) {\n         let mut registry = self.skill_registry.write().await;\n         registry.add(skill);\n         let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn remove_skill(&mut self, name: &str) {\n-        let mut registry = self.skill_registry.write().await;\n-        registry.remove(name);\n-        let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {\n         let mut registry = self.skill_registry.write().await;\n         let ok = registry.activate(name);\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::remove_skill",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 220
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:217:9: replace FuneraEnv::remove_skill with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 73,
+        "line": 219
+      },
+      "start": {
+        "column": 9,
+        "line": 217
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::activate_skill -> bool with true\n@@ -216,22 +216,17 @@\n     pub(crate) async fn remove_skill(&mut self, name: &str) {\n         let mut registry = self.skill_registry.write().await;\n         registry.remove(name);\n         let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {\n-        let mut registry = self.skill_registry.write().await;\n-        let ok = registry.activate(name);\n-        if ok {\n-            let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n-        }\n-        ok\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {\n         let mut registry = self.skill_registry.write().await;\n         let ok = registry.deactivate(name);\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::activate_skill",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 230
+        },
+        "start": {
+          "column": 5,
+          "line": 222
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:224:9: replace FuneraEnv::activate_skill -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 229
+      },
+      "start": {
+        "column": 9,
+        "line": 224
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::activate_skill -> bool with false\n@@ -216,22 +216,17 @@\n     pub(crate) async fn remove_skill(&mut self, name: &str) {\n         let mut registry = self.skill_registry.write().await;\n         registry.remove(name);\n         let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {\n-        let mut registry = self.skill_registry.write().await;\n-        let ok = registry.activate(name);\n-        if ok {\n-            let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n-        }\n-        ok\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {\n         let mut registry = self.skill_registry.write().await;\n         let ok = registry.deactivate(name);\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::activate_skill",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 230
+        },
+        "start": {
+          "column": 5,
+          "line": 222
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:224:9: replace FuneraEnv::activate_skill -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 229
+      },
+      "start": {
+        "column": 9,
+        "line": 224
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::deactivate_skill -> bool with true\n@@ -226,22 +226,17 @@\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n         }\n         ok\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {\n-        let mut registry = self.skill_registry.write().await;\n-        let ok = registry.deactivate(name);\n-        if ok {\n-            let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n-        }\n-        ok\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn skill_prompt_now(&self) -> String {\n         self.skill_tx.borrow().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::deactivate_skill",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 240
+        },
+        "start": {
+          "column": 5,
+          "line": 232
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:234:9: replace FuneraEnv::deactivate_skill -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 239
+      },
+      "start": {
+        "column": 9,
+        "line": 234
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::deactivate_skill -> bool with false\n@@ -226,22 +226,17 @@\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n         }\n         ok\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {\n-        let mut registry = self.skill_registry.write().await;\n-        let ok = registry.deactivate(name);\n-        if ok {\n-            let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n-        }\n-        ok\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn skill_prompt_now(&self) -> String {\n         self.skill_tx.borrow().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::deactivate_skill",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 240
+        },
+        "start": {
+          "column": 5,
+          "line": 232
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:234:9: replace FuneraEnv::deactivate_skill -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 239
+      },
+      "start": {
+        "column": 9,
+        "line": 234
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::skill_prompt_now -> String with String::new()\n@@ -236,17 +236,17 @@\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n         }\n         ok\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn skill_prompt_now(&self) -> String {\n-        self.skill_tx.borrow().clone()\n+        String::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {\n         let _ = self.skill_tx.send(prompt);\n     }\n \n     pub(crate) fn model(&self) -> &str {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::skill_prompt_now",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 245
+        },
+        "start": {
+          "column": 5,
+          "line": 242
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:244:9: replace FuneraEnv::skill_prompt_now -> String with String::new()",
+    "package": "funera-core",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 39,
+        "line": 244
+      },
+      "start": {
+        "column": 9,
+        "line": 244
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::skill_prompt_now -> String with \"xyzzy\".into()\n@@ -236,17 +236,17 @@\n         if ok {\n             let _ = self.skill_tx.send(registry.get_active_skills_prompt());\n         }\n         ok\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn skill_prompt_now(&self) -> String {\n-        self.skill_tx.borrow().clone()\n+        \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {\n         let _ = self.skill_tx.send(prompt);\n     }\n \n     pub(crate) fn model(&self) -> &str {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::skill_prompt_now",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 245
+        },
+        "start": {
+          "column": 5,
+          "line": 242
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:244:9: replace FuneraEnv::skill_prompt_now -> String with \"xyzzy\".into()",
+    "package": "funera-core",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 39,
+        "line": 244
+      },
+      "start": {
+        "column": 9,
+        "line": 244
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::set_skill_prompt with ()\n@@ -241,17 +241,17 @@\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn skill_prompt_now(&self) -> String {\n         self.skill_tx.borrow().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {\n-        let _ = self.skill_tx.send(prompt);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub(crate) fn model(&self) -> &str {\n         &self.model\n     }\n }\n \n #[derive(Debug, Clone)]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::set_skill_prompt",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 250
+        },
+        "start": {
+          "column": 5,
+          "line": 247
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:249:9: replace FuneraEnv::set_skill_prompt with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 44,
+        "line": 249
+      },
+      "start": {
+        "column": 9,
+        "line": 249
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::model -> &str with \"\"\n@@ -245,17 +245,17 @@\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {\n         let _ = self.skill_tx.send(prompt);\n     }\n \n     pub(crate) fn model(&self) -> &str {\n-        &self.model\n+        \"\" /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n #[derive(Debug, Clone)]\n pub struct FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     tool_rx: watch::Receiver<JsonValue>,\n     client_rx: watch::Receiver<async_openai::Client<OpenAIConfig>>,\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::model",
+      "return_type": "-> &str",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 254
+        },
+        "start": {
+          "column": 5,
+          "line": 252
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:253:9: replace FuneraEnv::model -> &str with \"\"",
+    "package": "funera-core",
+    "replacement": "\"\"",
+    "span": {
+      "end": {
+        "column": 20,
+        "line": 253
+      },
+      "start": {
+        "column": 9,
+        "line": 253
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::model -> &str with \"xyzzy\"\n@@ -245,17 +245,17 @@\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {\n         let _ = self.skill_tx.send(prompt);\n     }\n \n     pub(crate) fn model(&self) -> &str {\n-        &self.model\n+        \"xyzzy\" /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n #[derive(Debug, Clone)]\n pub struct FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     tool_rx: watch::Receiver<JsonValue>,\n     client_rx: watch::Receiver<async_openai::Client<OpenAIConfig>>,\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::model",
+      "return_type": "-> &str",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 254
+        },
+        "start": {
+          "column": 5,
+          "line": 252
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:253:9: replace FuneraEnv::model -> &str with \"xyzzy\"",
+    "package": "funera-core",
+    "replacement": "\"xyzzy\"",
+    "span": {
+      "end": {
+        "column": 20,
+        "line": 253
+      },
+      "start": {
+        "column": 9,
+        "line": 253
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_tool -> JsonValue with Default::default()\n@@ -262,17 +262,17 @@\n     model_rx: watch::Receiver<String>,\n     #[cfg(feature = \"skill\")]\n     skill_rx: watch::Receiver<String>,\n }\n \n impl FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     pub fn watch_tool(&mut self) -> JsonValue {\n-        self.tool_rx.borrow_and_update().clone()\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n         self.client_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_tool",
+      "return_type": "-> JsonValue",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 271
+        },
+        "start": {
+          "column": 5,
+          "line": 268
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:270:9: replace FuneraEnvWatcher::watch_tool -> JsonValue with Default::default()",
+    "package": "funera-core",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 49,
+        "line": 270
+      },
+      "start": {
+        "column": 9,
+        "line": 270
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::new()\n@@ -266,17 +266,17 @@\n \n impl FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     pub fn watch_tool(&mut self) -> JsonValue {\n         self.tool_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.client_rx.borrow_and_update().clone()\n+        Client::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 275
+        },
+        "start": {
+          "column": 5,
+          "line": 273
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::new()",
+    "package": "funera-core",
+    "replacement": "Client::new()",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 274
+      },
+      "start": {
+        "column": 9,
+        "line": 274
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::from_iter([Default::default()])\n@@ -266,17 +266,17 @@\n \n impl FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     pub fn watch_tool(&mut self) -> JsonValue {\n         self.tool_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.client_rx.borrow_and_update().clone()\n+        Client::from_iter([Default::default()]) /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 275
+        },
+        "start": {
+          "column": 5,
+          "line": 273
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::from_iter([Default::default()])",
+    "package": "funera-core",
+    "replacement": "Client::from_iter([Default::default()])",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 274
+      },
+      "start": {
+        "column": 9,
+        "line": 274
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::new(Default::default())\n@@ -266,17 +266,17 @@\n \n impl FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     pub fn watch_tool(&mut self) -> JsonValue {\n         self.tool_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.client_rx.borrow_and_update().clone()\n+        Client::new(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 275
+        },
+        "start": {
+          "column": 5,
+          "line": 273
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::new(Default::default())",
+    "package": "funera-core",
+    "replacement": "Client::new(Default::default())",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 274
+      },
+      "start": {
+        "column": 9,
+        "line": 274
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())\n@@ -266,17 +266,17 @@\n \n impl FuneraEnvWatcher {\n     #[cfg(feature = \"tool\")]\n     pub fn watch_tool(&mut self) -> JsonValue {\n         self.tool_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.client_rx.borrow_and_update().clone()\n+        Client::from(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 275
+        },
+        "start": {
+          "column": 5,
+          "line": 273
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())",
+    "package": "funera-core",
+    "replacement": "Client::from(Default::default())",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 274
+      },
+      "start": {
+        "column": 9,
+        "line": 274
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_model -> String with String::new()\n@@ -270,17 +270,17 @@\n         self.tool_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n         self.client_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_model(&mut self) -> String {\n-        self.model_rx.borrow_and_update().clone()\n+        String::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n         self.skill_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"tool\")]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_model",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 279
+        },
+        "start": {
+          "column": 5,
+          "line": 277
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:278:9: replace FuneraEnvWatcher::watch_model -> String with String::new()",
+    "package": "funera-core",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 50,
+        "line": 278
+      },
+      "start": {
+        "column": 9,
+        "line": 278
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_model -> String with \"xyzzy\".into()\n@@ -270,17 +270,17 @@\n         self.tool_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n         self.client_rx.borrow_and_update().clone()\n     }\n \n     pub fn watch_model(&mut self) -> String {\n-        self.model_rx.borrow_and_update().clone()\n+        \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n         self.skill_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"tool\")]\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_model",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 279
+        },
+        "start": {
+          "column": 5,
+          "line": 277
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:278:9: replace FuneraEnvWatcher::watch_model -> String with \"xyzzy\".into()",
+    "package": "funera-core",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 50,
+        "line": 278
+      },
+      "start": {
+        "column": 9,
+        "line": 278
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_skill -> String with String::new()\n@@ -275,17 +275,17 @@\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n-        self.skill_rx.borrow_and_update().clone()\n+        String::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn has_tool_changed(&self) -> bool {\n         self.tool_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_skill",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 284
+        },
+        "start": {
+          "column": 5,
+          "line": 281
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:283:9: replace FuneraEnvWatcher::watch_skill -> String with String::new()",
+    "package": "funera-core",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 50,
+        "line": 283
+      },
+      "start": {
+        "column": 9,
+        "line": 283
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::watch_skill -> String with \"xyzzy\".into()\n@@ -275,17 +275,17 @@\n     }\n \n     pub fn watch_model(&mut self) -> String {\n         self.model_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n-        self.skill_rx.borrow_and_update().clone()\n+        \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn has_tool_changed(&self) -> bool {\n         self.tool_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::watch_skill",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 284
+        },
+        "start": {
+          "column": 5,
+          "line": 281
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:283:9: replace FuneraEnvWatcher::watch_skill -> String with \"xyzzy\".into()",
+    "package": "funera-core",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 50,
+        "line": 283
+      },
+      "start": {
+        "column": 9,
+        "line": 283
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_tool_changed -> bool with true\n@@ -280,17 +280,17 @@\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n         self.skill_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn has_tool_changed(&self) -> bool {\n-        self.tool_rx.has_changed().unwrap_or(false)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n         self.client_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n         self.model_rx.has_changed().unwrap_or(false)\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_tool_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 289
+        },
+        "start": {
+          "column": 5,
+          "line": 286
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:288:9: replace FuneraEnvWatcher::has_tool_changed -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 52,
+        "line": 288
+      },
+      "start": {
+        "column": 9,
+        "line": 288
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_tool_changed -> bool with false\n@@ -280,17 +280,17 @@\n \n     #[cfg(feature = \"skill\")]\n     pub fn watch_skill(&mut self) -> String {\n         self.skill_rx.borrow_and_update().clone()\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn has_tool_changed(&self) -> bool {\n-        self.tool_rx.has_changed().unwrap_or(false)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n         self.client_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n         self.model_rx.has_changed().unwrap_or(false)\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_tool_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 289
+        },
+        "start": {
+          "column": 5,
+          "line": 286
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:288:9: replace FuneraEnvWatcher::has_tool_changed -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 52,
+        "line": 288
+      },
+      "start": {
+        "column": 9,
+        "line": 288
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_client_changed -> bool with true\n@@ -284,17 +284,17 @@\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn has_tool_changed(&self) -> bool {\n         self.tool_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n-        self.client_rx.has_changed().unwrap_or(false)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n         self.model_rx.has_changed().unwrap_or(false)\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_client_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 293
+        },
+        "start": {
+          "column": 5,
+          "line": 291
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:292:9: replace FuneraEnvWatcher::has_client_changed -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 54,
+        "line": 292
+      },
+      "start": {
+        "column": 9,
+        "line": 292
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_client_changed -> bool with false\n@@ -284,17 +284,17 @@\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub fn has_tool_changed(&self) -> bool {\n         self.tool_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n-        self.client_rx.has_changed().unwrap_or(false)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n         self.model_rx.has_changed().unwrap_or(false)\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_client_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 293
+        },
+        "start": {
+          "column": 5,
+          "line": 291
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:292:9: replace FuneraEnvWatcher::has_client_changed -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 54,
+        "line": 292
+      },
+      "start": {
+        "column": 9,
+        "line": 292
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_model_changed -> bool with true\n@@ -288,17 +288,17 @@\n         self.tool_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n         self.client_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n-        self.model_rx.has_changed().unwrap_or(false)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n         self.skill_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_model_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 297
+        },
+        "start": {
+          "column": 5,
+          "line": 295
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:296:9: replace FuneraEnvWatcher::has_model_changed -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 53,
+        "line": 296
+      },
+      "start": {
+        "column": 9,
+        "line": 296
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_model_changed -> bool with false\n@@ -288,17 +288,17 @@\n         self.tool_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_client_changed(&self) -> bool {\n         self.client_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n-        self.model_rx.has_changed().unwrap_or(false)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n         self.skill_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_model_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 297
+        },
+        "start": {
+          "column": 5,
+          "line": 295
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:296:9: replace FuneraEnvWatcher::has_model_changed -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 53,
+        "line": 296
+      },
+      "start": {
+        "column": 9,
+        "line": 296
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_skill_changed -> bool with true\n@@ -293,17 +293,17 @@\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n         self.model_rx.has_changed().unwrap_or(false)\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n-        self.skill_rx.has_changed().unwrap_or(false)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n         self.watch_client()\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_skill_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 302
+        },
+        "start": {
+          "column": 5,
+          "line": 299
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:301:9: replace FuneraEnvWatcher::has_skill_changed -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 53,
+        "line": 301
+      },
+      "start": {
+        "column": 9,
+        "line": 301
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::has_skill_changed -> bool with false\n@@ -293,17 +293,17 @@\n     }\n \n     pub fn has_model_changed(&self) -> bool {\n         self.model_rx.has_changed().unwrap_or(false)\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n-        self.skill_rx.has_changed().unwrap_or(false)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n         self.watch_client()\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::has_skill_changed",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 302
+        },
+        "start": {
+          "column": 5,
+          "line": 299
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:301:9: replace FuneraEnvWatcher::has_skill_changed -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 53,
+        "line": 301
+      },
+      "start": {
+        "column": 9,
+        "line": 301
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::new()\n@@ -297,17 +297,17 @@\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n         self.skill_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.watch_client()\n+        Client::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n         self.tool_rx.changed().await\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::use_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 306
+        },
+        "start": {
+          "column": 5,
+          "line": 304
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::new()",
+    "package": "funera-core",
+    "replacement": "Client::new()",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 305
+      },
+      "start": {
+        "column": 9,
+        "line": 305
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from_iter([Default::default()])\n@@ -297,17 +297,17 @@\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n         self.skill_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.watch_client()\n+        Client::from_iter([Default::default()]) /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n         self.tool_rx.changed().await\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::use_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 306
+        },
+        "start": {
+          "column": 5,
+          "line": 304
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from_iter([Default::default()])",
+    "package": "funera-core",
+    "replacement": "Client::from_iter([Default::default()])",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 305
+      },
+      "start": {
+        "column": 9,
+        "line": 305
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::new(Default::default())\n@@ -297,17 +297,17 @@\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n         self.skill_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.watch_client()\n+        Client::new(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n         self.tool_rx.changed().await\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::use_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 306
+        },
+        "start": {
+          "column": 5,
+          "line": 304
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::new(Default::default())",
+    "package": "funera-core",
+    "replacement": "Client::new(Default::default())",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 305
+      },
+      "start": {
+        "column": 9,
+        "line": 305
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())\n@@ -297,17 +297,17 @@\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub fn has_skill_changed(&self) -> bool {\n         self.skill_rx.has_changed().unwrap_or(false)\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n-        self.watch_client()\n+        Client::from(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n         self.tool_rx.changed().await\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::use_client",
+      "return_type": "-> async_openai::Client<OpenAIConfig>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 306
+        },
+        "start": {
+          "column": 5,
+          "line": 304
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())",
+    "package": "funera-core",
+    "replacement": "Client::from(Default::default())",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 305
+      },
+      "start": {
+        "column": 9,
+        "line": 305
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::tool_changed -> Result<(), RecvError> with Ok(())\n@@ -302,17 +302,17 @@\n     }\n \n     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {\n         self.watch_client()\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n-        self.tool_rx.changed().await\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n         self.client_rx.changed().await\n     }\n \n     pub async fn model_changed(&mut self) -> Result<(), RecvError> {\n         self.model_rx.changed().await\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::tool_changed",
+      "return_type": "-> Result<(), RecvError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 311
+        },
+        "start": {
+          "column": 5,
+          "line": 308
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:310:9: replace FuneraEnvWatcher::tool_changed -> Result<(), RecvError> with Ok(())",
+    "package": "funera-core",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 37,
+        "line": 310
+      },
+      "start": {
+        "column": 9,
+        "line": 310
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::client_changed -> Result<(), RecvError> with Ok(())\n@@ -306,17 +306,17 @@\n     }\n \n     #[cfg(feature = \"tool\")]\n     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {\n         self.tool_rx.changed().await\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n-        self.client_rx.changed().await\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     pub async fn model_changed(&mut self) -> Result<(), RecvError> {\n         self.model_rx.changed().await\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub async fn skill_changed(&mut self) -> Result<(), RecvError> {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::client_changed",
+      "return_type": "-> Result<(), RecvError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 315
+        },
+        "start": {
+          "column": 5,
+          "line": 313
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:314:9: replace FuneraEnvWatcher::client_changed -> Result<(), RecvError> with Ok(())",
+    "package": "funera-core",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 39,
+        "line": 314
+      },
+      "start": {
+        "column": 9,
+        "line": 314
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::model_changed -> Result<(), RecvError> with Ok(())\n@@ -310,17 +310,17 @@\n         self.tool_rx.changed().await\n     }\n \n     pub async fn client_changed(&mut self) -> Result<(), RecvError> {\n         self.client_rx.changed().await\n     }\n \n     pub async fn model_changed(&mut self) -> Result<(), RecvError> {\n-        self.model_rx.changed().await\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub async fn skill_changed(&mut self) -> Result<(), RecvError> {\n         self.skill_rx.changed().await\n     }\n }\n \n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::model_changed",
+      "return_type": "-> Result<(), RecvError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 319
+        },
+        "start": {
+          "column": 5,
+          "line": 317
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:318:9: replace FuneraEnvWatcher::model_changed -> Result<(), RecvError> with Ok(())",
+    "package": "funera-core",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 38,
+        "line": 318
+      },
+      "start": {
+        "column": 9,
+        "line": 318
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnvWatcher::skill_changed -> Result<(), RecvError> with Ok(())\n@@ -315,17 +315,17 @@\n     }\n \n     pub async fn model_changed(&mut self) -> Result<(), RecvError> {\n         self.model_rx.changed().await\n     }\n \n     #[cfg(feature = \"skill\")]\n     pub async fn skill_changed(&mut self) -> Result<(), RecvError> {\n-        self.skill_rx.changed().await\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n // ═══════════════════════════════════════════════════════════════\n // Capability layer — reversible effects + typed services\n // ═══════════════════════════════════════════════════════════════\n \n impl FuneraEnv {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnvWatcher::skill_changed",
+      "return_type": "-> Result<(), RecvError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 324
+        },
+        "start": {
+          "column": 5,
+          "line": 321
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:323:9: replace FuneraEnvWatcher::skill_changed -> Result<(), RecvError> with Ok(())",
+    "package": "funera-core",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 38,
+        "line": 323
+      },
+      "start": {
+        "column": 9,
+        "line": 323
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::derive -> FuneraEnv with Default::default()\n@@ -331,19 +331,17 @@\n impl FuneraEnv {\n     /// Derive a child env that shares this env's service table but owns a fresh\n     /// effect accumulator.\n     ///\n     /// A plugin instance runs its `apply` against a derived env, so unloading\n     /// that instance ([`dispose`](Self::dispose)) reverts only the effects it\n     /// registered, while the services it provided remain visible to siblings.\n     pub fn derive(&self) -> FuneraEnv {\n-        let mut child = self.clone();\n-        child.disposers = Arc::new(Mutex::new(Vec::new()));\n-        child\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Subscribe to service provision/removal events.\n     ///\n     /// The observer is called with `(TypeId, true)` when a service is provided\n     /// and `(TypeId, false)` when it is removed.\n     pub fn on_service_change(&self, observer: ServiceObserver) {\n         self.shared.subscribe(observer);\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::derive",
+      "return_type": "-> FuneraEnv",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 342
+        },
+        "start": {
+          "column": 5,
+          "line": 332
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:339:9: replace FuneraEnv::derive -> FuneraEnv with Default::default()",
+    "package": "funera-core",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 14,
+        "line": 341
+      },
+      "start": {
+        "column": 9,
+        "line": 339
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::on_service_change with ()\n@@ -341,17 +341,17 @@\n         child\n     }\n \n     /// Subscribe to service provision/removal events.\n     ///\n     /// The observer is called with `(TypeId, true)` when a service is provided\n     /// and `(TypeId, false)` when it is removed.\n     pub fn on_service_change(&self, observer: ServiceObserver) {\n-        self.shared.subscribe(observer);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Register a reversible effect.\n     ///\n     /// `body` runs now (setup) and returns a [`Disposer`] that undoes it. The\n     /// disposer is pushed onto the env's accumulator and run in reverse (LIFO)\n     /// order by [`dispose`](Self::dispose) when the env is torn down.\n     ///\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::on_service_change",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 350
+        },
+        "start": {
+          "column": 5,
+          "line": 344
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:349:9: replace FuneraEnv::on_service_change with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 41,
+        "line": 349
+      },
+      "start": {
+        "column": 9,
+        "line": 349
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::effect with ()\n@@ -357,18 +357,17 @@\n     ///\n     /// ```rust,ignore\n     /// env.effect(|| {\n     ///     let resource = acquire();       // setup: the effect\n     ///     Box::new(move || release(resource))  // teardown: its inverse\n     /// });\n     /// ```\n     pub fn effect(&self, body: impl FnOnce() -> Disposer) {\n-        let undo = body();\n-        self.disposers.lock().unwrap().push(undo);\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Provide a typed service to this env.\n     ///\n     /// The service is stored under its [`TypeId`] and automatically removed on\n     /// [`dispose`](Self::dispose). `provide` is itself an effect: its inverse is\n     /// \"remove the service\", registered in this env's own accumulator.\n     ///\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::effect",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 367
+        },
+        "start": {
+          "column": 5,
+          "line": 352
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:365:9: replace FuneraEnv::effect with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 366
+      },
+      "start": {
+        "column": 9,
+        "line": 365
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::provide with ()\n@@ -374,25 +374,17 @@\n     ///\n     /// ```rust,ignore\n     /// #[derive(Clone)]\n     /// struct Config { url: String }\n     /// env.provide(Config { url: \"db://…\".into() });\n     /// let cfg: std::sync::Arc<Config> = env.get::<Config>().unwrap();\n     /// ```\n     pub fn provide<T: Send + Sync + 'static>(&self, value: T) {\n-        let key = TypeId::of::<T>();\n-        let shared = Arc::clone(&self.shared);\n-        self.effect(move || {\n-            shared.insert(key, Arc::new(value));\n-            let teardown_shared = Arc::clone(&shared);\n-            Box::new(move || {\n-                teardown_shared.remove(key);\n-            })\n-        });\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Resolve a typed service previously provided to this env (or a parent).\n     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {\n         self.shared\n             .services\n             .read()\n             .unwrap()\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::provide",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 391
+        },
+        "start": {
+          "column": 5,
+          "line": 369
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:382:9: replace FuneraEnv::provide with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 12,
+        "line": 390
+      },
+      "start": {
+        "column": 9,
+        "line": 382
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::get -> Option<Arc<T>> with None\n@@ -387,22 +387,17 @@\n             Box::new(move || {\n                 teardown_shared.remove(key);\n             })\n         });\n     }\n \n     /// Resolve a typed service previously provided to this env (or a parent).\n     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {\n-        self.shared\n-            .services\n-            .read()\n-            .unwrap()\n-            .get(&TypeId::of::<T>())\n-            .and_then(|v| v.clone().downcast::<T>().ok())\n+        None /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether a service of type `T` is currently provided.\n     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {\n         self.contains_typeid(TypeId::of::<T>())\n     }\n \n     /// Whether a service with the given [`TypeId`] is currently provided.\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::get",
+      "return_type": "-> Option<Arc<T>>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 401
+        },
+        "start": {
+          "column": 5,
+          "line": 393
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:395:9: replace FuneraEnv::get -> Option<Arc<T>> with None",
+    "package": "funera-core",
+    "replacement": "None",
+    "span": {
+      "end": {
+        "column": 58,
+        "line": 400
+      },
+      "start": {
+        "column": 9,
+        "line": 395
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::get -> Option<Arc<T>> with Some(Arc::new(Default::default()))\n@@ -387,22 +387,17 @@\n             Box::new(move || {\n                 teardown_shared.remove(key);\n             })\n         });\n     }\n \n     /// Resolve a typed service previously provided to this env (or a parent).\n     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {\n-        self.shared\n-            .services\n-            .read()\n-            .unwrap()\n-            .get(&TypeId::of::<T>())\n-            .and_then(|v| v.clone().downcast::<T>().ok())\n+        Some(Arc::new(Default::default())) /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether a service of type `T` is currently provided.\n     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {\n         self.contains_typeid(TypeId::of::<T>())\n     }\n \n     /// Whether a service with the given [`TypeId`] is currently provided.\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::get",
+      "return_type": "-> Option<Arc<T>>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 401
+        },
+        "start": {
+          "column": 5,
+          "line": 393
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:395:9: replace FuneraEnv::get -> Option<Arc<T>> with Some(Arc::new(Default::default()))",
+    "package": "funera-core",
+    "replacement": "Some(Arc::new(Default::default()))",
+    "span": {
+      "end": {
+        "column": 58,
+        "line": 400
+      },
+      "start": {
+        "column": 9,
+        "line": 395
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::contains -> bool with true\n@@ -397,17 +397,17 @@\n             .read()\n             .unwrap()\n             .get(&TypeId::of::<T>())\n             .and_then(|v| v.clone().downcast::<T>().ok())\n     }\n \n     /// Whether a service of type `T` is currently provided.\n     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {\n-        self.contains_typeid(TypeId::of::<T>())\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether a service with the given [`TypeId`] is currently provided.\n     ///\n     /// The non-generic counterpart of [`contains`](Self::contains), used by the\n     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).\n     pub fn contains_typeid(&self, key: TypeId) -> bool {\n         self.shared.services.read().unwrap().contains_key(&key)\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::contains",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 406
+        },
+        "start": {
+          "column": 5,
+          "line": 403
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:405:9: replace FuneraEnv::contains -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 48,
+        "line": 405
+      },
+      "start": {
+        "column": 9,
+        "line": 405
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::contains -> bool with false\n@@ -397,17 +397,17 @@\n             .read()\n             .unwrap()\n             .get(&TypeId::of::<T>())\n             .and_then(|v| v.clone().downcast::<T>().ok())\n     }\n \n     /// Whether a service of type `T` is currently provided.\n     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {\n-        self.contains_typeid(TypeId::of::<T>())\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether a service with the given [`TypeId`] is currently provided.\n     ///\n     /// The non-generic counterpart of [`contains`](Self::contains), used by the\n     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).\n     pub fn contains_typeid(&self, key: TypeId) -> bool {\n         self.shared.services.read().unwrap().contains_key(&key)\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::contains",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 406
+        },
+        "start": {
+          "column": 5,
+          "line": 403
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:405:9: replace FuneraEnv::contains -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 48,
+        "line": 405
+      },
+      "start": {
+        "column": 9,
+        "line": 405
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::contains_typeid -> bool with true\n@@ -405,17 +405,17 @@\n         self.contains_typeid(TypeId::of::<T>())\n     }\n \n     /// Whether a service with the given [`TypeId`] is currently provided.\n     ///\n     /// The non-generic counterpart of [`contains`](Self::contains), used by the\n     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).\n     pub fn contains_typeid(&self, key: TypeId) -> bool {\n-        self.shared.services.read().unwrap().contains_key(&key)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Number of services currently provided.\n     pub fn service_count(&self) -> usize {\n         self.shared.services.read().unwrap().len()\n     }\n \n     /// Run every registered disposer in reverse (LIFO) order.\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::contains_typeid",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 414
+        },
+        "start": {
+          "column": 5,
+          "line": 408
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:413:9: replace FuneraEnv::contains_typeid -> bool with true",
+    "package": "funera-core",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 64,
+        "line": 413
+      },
+      "start": {
+        "column": 9,
+        "line": 413
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::contains_typeid -> bool with false\n@@ -405,17 +405,17 @@\n         self.contains_typeid(TypeId::of::<T>())\n     }\n \n     /// Whether a service with the given [`TypeId`] is currently provided.\n     ///\n     /// The non-generic counterpart of [`contains`](Self::contains), used by the\n     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).\n     pub fn contains_typeid(&self, key: TypeId) -> bool {\n-        self.shared.services.read().unwrap().contains_key(&key)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Number of services currently provided.\n     pub fn service_count(&self) -> usize {\n         self.shared.services.read().unwrap().len()\n     }\n \n     /// Run every registered disposer in reverse (LIFO) order.\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::contains_typeid",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 414
+        },
+        "start": {
+          "column": 5,
+          "line": 408
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:413:9: replace FuneraEnv::contains_typeid -> bool with false",
+    "package": "funera-core",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 64,
+        "line": 413
+      },
+      "start": {
+        "column": 9,
+        "line": 413
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::service_count -> usize with 0\n@@ -410,17 +410,17 @@\n     /// The non-generic counterpart of [`contains`](Self::contains), used by the\n     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).\n     pub fn contains_typeid(&self, key: TypeId) -> bool {\n         self.shared.services.read().unwrap().contains_key(&key)\n     }\n \n     /// Number of services currently provided.\n     pub fn service_count(&self) -> usize {\n-        self.shared.services.read().unwrap().len()\n+        0 /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Run every registered disposer in reverse (LIFO) order.\n     ///\n     /// This tears the env's capability layer down: each effect is undone in the\n     /// reverse of the order it was registered. Only this env's own effects are\n     /// reverted; services provided by sibling envs are untouched.\n     pub fn dispose(&self) {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::service_count",
+      "return_type": "-> usize",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 419
+        },
+        "start": {
+          "column": 5,
+          "line": 416
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:418:9: replace FuneraEnv::service_count -> usize with 0",
+    "package": "funera-core",
+    "replacement": "0",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 418
+      },
+      "start": {
+        "column": 9,
+        "line": 418
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::service_count -> usize with 1\n@@ -410,17 +410,17 @@\n     /// The non-generic counterpart of [`contains`](Self::contains), used by the\n     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).\n     pub fn contains_typeid(&self, key: TypeId) -> bool {\n         self.shared.services.read().unwrap().contains_key(&key)\n     }\n \n     /// Number of services currently provided.\n     pub fn service_count(&self) -> usize {\n-        self.shared.services.read().unwrap().len()\n+        1 /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Run every registered disposer in reverse (LIFO) order.\n     ///\n     /// This tears the env's capability layer down: each effect is undone in the\n     /// reverse of the order it was registered. Only this env's own effects are\n     /// reverted; services provided by sibling envs are untouched.\n     pub fn dispose(&self) {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::service_count",
+      "return_type": "-> usize",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 419
+        },
+        "start": {
+          "column": 5,
+          "line": 416
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:418:9: replace FuneraEnv::service_count -> usize with 1",
+    "package": "funera-core",
+    "replacement": "1",
+    "span": {
+      "end": {
+        "column": 51,
+        "line": 418
+      },
+      "start": {
+        "column": 9,
+        "line": 418
+      }
+    }
+  },
+  {
+    "diff": "--- funera_core/src/env.rs\n+++ replace FuneraEnv::dispose with ()\n@@ -419,20 +419,17 @@\n     }\n \n     /// Run every registered disposer in reverse (LIFO) order.\n     ///\n     /// This tears the env's capability layer down: each effect is undone in the\n     /// reverse of the order it was registered. Only this env's own effects are\n     /// reverted; services provided by sibling envs are untouched.\n     pub fn dispose(&self) {\n-        let disposers = std::mem::take(&mut *self.disposers.lock().unwrap());\n-        for undo in disposers.into_iter().rev() {\n-            undo();\n-        }\n+        () /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n #[cfg(test)]\n mod tests {\n     use super::*;\n \n     fn test_env() -> (FuneraEnv, FuneraEnvWatcher) {\n",
+    "file": "funera_core/src/env.rs",
+    "function": {
+      "function_name": "FuneraEnv::dispose",
+      "return_type": "",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 431
+        },
+        "start": {
+          "column": 5,
+          "line": 421
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "funera_core/src/env.rs:427:9: replace FuneraEnv::dispose with ()",
+    "package": "funera-core",
+    "replacement": "()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 430
+      },
+      "start": {
+        "column": 9,
+        "line": 427
+      }
+    }
+  }
+]

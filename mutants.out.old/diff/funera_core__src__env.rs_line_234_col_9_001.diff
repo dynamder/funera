@@ -1,0 +1,26 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::deactivate_skill -> bool with false
+@@ -226,22 +226,17 @@
+         if ok {
+             let _ = self.skill_tx.send(registry.get_active_skills_prompt());
+         }
+         ok
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {
+-        let mut registry = self.skill_registry.write().await;
+-        let ok = registry.deactivate(name);
+-        if ok {
+-            let _ = self.skill_tx.send(registry.get_active_skills_prompt());
+-        }
+-        ok
++        false /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) fn skill_prompt_now(&self) -> String {
+         self.skill_tx.borrow().clone()
+     }
+ 
+     #[cfg(feature = "skill")]

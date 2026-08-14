@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::has_skill_changed -> bool with true
+@@ -293,17 +293,17 @@
+     }
+ 
+     pub fn has_model_changed(&self) -> bool {
+         self.model_rx.has_changed().unwrap_or(false)
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub fn has_skill_changed(&self) -> bool {
+-        self.skill_rx.has_changed().unwrap_or(false)
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {
+         self.watch_client()
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {

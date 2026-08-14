@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::model -> &str with "xyzzy"
+@@ -245,17 +245,17 @@
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {
+         let _ = self.skill_tx.send(prompt);
+     }
+ 
+     pub(crate) fn model(&self) -> &str {
+-        &self.model
++        "xyzzy" /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[derive(Debug, Clone)]
+ pub struct FuneraEnvWatcher {
+     #[cfg(feature = "tool")]
+     tool_rx: watch::Receiver<JsonValue>,
+     client_rx: watch::Receiver<async_openai::Client<OpenAIConfig>>,

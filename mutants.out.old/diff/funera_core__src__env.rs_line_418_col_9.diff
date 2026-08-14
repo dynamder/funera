@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::service_count -> usize with 0
+@@ -410,17 +410,17 @@
+     /// The non-generic counterpart of [`contains`](Self::contains), used by the
+     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).
+     pub fn contains_typeid(&self, key: TypeId) -> bool {
+         self.shared.services.read().unwrap().contains_key(&key)
+     }
+ 
+     /// Number of services currently provided.
+     pub fn service_count(&self) -> usize {
+-        self.shared.services.read().unwrap().len()
++        0 /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Run every registered disposer in reverse (LIFO) order.
+     ///
+     /// This tears the env's capability layer down: each effect is undone in the
+     /// reverse of the order it was registered. Only this env's own effects are
+     /// reverted; services provided by sibling envs are untouched.
+     pub fn dispose(&self) {

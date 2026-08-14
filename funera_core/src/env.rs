@@ -525,27 +525,61 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn model_changed_awaits_change() {
+    async fn model_changed_blocks_then_resolves() {
         let (env, mut watcher) = test_env();
+
+        // Blocks while no change is pending (kills a "return Ok(())" mutation).
+        let early = tokio::time::timeout(
+            std::time::Duration::from_millis(50),
+            watcher.model_changed(),
+        )
+        .await;
+        assert!(
+            early.is_err(),
+            "model_changed should block with no pending change"
+        );
+
+        // Resolves once a change is sent.
         let mut env2 = env.clone();
         let handle = tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             env2.set_model("m2");
         });
-        assert!(watcher.model_changed().await.is_ok());
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            watcher.model_changed(),
+        )
+        .await;
+        assert!(result.is_ok(), "model_changed should resolve after set_model");
         assert_eq!(watcher.watch_model(), "m2");
         handle.await.unwrap();
     }
 
     #[tokio::test]
-    async fn client_changed_awaits_change() {
+    async fn client_changed_blocks_then_resolves() {
         let (env, mut watcher) = test_env();
+
+        let early = tokio::time::timeout(
+            std::time::Duration::from_millis(50),
+            watcher.client_changed(),
+        )
+        .await;
+        assert!(
+            early.is_err(),
+            "client_changed should block with no pending change"
+        );
+
         let mut env2 = env.clone();
         let handle = tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             env2.set_client(async_openai::Client::new());
         });
-        assert!(watcher.client_changed().await.is_ok());
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            watcher.client_changed(),
+        )
+        .await;
+        assert!(result.is_ok(), "client_changed should resolve after set_client");
         handle.await.unwrap();
     }
 
@@ -584,12 +618,13 @@ mod tests {
         }
 
         #[test]
-        fn with_tool_registry_updates_watcher() {
+        fn with_tool_registry_updates_watcher_and_registry() {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             let mut reg = ToolRegistry::new();
             reg.add_tool(Box::new(MockTool));
-            let _env = env.with_tool_registry(reg);
+            let env = env.with_tool_registry(reg);
             assert!(watcher.watch_tool().as_array().is_some_and(|a| a.len() == 1));
+            assert!(env.tool_registry.blocking_read().tool_exists("mock"));
         }
 
         #[tokio::test]
@@ -624,14 +659,27 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn tool_changed_awaits_change() {
+        async fn tool_changed_blocks_then_resolves() {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+
+            let early = tokio::time::timeout(
+                std::time::Duration::from_millis(50),
+                watcher.tool_changed(),
+            )
+            .await;
+            assert!(early.is_err(), "tool_changed should block with no pending change");
+
             let mut env2 = env.clone();
             let handle = tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 env2.add_tool(Box::new(MockTool)).await;
             });
-            assert!(watcher.tool_changed().await.is_ok());
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                watcher.tool_changed(),
+            )
+            .await;
+            assert!(result.is_ok(), "tool_changed should resolve after add_tool");
             handle.await.unwrap();
         }
     }
@@ -676,13 +724,14 @@ mod tests {
         }
 
         #[test]
-        fn with_skill_registry_updates_watcher() {
+        fn with_skill_registry_updates_watcher_and_registry() {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             let mut reg = SkillRegistry::new();
             reg.add(skill("s1", "content"));
             reg.activate("s1");
-            let _env = env.with_skill_registry(reg);
+            let env = env.with_skill_registry(reg);
             assert_eq!(watcher.watch_skill(), "content");
+            assert!(env.skill_registry.blocking_read().contains("s1"));
         }
 
         #[test]
@@ -695,14 +744,27 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn skill_changed_awaits_change() {
+        async fn skill_changed_blocks_then_resolves() {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+
+            let early = tokio::time::timeout(
+                std::time::Duration::from_millis(50),
+                watcher.skill_changed(),
+            )
+            .await;
+            assert!(early.is_err(), "skill_changed should block with no pending change");
+
             let mut env2 = env.clone();
             let handle = tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 env2.add_skill(skill("s1", "content")).await;
             });
-            assert!(watcher.skill_changed().await.is_ok());
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                watcher.skill_changed(),
+            )
+            .await;
+            assert!(result.is_ok(), "skill_changed should resolve after add_skill");
             handle.await.unwrap();
         }
     }

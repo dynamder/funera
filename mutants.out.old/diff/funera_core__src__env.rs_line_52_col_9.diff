@@ -1,0 +1,22 @@
+--- funera_core/src/env.rs
++++ replace EnvShared::insert with ()
+@@ -44,18 +44,17 @@
+     fn new() -> Self {
+         Self {
+             services: StdRwLock::new(HashMap::new()),
+             observers: Mutex::new(Vec::new()),
+         }
+     }
+ 
+     fn insert(&self, key: TypeId, value: Arc<dyn Any + Send + Sync>) {
+-        self.services.write().unwrap().insert(key, value);
+-        self.notify(key, true);
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn remove(&self, key: TypeId) {
+         self.services.write().unwrap().remove(&key);
+         self.notify(key, false);
+     }
+ 
+     fn notify(&self, key: TypeId, present: bool) {

@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())
+@@ -297,17 +297,17 @@
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub fn has_skill_changed(&self) -> bool {
+         self.skill_rx.has_changed().unwrap_or(false)
+     }
+ 
+     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {
+-        self.watch_client()
++        Client::from(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {
+         self.tool_rx.changed().await
+     }
+ 
+     pub async fn client_changed(&mut self) -> Result<(), RecvError> {

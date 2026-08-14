@@ -1,0 +1,23 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::remove_tool with ()
+@@ -178,19 +178,17 @@
+     pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {
+         let mut registry = self.tool_registry.write().await;
+         registry.add_tool(tool);
+         let _ = self.tool_tx.send(registry.available_tools_json());
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub(crate) async fn remove_tool(&mut self, name: &str) {
+-        let mut registry = self.tool_registry.write().await;
+-        registry.remove_tool(name);
+-        let _ = self.tool_tx.send(registry.available_tools_json());
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
+         let registry = self.tool_registry.read().await;
+         let _ = self.tool_tx.send(registry.available_tools_json());
+     }
+ 

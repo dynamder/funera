@@ -1,0 +1,45 @@
+funera_core/src/env.rs:52:9: replace EnvShared::insert with ()
+funera_core/src/env.rs:57:9: replace EnvShared::remove with ()
+funera_core/src/env.rs:62:9: replace EnvShared::notify with ()
+funera_core/src/env.rs:69:9: replace EnvShared::subscribe with ()
+funera_core/src/env.rs:154:9: replace FuneraEnv::sandbox_policy -> &SandboxPolicy with Box::leak(Box::new(Default::default()))
+funera_core/src/env.rs:179:9: replace FuneraEnv::add_tool with ()
+funera_core/src/env.rs:186:9: replace FuneraEnv::remove_tool with ()
+funera_core/src/env.rs:193:9: replace FuneraEnv::set_tool_availability with ()
+funera_core/src/env.rs:198:9: replace FuneraEnv::set_client with ()
+funera_core/src/env.rs:203:9: replace FuneraEnv::set_model with ()
+funera_core/src/env.rs:210:9: replace FuneraEnv::add_skill with ()
+funera_core/src/env.rs:217:9: replace FuneraEnv::remove_skill with ()
+funera_core/src/env.rs:224:9: replace FuneraEnv::activate_skill -> bool with true
+funera_core/src/env.rs:224:9: replace FuneraEnv::activate_skill -> bool with false
+funera_core/src/env.rs:234:9: replace FuneraEnv::deactivate_skill -> bool with true
+funera_core/src/env.rs:234:9: replace FuneraEnv::deactivate_skill -> bool with false
+funera_core/src/env.rs:244:9: replace FuneraEnv::skill_prompt_now -> String with String::new()
+funera_core/src/env.rs:244:9: replace FuneraEnv::skill_prompt_now -> String with "xyzzy".into()
+funera_core/src/env.rs:249:9: replace FuneraEnv::set_skill_prompt with ()
+funera_core/src/env.rs:253:9: replace FuneraEnv::model -> &str with ""
+funera_core/src/env.rs:253:9: replace FuneraEnv::model -> &str with "xyzzy"
+funera_core/src/env.rs:270:9: replace FuneraEnvWatcher::watch_tool -> JsonValue with Default::default()
+funera_core/src/env.rs:278:9: replace FuneraEnvWatcher::watch_model -> String with String::new()
+funera_core/src/env.rs:278:9: replace FuneraEnvWatcher::watch_model -> String with "xyzzy".into()
+funera_core/src/env.rs:283:9: replace FuneraEnvWatcher::watch_skill -> String with String::new()
+funera_core/src/env.rs:283:9: replace FuneraEnvWatcher::watch_skill -> String with "xyzzy".into()
+funera_core/src/env.rs:288:9: replace FuneraEnvWatcher::has_tool_changed -> bool with true
+funera_core/src/env.rs:288:9: replace FuneraEnvWatcher::has_tool_changed -> bool with false
+funera_core/src/env.rs:292:9: replace FuneraEnvWatcher::has_client_changed -> bool with true
+funera_core/src/env.rs:292:9: replace FuneraEnvWatcher::has_client_changed -> bool with false
+funera_core/src/env.rs:296:9: replace FuneraEnvWatcher::has_model_changed -> bool with true
+funera_core/src/env.rs:296:9: replace FuneraEnvWatcher::has_model_changed -> bool with false
+funera_core/src/env.rs:301:9: replace FuneraEnvWatcher::has_skill_changed -> bool with true
+funera_core/src/env.rs:301:9: replace FuneraEnvWatcher::has_skill_changed -> bool with false
+funera_core/src/env.rs:318:9: replace FuneraEnvWatcher::model_changed -> Result<(), RecvError> with Ok(())
+funera_core/src/env.rs:349:9: replace FuneraEnv::on_service_change with ()
+funera_core/src/env.rs:365:9: replace FuneraEnv::effect with ()
+funera_core/src/env.rs:382:9: replace FuneraEnv::provide with ()
+funera_core/src/env.rs:395:9: replace FuneraEnv::get -> Option<Arc<T>> with None
+funera_core/src/env.rs:405:9: replace FuneraEnv::contains -> bool with true
+funera_core/src/env.rs:405:9: replace FuneraEnv::contains -> bool with false
+funera_core/src/env.rs:413:9: replace FuneraEnv::contains_typeid -> bool with true
+funera_core/src/env.rs:413:9: replace FuneraEnv::contains_typeid -> bool with false
+funera_core/src/env.rs:418:9: replace FuneraEnv::service_count -> usize with 0
+funera_core/src/env.rs:418:9: replace FuneraEnv::service_count -> usize with 1

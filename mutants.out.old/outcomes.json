@@ -1,0 +1,4101 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 52.1194269,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.8522441,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:52:9: replace EnvShared::insert with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "EnvShared::insert",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 51,
+                "column": 5
+              },
+              "end": {
+                "line": 54,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 52,
+              "column": 9
+            },
+            "end": {
+              "line": 53,
+              "column": 32
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_52_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_52_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.6921458,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.7852721000000003,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:57:9: replace EnvShared::remove with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "EnvShared::remove",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 56,
+                "column": 5
+              },
+              "end": {
+                "line": 59,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 57,
+              "column": 9
+            },
+            "end": {
+              "line": 58,
+              "column": 33
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_57_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_57_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.6423951,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.6479438,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:62:9: replace EnvShared::notify with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "EnvShared::notify",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 61,
+                "column": 5
+              },
+              "end": {
+                "line": 66,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 62,
+              "column": 9
+            },
+            "end": {
+              "line": 65,
+              "column": 10
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_62_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_62_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.647683,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.6420622,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:69:9: replace EnvShared::subscribe with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "EnvShared::subscribe",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 68,
+                "column": 5
+              },
+              "end": {
+                "line": 70,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 69,
+              "column": 9
+            },
+            "end": {
+              "line": 69,
+              "column": 55
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_69_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_69_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.3009466,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5986067999999998,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:147:9: replace FuneraEnv::with_sandbox_policy -> Self with Default::default()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::with_sandbox_policy",
+            "return_type": "-> Self",
+            "span": {
+              "start": {
+                "line": 144,
+                "column": 5
+              },
+              "end": {
+                "line": 149,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 147,
+              "column": 9
+            },
+            "end": {
+              "line": 148,
+              "column": 13
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_147_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_147_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.9280088,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:154:9: replace FuneraEnv::sandbox_policy -> &SandboxPolicy with Box::leak(Box::new(Default::default()))",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::sandbox_policy",
+            "return_type": "-> &SandboxPolicy",
+            "span": {
+              "start": {
+                "line": 151,
+                "column": 5
+              },
+              "end": {
+                "line": 155,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 154,
+              "column": 9
+            },
+            "end": {
+              "line": 154,
+              "column": 29
+            }
+          },
+          "replacement": "Box::leak(Box::new(Default::default()))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_154_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_154_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1482254,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.6501802,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:159:9: replace FuneraEnv::with_tool_registry -> Self with Default::default()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::with_tool_registry",
+            "return_type": "-> Self",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 5
+              },
+              "end": {
+                "line": 165,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 159,
+              "column": 9
+            },
+            "end": {
+              "line": 164,
+              "column": 10
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_159_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_159_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.9216715,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:162:13: delete field tool_registry from struct Self expression in FuneraEnv::with_tool_registry",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::with_tool_registry",
+            "return_type": "-> Self",
+            "span": {
+              "start": {
+                "line": 157,
+                "column": 5
+              },
+              "end": {
+                "line": 165,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 162,
+              "column": 13
+            },
+            "end": {
+              "line": 162,
+              "column": 65
+            }
+          },
+          "replacement": "",
+          "genre": "StructField"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/funera_core__src__env.rs_line_162_col_13.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_162_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.0943708,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.5105071,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:169:9: replace FuneraEnv::with_skill_registry -> Self with Default::default()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::with_skill_registry",
+            "return_type": "-> Self",
+            "span": {
+              "start": {
+                "line": 167,
+                "column": 5
+              },
+              "end": {
+                "line": 175,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 169,
+              "column": 9
+            },
+            "end": {
+              "line": 174,
+              "column": 10
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_169_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_169_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.9797657,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:172:13: delete field skill_registry from struct Self expression in FuneraEnv::with_skill_registry",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::with_skill_registry",
+            "return_type": "-> Self",
+            "span": {
+              "start": {
+                "line": 167,
+                "column": 5
+              },
+              "end": {
+                "line": 175,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 172,
+              "column": 13
+            },
+            "end": {
+              "line": 172,
+              "column": 67
+            }
+          },
+          "replacement": "",
+          "genre": "StructField"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/funera_core__src__env.rs_line_172_col_13.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_172_col_13.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1501349,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.8109453,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:179:9: replace FuneraEnv::add_tool with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::add_tool",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 177,
+                "column": 5
+              },
+              "end": {
+                "line": 182,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 179,
+              "column": 9
+            },
+            "end": {
+              "line": 181,
+              "column": 68
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_179_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_179_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.4923556,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 7.4301811,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:186:9: replace FuneraEnv::remove_tool with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::remove_tool",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 184,
+                "column": 5
+              },
+              "end": {
+                "line": 189,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 186,
+              "column": 9
+            },
+            "end": {
+              "line": 188,
+              "column": 68
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_186_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_186_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.6048607,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.3950437,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:193:9: replace FuneraEnv::set_tool_availability with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::set_tool_availability",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 191,
+                "column": 5
+              },
+              "end": {
+                "line": 195,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 193,
+              "column": 9
+            },
+            "end": {
+              "line": 194,
+              "column": 68
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_193_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_193_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.5429499,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.4349205,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:198:9: replace FuneraEnv::set_client with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::set_client",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 197,
+                "column": 5
+              },
+              "end": {
+                "line": 200,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 198,
+              "column": 9
+            },
+            "end": {
+              "line": 199,
+              "column": 45
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_198_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_198_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.9495222,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 7.2708254,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:203:9: replace FuneraEnv::set_model with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::set_model",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 202,
+                "column": 5
+              },
+              "end": {
+                "line": 206,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 203,
+              "column": 9
+            },
+            "end": {
+              "line": 205,
+              "column": 43
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_203_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_203_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.4988189,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 7.3715228,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:210:9: replace FuneraEnv::add_skill with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::add_skill",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 208,
+                "column": 5
+              },
+              "end": {
+                "line": 213,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 210,
+              "column": 9
+            },
+            "end": {
+              "line": 212,
+              "column": 73
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_210_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_210_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.2384489,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 7.4686455,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:217:9: replace FuneraEnv::remove_skill with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::remove_skill",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 215,
+                "column": 5
+              },
+              "end": {
+                "line": 220,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 217,
+              "column": 9
+            },
+            "end": {
+              "line": 219,
+              "column": 73
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_217_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_217_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.2922473,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.591413,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:224:9: replace FuneraEnv::activate_skill -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::activate_skill",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 222,
+                "column": 5
+              },
+              "end": {
+                "line": 230,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 224,
+              "column": 9
+            },
+            "end": {
+              "line": 229,
+              "column": 11
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_224_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_224_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.3005623,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5418569,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:224:9: replace FuneraEnv::activate_skill -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::activate_skill",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 222,
+                "column": 5
+              },
+              "end": {
+                "line": 230,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 224,
+              "column": 9
+            },
+            "end": {
+              "line": 229,
+              "column": 11
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_224_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_224_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.5417063,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.3958541,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:234:9: replace FuneraEnv::deactivate_skill -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::deactivate_skill",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 232,
+                "column": 5
+              },
+              "end": {
+                "line": 240,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 234,
+              "column": 9
+            },
+            "end": {
+              "line": 239,
+              "column": 11
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_234_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_234_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.5381451999999998,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5352779,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:234:9: replace FuneraEnv::deactivate_skill -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::deactivate_skill",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 232,
+                "column": 5
+              },
+              "end": {
+                "line": 240,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 234,
+              "column": 9
+            },
+            "end": {
+              "line": 239,
+              "column": 11
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_234_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_234_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.399899,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.4396628,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:244:9: replace FuneraEnv::skill_prompt_now -> String with String::new()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::skill_prompt_now",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 242,
+                "column": 5
+              },
+              "end": {
+                "line": 245,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 244,
+              "column": 9
+            },
+            "end": {
+              "line": 244,
+              "column": 39
+            }
+          },
+          "replacement": "String::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_244_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_244_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.2947253,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.3910946,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:244:9: replace FuneraEnv::skill_prompt_now -> String with \"xyzzy\".into()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::skill_prompt_now",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 242,
+                "column": 5
+              },
+              "end": {
+                "line": 245,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 244,
+              "column": 9
+            },
+            "end": {
+              "line": 244,
+              "column": 39
+            }
+          },
+          "replacement": "\"xyzzy\".into()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_244_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_244_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1906164,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5036579,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:249:9: replace FuneraEnv::set_skill_prompt with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::set_skill_prompt",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 247,
+                "column": 5
+              },
+              "end": {
+                "line": 250,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 249,
+              "column": 9
+            },
+            "end": {
+              "line": 249,
+              "column": 44
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_249_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_249_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1440949,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5888238,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:253:9: replace FuneraEnv::model -> &str with \"\"",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::model",
+            "return_type": "-> &str",
+            "span": {
+              "start": {
+                "line": 252,
+                "column": 5
+              },
+              "end": {
+                "line": 254,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 253,
+              "column": 9
+            },
+            "end": {
+              "line": 253,
+              "column": 20
+            }
+          },
+          "replacement": "\"\"",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_253_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_253_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1401817,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5503587,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:253:9: replace FuneraEnv::model -> &str with \"xyzzy\"",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::model",
+            "return_type": "-> &str",
+            "span": {
+              "start": {
+                "line": 252,
+                "column": 5
+              },
+              "end": {
+                "line": 254,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 253,
+              "column": 9
+            },
+            "end": {
+              "line": 253,
+              "column": 20
+            }
+          },
+          "replacement": "\"xyzzy\"",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_253_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_253_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1888824,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.502472,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:270:9: replace FuneraEnvWatcher::watch_tool -> JsonValue with Default::default()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_tool",
+            "return_type": "-> JsonValue",
+            "span": {
+              "start": {
+                "line": 268,
+                "column": 5
+              },
+              "end": {
+                "line": 271,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 270,
+              "column": 9
+            },
+            "end": {
+              "line": 270,
+              "column": 49
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_270_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_270_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.3919888,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.7905512,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::new()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 273,
+                "column": 5
+              },
+              "end": {
+                "line": 275,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 274,
+              "column": 9
+            },
+            "end": {
+              "line": 274,
+              "column": 51
+            }
+          },
+          "replacement": "Client::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_274_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_274_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.8259202,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::from_iter([Default::default()])",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 273,
+                "column": 5
+              },
+              "end": {
+                "line": 275,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 274,
+              "column": 9
+            },
+            "end": {
+              "line": 274,
+              "column": 51
+            }
+          },
+          "replacement": "Client::from_iter([Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_274_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_274_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.7881291,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::new(Default::default())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 273,
+                "column": 5
+              },
+              "end": {
+                "line": 275,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 274,
+              "column": 9
+            },
+            "end": {
+              "line": 274,
+              "column": 51
+            }
+          },
+          "replacement": "Client::new(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_274_col_9_002.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_274_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.791292,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:274:9: replace FuneraEnvWatcher::watch_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 273,
+                "column": 5
+              },
+              "end": {
+                "line": 275,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 274,
+              "column": 9
+            },
+            "end": {
+              "line": 274,
+              "column": 51
+            }
+          },
+          "replacement": "Client::from(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_274_col_9_003.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_274_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.7825917,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:278:9: replace FuneraEnvWatcher::watch_model -> String with String::new()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_model",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 277,
+                "column": 5
+              },
+              "end": {
+                "line": 279,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 278,
+              "column": 9
+            },
+            "end": {
+              "line": 278,
+              "column": 50
+            }
+          },
+          "replacement": "String::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_278_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_278_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.3316541,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.597748,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:278:9: replace FuneraEnvWatcher::watch_model -> String with \"xyzzy\".into()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_model",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 277,
+                "column": 5
+              },
+              "end": {
+                "line": 279,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 278,
+              "column": 9
+            },
+            "end": {
+              "line": 278,
+              "column": 50
+            }
+          },
+          "replacement": "\"xyzzy\".into()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_278_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_278_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.337152,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5366827,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:283:9: replace FuneraEnvWatcher::watch_skill -> String with String::new()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_skill",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 281,
+                "column": 5
+              },
+              "end": {
+                "line": 284,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 283,
+              "column": 9
+            },
+            "end": {
+              "line": 283,
+              "column": 50
+            }
+          },
+          "replacement": "String::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_283_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_283_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.5927788,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5451091,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:283:9: replace FuneraEnvWatcher::watch_skill -> String with \"xyzzy\".into()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::watch_skill",
+            "return_type": "-> String",
+            "span": {
+              "start": {
+                "line": 281,
+                "column": 5
+              },
+              "end": {
+                "line": 284,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 283,
+              "column": 9
+            },
+            "end": {
+              "line": 283,
+              "column": 50
+            }
+          },
+          "replacement": "\"xyzzy\".into()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_283_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_283_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.3352735,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5391731,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:288:9: replace FuneraEnvWatcher::has_tool_changed -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_tool_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 286,
+                "column": 5
+              },
+              "end": {
+                "line": 289,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 288,
+              "column": 9
+            },
+            "end": {
+              "line": 288,
+              "column": 52
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_288_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_288_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.2913718,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.3484226,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:288:9: replace FuneraEnvWatcher::has_tool_changed -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_tool_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 286,
+                "column": 5
+              },
+              "end": {
+                "line": 289,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 288,
+              "column": 9
+            },
+            "end": {
+              "line": 288,
+              "column": 52
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_288_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_288_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1920238,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5462366,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:292:9: replace FuneraEnvWatcher::has_client_changed -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_client_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 291,
+                "column": 5
+              },
+              "end": {
+                "line": 293,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 9
+            },
+            "end": {
+              "line": 292,
+              "column": 54
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_292_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_292_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.3375199,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.4883784,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:292:9: replace FuneraEnvWatcher::has_client_changed -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_client_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 291,
+                "column": 5
+              },
+              "end": {
+                "line": 293,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 292,
+              "column": 9
+            },
+            "end": {
+              "line": 292,
+              "column": 54
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_292_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_292_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.2920585,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5852494,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:296:9: replace FuneraEnvWatcher::has_model_changed -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_model_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 295,
+                "column": 5
+              },
+              "end": {
+                "line": 297,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 296,
+              "column": 9
+            },
+            "end": {
+              "line": 296,
+              "column": 53
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_296_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_296_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.1854744999999998,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.7449223,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:296:9: replace FuneraEnvWatcher::has_model_changed -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_model_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 295,
+                "column": 5
+              },
+              "end": {
+                "line": 297,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 296,
+              "column": 9
+            },
+            "end": {
+              "line": 296,
+              "column": 53
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_296_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_296_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.3433316,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.4840873,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:301:9: replace FuneraEnvWatcher::has_skill_changed -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_skill_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 299,
+                "column": 5
+              },
+              "end": {
+                "line": 302,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 301,
+              "column": 9
+            },
+            "end": {
+              "line": 301,
+              "column": 53
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_301_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_301_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.285421,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5504499000000003,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:301:9: replace FuneraEnvWatcher::has_skill_changed -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::has_skill_changed",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 299,
+                "column": 5
+              },
+              "end": {
+                "line": 302,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 301,
+              "column": 9
+            },
+            "end": {
+              "line": 301,
+              "column": 53
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_301_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_301_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.2910264,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.486578,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::new()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::use_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 304,
+                "column": 5
+              },
+              "end": {
+                "line": 306,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 305,
+              "column": 9
+            },
+            "end": {
+              "line": 305,
+              "column": 28
+            }
+          },
+          "replacement": "Client::new()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_305_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_305_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.8326419,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from_iter([Default::default()])",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::use_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 304,
+                "column": 5
+              },
+              "end": {
+                "line": 306,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 305,
+              "column": 9
+            },
+            "end": {
+              "line": 305,
+              "column": 28
+            }
+          },
+          "replacement": "Client::from_iter([Default::default()])",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_305_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_305_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.7839083,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::new(Default::default())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::use_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 304,
+                "column": 5
+              },
+              "end": {
+                "line": 306,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 305,
+              "column": 9
+            },
+            "end": {
+              "line": 305,
+              "column": 28
+            }
+          },
+          "replacement": "Client::new(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_305_col_9_002.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_305_col_9_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.7769674,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:305:9: replace FuneraEnvWatcher::use_client -> async_openai::Client<OpenAIConfig> with Client::from(Default::default())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::use_client",
+            "return_type": "-> async_openai::Client<OpenAIConfig>",
+            "span": {
+              "start": {
+                "line": 304,
+                "column": 5
+              },
+              "end": {
+                "line": 306,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 305,
+              "column": 9
+            },
+            "end": {
+              "line": 305,
+              "column": 28
+            }
+          },
+          "replacement": "Client::from(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_305_col_9_003.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_305_col_9_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.7913734,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:310:9: replace FuneraEnvWatcher::tool_changed -> Result<(), RecvError> with Ok(())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::tool_changed",
+            "return_type": "-> Result<(), RecvError>",
+            "span": {
+              "start": {
+                "line": 308,
+                "column": 5
+              },
+              "end": {
+                "line": 311,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 310,
+              "column": 9
+            },
+            "end": {
+              "line": 310,
+              "column": 37
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/funera_core__src__env.rs_line_310_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_310_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.3881211,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.7970245,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:314:9: replace FuneraEnvWatcher::client_changed -> Result<(), RecvError> with Ok(())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::client_changed",
+            "return_type": "-> Result<(), RecvError>",
+            "span": {
+              "start": {
+                "line": 313,
+                "column": 5
+              },
+              "end": {
+                "line": 315,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 314,
+              "column": 9
+            },
+            "end": {
+              "line": 314,
+              "column": 39
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/funera_core__src__env.rs_line_314_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_314_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.8458825,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.8732814,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:318:9: replace FuneraEnvWatcher::model_changed -> Result<(), RecvError> with Ok(())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::model_changed",
+            "return_type": "-> Result<(), RecvError>",
+            "span": {
+              "start": {
+                "line": 317,
+                "column": 5
+              },
+              "end": {
+                "line": 319,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 318,
+              "column": 9
+            },
+            "end": {
+              "line": 318,
+              "column": 38
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_318_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_318_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.7357261,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.4863192,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:323:9: replace FuneraEnvWatcher::skill_changed -> Result<(), RecvError> with Ok(())",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnvWatcher::skill_changed",
+            "return_type": "-> Result<(), RecvError>",
+            "span": {
+              "start": {
+                "line": 321,
+                "column": 5
+              },
+              "end": {
+                "line": 324,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 323,
+              "column": 9
+            },
+            "end": {
+              "line": 323,
+              "column": 38
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/funera_core__src__env.rs_line_323_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_323_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.4869758,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 4.661423,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:339:9: replace FuneraEnv::derive -> FuneraEnv with Default::default()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::derive",
+            "return_type": "-> FuneraEnv",
+            "span": {
+              "start": {
+                "line": 332,
+                "column": 5
+              },
+              "end": {
+                "line": 342,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 339,
+              "column": 9
+            },
+            "end": {
+              "line": 341,
+              "column": 14
+            }
+          },
+          "replacement": "Default::default()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_339_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_339_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.9784518,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:349:9: replace FuneraEnv::on_service_change with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::on_service_change",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 344,
+                "column": 5
+              },
+              "end": {
+                "line": 350,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 349,
+              "column": 9
+            },
+            "end": {
+              "line": 349,
+              "column": 41
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_349_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_349_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.5820804,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5300573,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:365:9: replace FuneraEnv::effect with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::effect",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 352,
+                "column": 5
+              },
+              "end": {
+                "line": 367,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 365,
+              "column": 9
+            },
+            "end": {
+              "line": 366,
+              "column": 51
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_365_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_365_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.9967078000000003,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.6406371,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:382:9: replace FuneraEnv::provide with ()",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::provide",
+            "return_type": "",
+            "span": {
+              "start": {
+                "line": 369,
+                "column": 5
+              },
+              "end": {
+                "line": 391,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 382,
+              "column": 9
+            },
+            "end": {
+              "line": 390,
+              "column": 12
+            }
+          },
+          "replacement": "()",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_382_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_382_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.6964805,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.7947447,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:395:9: replace FuneraEnv::get -> Option<Arc<T>> with None",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::get",
+            "return_type": "-> Option<Arc<T>>",
+            "span": {
+              "start": {
+                "line": 393,
+                "column": 5
+              },
+              "end": {
+                "line": 401,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 395,
+              "column": 9
+            },
+            "end": {
+              "line": 400,
+              "column": 58
+            }
+          },
+          "replacement": "None",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_395_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_395_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.5502531,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5877236,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:395:9: replace FuneraEnv::get -> Option<Arc<T>> with Some(Arc::new(Default::default()))",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::get",
+            "return_type": "-> Option<Arc<T>>",
+            "span": {
+              "start": {
+                "line": 393,
+                "column": 5
+              },
+              "end": {
+                "line": 401,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 395,
+              "column": 9
+            },
+            "end": {
+              "line": 400,
+              "column": 58
+            }
+          },
+          "replacement": "Some(Arc::new(Default::default()))",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "Unviable",
+      "log_path": "log/funera_core__src__env.rs_line_395_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_395_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 0.8797692,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:405:9: replace FuneraEnv::contains -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::contains",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 403,
+                "column": 5
+              },
+              "end": {
+                "line": 406,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 405,
+              "column": 9
+            },
+            "end": {
+              "line": 405,
+              "column": 48
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_405_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_405_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 3.2367826,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5878382,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:405:9: replace FuneraEnv::contains -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::contains",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 403,
+                "column": 5
+              },
+              "end": {
+                "line": 406,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 405,
+              "column": 9
+            },
+            "end": {
+              "line": 405,
+              "column": 48
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_405_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_405_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.2344316,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.6037732,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:413:9: replace FuneraEnv::contains_typeid -> bool with true",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::contains_typeid",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 408,
+                "column": 5
+              },
+              "end": {
+                "line": 414,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 413,
+              "column": 9
+            },
+            "end": {
+              "line": 413,
+              "column": 64
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_413_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_413_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.6872913,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.9386825,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:413:9: replace FuneraEnv::contains_typeid -> bool with false",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::contains_typeid",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 408,
+                "column": 5
+              },
+              "end": {
+                "line": 414,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 413,
+              "column": 9
+            },
+            "end": {
+              "line": 413,
+              "column": 64
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_413_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_413_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.4426153,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.8374148999999997,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:418:9: replace FuneraEnv::service_count -> usize with 0",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::service_count",
+            "return_type": "-> usize",
+            "span": {
+              "start": {
+                "line": 416,
+                "column": 5
+              },
+              "end": {
+                "line": 419,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 418,
+              "column": 9
+            },
+            "end": {
+              "line": 418,
+              "column": 51
+            }
+          },
+          "replacement": "0",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_418_col_9.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_418_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.380592,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.5333197,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "funera_core/src/env.rs:418:9: replace FuneraEnv::service_count -> usize with 1",
+          "package": "funera-core",
+          "file": "funera_core/src/env.rs",
+          "function": {
+            "function_name": "FuneraEnv::service_count",
+            "return_type": "-> usize",
+            "span": {
+              "start": {
+                "line": 416,
+                "column": 5
+              },
+              "end": {
+                "line": 419,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 418,
+              "column": 9
+            },
+            "end": {
+              "line": 418,
+              "column": 51
+            }
+          },
+          "replacement": "1",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/funera_core__src__env.rs_line_418_col_9_001.log",
+      "diff_path": "diff/funera_core__src__env.rs_line_418_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 2.4491595,
+          "process_status": "Success",
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.799406,
+          "process_status": {
+            "Failure": 101
+          },
+          "argv": [
+            "C:\\Users\\atomt\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\cargo.exe",
+            "test",
+            "--verbose",
+            "--package=funera-core@0.2.6",
+            "--all-features"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 63,
+  "missed": 5,
+  "caught": 45,
+  "timeout": 0,
+  "unviable": 13,
+  "success": 0,
+  "start_time": "2026-08-14T17:50:40.5806441Z",
+  "end_time": null,
+  "cargo_mutants_version": "27.1.0"
+}

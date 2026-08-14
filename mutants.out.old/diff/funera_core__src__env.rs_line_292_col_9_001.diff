@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::has_client_changed -> bool with false
+@@ -284,17 +284,17 @@
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub fn has_tool_changed(&self) -> bool {
+         self.tool_rx.has_changed().unwrap_or(false)
+     }
+ 
+     pub fn has_client_changed(&self) -> bool {
+-        self.client_rx.has_changed().unwrap_or(false)
++        false /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub fn has_model_changed(&self) -> bool {
+         self.model_rx.has_changed().unwrap_or(false)
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub fn has_skill_changed(&self) -> bool {

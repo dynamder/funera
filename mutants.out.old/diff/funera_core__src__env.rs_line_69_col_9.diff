@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace EnvShared::subscribe with ()
+@@ -61,17 +61,17 @@
+     fn notify(&self, key: TypeId, present: bool) {
+         let observers = self.observers.lock().unwrap();
+         for observer in observers.iter() {
+             observer(key, present);
+         }
+     }
+ 
+     fn subscribe(&self, observer: ServiceObserver) {
+-        self.observers.lock().unwrap().push(observer);
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[derive(Clone)]
+ pub struct FuneraEnv {
+     #[cfg(feature = "tool")]
+     pub(crate) tool_registry: Arc<RwLock<ToolRegistry>>,
+     #[cfg(feature = "skill")]

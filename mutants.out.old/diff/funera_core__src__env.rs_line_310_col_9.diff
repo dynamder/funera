@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::tool_changed -> Result<(), RecvError> with Ok(())
+@@ -302,17 +302,17 @@
+     }
+ 
+     pub fn use_client(&mut self) -> async_openai::Client<OpenAIConfig> {
+         self.watch_client()
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {
+-        self.tool_rx.changed().await
++        Ok(()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub async fn client_changed(&mut self) -> Result<(), RecvError> {
+         self.client_rx.changed().await
+     }
+ 
+     pub async fn model_changed(&mut self) -> Result<(), RecvError> {
+         self.model_rx.changed().await

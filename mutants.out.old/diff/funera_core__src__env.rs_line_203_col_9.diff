@@ -1,0 +1,23 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::set_model with ()
+@@ -195,19 +195,17 @@
+     }
+ 
+     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
+         self.llm_client = client.clone();
+         let _ = self.client_tx.send(client);
+     }
+ 
+     pub(crate) fn set_model(&mut self, model: impl Into<String>) {
+-        let model = model.into();
+-        self.model = model.clone();
+-        let _ = self.model_tx.send(model);
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) async fn add_skill(&mut self, skill: Skill) {
+         let mut registry = self.skill_registry.write().await;
+         registry.add(skill);
+         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
+     }

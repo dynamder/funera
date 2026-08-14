@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::contains -> bool with false
+@@ -397,17 +397,17 @@
+             .read()
+             .unwrap()
+             .get(&TypeId::of::<T>())
+             .and_then(|v| v.clone().downcast::<T>().ok())
+     }
+ 
+     /// Whether a service of type `T` is currently provided.
+     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
+-        self.contains_typeid(TypeId::of::<T>())
++        false /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Whether a service with the given [`TypeId`] is currently provided.
+     ///
+     /// The non-generic counterpart of [`contains`](Self::contains), used by the
+     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).
+     pub fn contains_typeid(&self, key: TypeId) -> bool {
+         self.shared.services.read().unwrap().contains_key(&key)

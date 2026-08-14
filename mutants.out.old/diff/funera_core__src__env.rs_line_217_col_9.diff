@@ -1,0 +1,23 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::remove_skill with ()
+@@ -209,19 +209,17 @@
+     pub(crate) async fn add_skill(&mut self, skill: Skill) {
+         let mut registry = self.skill_registry.write().await;
+         registry.add(skill);
+         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) async fn remove_skill(&mut self, name: &str) {
+-        let mut registry = self.skill_registry.write().await;
+-        registry.remove(name);
+-        let _ = self.skill_tx.send(registry.get_active_skills_prompt());
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {
+         let mut registry = self.skill_registry.write().await;
+         let ok = registry.activate(name);
+         if ok {
+             let _ = self.skill_tx.send(registry.get_active_skills_prompt());

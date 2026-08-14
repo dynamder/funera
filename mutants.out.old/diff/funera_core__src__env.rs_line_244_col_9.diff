@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnv::skill_prompt_now -> String with String::new()
+@@ -236,17 +236,17 @@
+         if ok {
+             let _ = self.skill_tx.send(registry.get_active_skills_prompt());
+         }
+         ok
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) fn skill_prompt_now(&self) -> String {
+-        self.skill_tx.borrow().clone()
++        String::new() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub(crate) fn set_skill_prompt(&mut self, prompt: String) {
+         let _ = self.skill_tx.send(prompt);
+     }
+ 
+     pub(crate) fn model(&self) -> &str {

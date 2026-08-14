@@ -1,0 +1,21 @@
+--- funera_core/src/env.rs
++++ replace FuneraEnvWatcher::client_changed -> Result<(), RecvError> with Ok(())
+@@ -306,17 +306,17 @@
+     }
+ 
+     #[cfg(feature = "tool")]
+     pub async fn tool_changed(&mut self) -> Result<(), RecvError> {
+         self.tool_rx.changed().await
+     }
+ 
+     pub async fn client_changed(&mut self) -> Result<(), RecvError> {
+-        self.client_rx.changed().await
++        Ok(()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub async fn model_changed(&mut self) -> Result<(), RecvError> {
+         self.model_rx.changed().await
+     }
+ 
+     #[cfg(feature = "skill")]
+     pub async fn skill_changed(&mut self) -> Result<(), RecvError> {
