@@ -1,4 +1,6 @@
-use std::sync::Arc;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock as StdRwLock};
 
 use async_openai::config::OpenAIConfig;
 
@@ -13,6 +15,31 @@ use tokio::sync::{
     RwLock,
     watch::{self, error::RecvError},
 };
+
+/// A teardown action that undoes one effect.
+///
+/// Returned by [`FuneraEnv::effect`] bodies and run in reverse registration
+/// order when [`FuneraEnv::dispose`] is called (LIFO recovery).
+pub type Disposer = Box<dyn FnOnce() + Send + 'static>;
+
+/// Shared state behind a [`FuneraEnv`]'s capability layer.
+///
+/// `services` is the coeffect context (a typed service table keyed by
+/// [`TypeId`]); `disposers` is the accumulator of effect inverses, recovered
+/// in LIFO order on [`FuneraEnv::dispose`].
+struct EnvShared {
+    services: StdRwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
+    disposers: Mutex<Vec<Disposer>>,
+}
+
+impl EnvShared {
+    fn new() -> Self {
+        Self {
+            services: StdRwLock::new(HashMap::new()),
+            disposers: Mutex::new(Vec::new()),
+        }
+    }
+}
 
 pub struct FuneraEnv {
     #[cfg(feature = "tool")]
@@ -29,6 +56,8 @@ pub struct FuneraEnv {
     skill_tx: watch::Sender<String>,
     #[cfg(feature = "sandbox")]
     sandbox_policy: SandboxPolicy,
+    /// Shared capability layer (service table + effect accumulator).
+    shared: Arc<EnvShared>,
 }
 
 impl FuneraEnv {
@@ -66,6 +95,7 @@ impl FuneraEnv {
                 skill_tx,
                 #[cfg(feature = "sandbox")]
                 sandbox_policy: SandboxPolicy::default(),
+                shared: Arc::new(EnvShared::new()),
             },
             FuneraEnvWatcher {
                 #[cfg(feature = "tool")]
@@ -252,5 +282,150 @@ impl FuneraEnvWatcher {
     #[cfg(feature = "skill")]
     pub async fn skill_changed(&mut self) -> Result<(), RecvError> {
         self.skill_rx.changed().await
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Capability layer — reversible effects + typed services
+// ═══════════════════════════════════════════════════════════════
+
+impl FuneraEnv {
+    /// Register a reversible effect.
+    ///
+    /// `body` runs now (setup) and returns a [`Disposer`] that undoes it. The
+    /// disposer is pushed onto the env's accumulator and run in reverse (LIFO)
+    /// order by [`dispose`](Self::dispose) when the env is torn down.
+    ///
+    /// ```rust,ignore
+    /// env.effect(|| {
+    ///     let resource = acquire();       // setup: the effect
+    ///     Box::new(move || release(resource))  // teardown: its inverse
+    /// });
+    /// ```
+    pub fn effect(&self, body: impl FnOnce() -> Disposer) {
+        let undo = body();
+        self.shared.disposers.lock().unwrap().push(undo);
+    }
+
+    /// Provide a typed service to this env.
+    ///
+    /// The service is stored under its [`TypeId`] and automatically removed on
+    /// [`dispose`](Self::dispose). `provide` is itself an effect: its inverse is
+    /// "remove the service".
+    ///
+    /// ```rust,ignore
+    /// #[derive(Clone)]
+    /// struct Config { url: String }
+    /// env.provide(Config { url: "db://…".into() });
+    /// let cfg: std::sync::Arc<Config> = env.get::<Config>().unwrap();
+    /// ```
+    pub fn provide<T: Send + Sync + 'static>(&self, value: T) {
+        let key = TypeId::of::<T>();
+        let shared = Arc::clone(&self.shared);
+        self.effect(move || {
+            shared.services.write().unwrap().insert(key, Arc::new(value));
+            let teardown_shared = Arc::clone(&shared);
+            Box::new(move || {
+                teardown_shared.services.write().unwrap().remove(&key);
+            })
+        });
+    }
+
+    /// Resolve a typed service previously provided to this env.
+    pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
+        self.shared
+            .services
+            .read()
+            .unwrap()
+            .get(&TypeId::of::<T>())
+            .and_then(|v| v.clone().downcast::<T>().ok())
+    }
+
+    /// Whether a service of type `T` is currently provided.
+    pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
+        self.shared
+            .services
+            .read()
+            .unwrap()
+            .contains_key(&TypeId::of::<T>())
+    }
+
+    /// Number of services currently provided.
+    pub fn service_count(&self) -> usize {
+        self.shared.services.read().unwrap().len()
+    }
+
+    /// Run every registered disposer in reverse (LIFO) order.
+    ///
+    /// This tears the env's capability layer down: each effect is undone in the
+    /// reverse of the order it was registered.
+    pub fn dispose(&self) {
+        let disposers = std::mem::take(&mut *self.shared.disposers.lock().unwrap());
+        for undo in disposers.into_iter().rev() {
+            undo();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_env() -> (FuneraEnv, FuneraEnvWatcher) {
+        FuneraEnv::new(async_openai::Client::new(), "test-model")
+    }
+
+    #[test]
+    fn provide_get_roundtrip() {
+        let (env, _watcher) = test_env();
+        #[derive(Debug, PartialEq)]
+        struct Config(u32);
+
+        env.provide(Config(42));
+
+        assert!(env.contains::<Config>());
+        assert_eq!(env.service_count(), 1);
+        assert_eq!(env.get::<Config>().unwrap().0, 42);
+    }
+
+    #[test]
+    fn get_missing_returns_none() {
+        let (env, _watcher) = test_env();
+        assert!(env.get::<String>().is_none());
+    }
+
+    #[test]
+    fn provide_removed_on_dispose() {
+        let (env, _watcher) = test_env();
+        env.provide(String::from("hello"));
+        assert!(env.contains::<String>());
+
+        env.dispose();
+        assert!(!env.contains::<String>());
+        assert_eq!(env.service_count(), 0);
+    }
+
+    #[test]
+    fn effect_runs_in_lifo_order() {
+        let (env, _watcher) = test_env();
+        let log: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let l1 = Arc::clone(&log);
+        env.effect(|| Box::new(move || l1.lock().unwrap().push("first")));
+        let l2 = Arc::clone(&log);
+        env.effect(|| Box::new(move || l2.lock().unwrap().push("second")));
+
+        env.dispose();
+        assert_eq!(*log.lock().unwrap(), vec!["second", "first"]);
+    }
+
+    #[test]
+    fn dispose_idempotent() {
+        let (env, _watcher) = test_env();
+        env.effect(|| Box::new(|| {}));
+        env.dispose();
+        // Second dispose is a no-op: the accumulator was drained.
+        env.dispose();
+        assert_eq!(env.service_count(), 0);
     }
 }
