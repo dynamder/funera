@@ -21,6 +21,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check --all
 
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace
+
   doc:
     runs-on: ubuntu-latest
     steps:

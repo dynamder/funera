@@ -2,6 +2,7 @@
 name = "funera"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Flexible and security-oriented LLM agent framework for Rust — ReAct loop, tools, skills, middleware, security"
 license.workspace = true
 repository.workspace = true
@@ -16,6 +17,7 @@ members = ["funera_builtin_tools", "funera_core", "funera-orchestrate"]
 [workspace.package]
 version = "0.2.6"
 edition = "2024"
+rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/dynamder/funera"
 
