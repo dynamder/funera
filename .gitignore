@@ -1,3 +1,4 @@
 /target
 nul
 semver-checks/
+/mutants.out/
