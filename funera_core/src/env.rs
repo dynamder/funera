@@ -148,6 +148,12 @@ impl FuneraEnv {
         self
     }
 
+    /// The configured sandbox policy.
+    #[cfg(feature = "sandbox")]
+    pub fn sandbox_policy(&self) -> &SandboxPolicy {
+        &self.sandbox_policy
+    }
+
     #[cfg(feature = "tool")]
     pub fn with_tool_registry(self, tool_registry: ToolRegistry) -> Self {
         let snapshot = tool_registry.available_tools_json();
@@ -485,5 +491,219 @@ mod tests {
         // Second dispose is a no-op: the accumulator was drained.
         env.dispose();
         assert_eq!(env.service_count(), 0);
+    }
+
+    // ── model / client hot-reload (pre-existing methods) ──────
+
+    #[test]
+    fn set_model_updates_model_and_watcher() {
+        let (mut env, mut watcher) = test_env();
+        assert_eq!(env.model(), "test-model");
+        env.set_model("m2");
+        assert_eq!(env.model(), "m2");
+        assert_eq!(watcher.watch_model(), "m2");
+    }
+
+    #[test]
+    fn has_model_changed_reflects_changes() {
+        let (mut env, mut watcher) = test_env();
+        assert!(!watcher.has_model_changed());
+        env.set_model("m2");
+        assert!(watcher.has_model_changed());
+        let _ = watcher.watch_model();
+        assert!(!watcher.has_model_changed());
+    }
+
+    #[test]
+    fn set_client_marks_client_changed() {
+        let (mut env, mut watcher) = test_env();
+        assert!(!watcher.has_client_changed());
+        env.set_client(async_openai::Client::new());
+        assert!(watcher.has_client_changed());
+        let _ = watcher.watch_client();
+        assert!(!watcher.has_client_changed());
+    }
+
+    #[tokio::test]
+    async fn model_changed_awaits_change() {
+        let (env, mut watcher) = test_env();
+        let mut env2 = env.clone();
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            env2.set_model("m2");
+        });
+        assert!(watcher.model_changed().await.is_ok());
+        assert_eq!(watcher.watch_model(), "m2");
+        handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn client_changed_awaits_change() {
+        let (env, mut watcher) = test_env();
+        let mut env2 = env.clone();
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            env2.set_client(async_openai::Client::new());
+        });
+        assert!(watcher.client_changed().await.is_ok());
+        handle.await.unwrap();
+    }
+
+    #[cfg(feature = "sandbox")]
+    #[test]
+    fn with_sandbox_policy_roundtrips() {
+        let (env, _watcher) = test_env();
+        let env = env.with_sandbox_policy(SandboxPolicy::disabled());
+        assert!(!env.sandbox_policy().enabled);
+    }
+
+    #[cfg(feature = "tool")]
+    mod tool_tests {
+        use super::*;
+        use crate::plugin::Plugin;
+        use crate::re_act::tool::{Tool, ToolCallError, ToolRegistry};
+        use serde_json::json;
+
+        struct MockTool;
+        impl Plugin for MockTool {
+            fn name(&self) -> &str {
+                "mock"
+            }
+        }
+        #[async_trait::async_trait]
+        impl Tool for MockTool {
+            fn description(&self) -> &str {
+                "mock tool"
+            }
+            fn schema(&self) -> JsonValue {
+                json!({"type": "function", "function": {"name": "mock"}})
+            }
+            async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+                Ok("ok".into())
+            }
+        }
+
+        #[test]
+        fn with_tool_registry_updates_watcher() {
+            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let mut reg = ToolRegistry::new();
+            reg.add_tool(Box::new(MockTool));
+            let _env = env.with_tool_registry(reg);
+            assert!(watcher.watch_tool().as_array().is_some_and(|a| a.len() == 1));
+        }
+
+        #[tokio::test]
+        async fn add_then_remove_tool_updates_watcher() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            env.add_tool(Box::new(MockTool)).await;
+            assert!(watcher.watch_tool().as_array().is_some_and(|a| a.len() == 1));
+            env.remove_tool("mock").await;
+            assert!(watcher.watch_tool().as_array().is_some_and(|a| a.is_empty()));
+        }
+
+        #[tokio::test]
+        async fn set_tool_availability_rebroadcasts_snapshot() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            env.add_tool(Box::new(MockTool)).await;
+            let _ = watcher.watch_tool();
+            assert!(!watcher.has_tool_changed());
+            env.set_tool_availability("mock", false).await;
+            assert!(watcher.has_tool_changed());
+        }
+
+        #[test]
+        fn has_tool_changed_reflects_changes() {
+            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            assert!(!watcher.has_tool_changed());
+            let mut reg = ToolRegistry::new();
+            reg.add_tool(Box::new(MockTool));
+            let _env = env.with_tool_registry(reg);
+            assert!(watcher.has_tool_changed());
+            let _ = watcher.watch_tool();
+            assert!(!watcher.has_tool_changed());
+        }
+
+        #[tokio::test]
+        async fn tool_changed_awaits_change() {
+            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let mut env2 = env.clone();
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                env2.add_tool(Box::new(MockTool)).await;
+            });
+            assert!(watcher.tool_changed().await.is_ok());
+            handle.await.unwrap();
+        }
+    }
+
+    #[cfg(feature = "skill")]
+    mod skill_tests {
+        use super::*;
+        use crate::re_act::skills::{Skill, SkillRegistry};
+
+        fn skill(name: &str, content: &str) -> Skill {
+            Skill::new(name, "", content)
+        }
+
+        #[tokio::test]
+        async fn add_and_activate_skill_updates_prompt() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            env.add_skill(skill("s1", "part one")).await;
+            assert!(env.activate_skill("s1").await);
+            assert_eq!(watcher.watch_skill(), "part one");
+            assert_eq!(env.skill_prompt_now(), "part one");
+        }
+
+        #[tokio::test]
+        async fn activate_deactivate_skill_returns_bool() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            env.add_skill(skill("s1", "content")).await;
+            assert!(!env.activate_skill("ghost").await);
+            assert!(env.activate_skill("s1").await);
+            assert_eq!(watcher.watch_skill(), "content");
+            assert!(env.deactivate_skill("s1").await);
+            assert_eq!(watcher.watch_skill(), "");
+            assert!(!env.deactivate_skill("s1").await);
+        }
+
+        #[tokio::test]
+        async fn remove_skill_clears_prompt() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            env.add_skill(skill("s1", "content")).await;
+            env.activate_skill("s1").await;
+            env.remove_skill("s1").await;
+            assert_eq!(watcher.watch_skill(), "");
+        }
+
+        #[test]
+        fn with_skill_registry_updates_watcher() {
+            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let mut reg = SkillRegistry::new();
+            reg.add(skill("s1", "content"));
+            reg.activate("s1");
+            let _env = env.with_skill_registry(reg);
+            assert_eq!(watcher.watch_skill(), "content");
+        }
+
+        #[test]
+        fn set_skill_prompt_and_has_changed() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            assert!(!watcher.has_skill_changed());
+            env.set_skill_prompt("hello".into());
+            assert!(watcher.has_skill_changed());
+            assert_eq!(watcher.watch_skill(), "hello");
+        }
+
+        #[tokio::test]
+        async fn skill_changed_awaits_change() {
+            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let mut env2 = env.clone();
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                env2.add_skill(skill("s1", "content")).await;
+            });
+            assert!(watcher.skill_changed().await.is_ok());
+            handle.await.unwrap();
+        }
     }
 }
