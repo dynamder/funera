@@ -1,5 +1,0 @@
-funera_core/src/env.rs:162:13: delete field tool_registry from struct Self expression in FuneraEnv::with_tool_registry
-funera_core/src/env.rs:172:13: delete field skill_registry from struct Self expression in FuneraEnv::with_skill_registry
-funera_core/src/env.rs:310:9: replace FuneraEnvWatcher::tool_changed -> Result<(), RecvError> with Ok(())
-funera_core/src/env.rs:314:9: replace FuneraEnvWatcher::client_changed -> Result<(), RecvError> with Ok(())
-funera_core/src/env.rs:323:9: replace FuneraEnvWatcher::skill_changed -> Result<(), RecvError> with Ok(())

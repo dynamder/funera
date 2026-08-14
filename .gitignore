@@ -2,3 +2,4 @@
 nul
 semver-checks/
 /mutants.out/
+/mutants.out.old/
