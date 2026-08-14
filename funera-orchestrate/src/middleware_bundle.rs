@@ -10,8 +10,8 @@
 //! # use funera_orchestrate::middleware::*;
 //! # use funera_orchestrate::middleware_bundle::MiddlewareBundle;
 //! # use funera_orchestrate::AgentEvent;
-//! # struct Logger; impl InspectorMiddleware<AgentEvent> for Logger {
-//! #     fn name(&self) -> &str { "log" }
+//! # struct Logger; impl Plugin for Logger { fn name(&self) -> &str { "log" } }
+//! # impl InspectorMiddleware<AgentEvent> for Logger {
 //! #     fn inspect(&self, _: &AgentEvent) -> Result<(), InspectorError> { Ok(()) }
 //! # }
 //! let bundle = MiddlewareBundle::from_chain(
@@ -46,8 +46,8 @@ impl<E: Clone + Send + 'static> MiddlewareBundle<E> {
     /// # use funera_orchestrate::middleware::*;
     /// # use funera_orchestrate::middleware_bundle::MiddlewareBundle;
     /// # use funera_orchestrate::AgentEvent;
-    /// # struct Logger; impl InspectorMiddleware<AgentEvent> for Logger {
-    /// #     fn name(&self) -> &str { "log" }
+    /// # struct Logger; impl Plugin for Logger { fn name(&self) -> &str { "log" } }
+    /// # impl InspectorMiddleware<AgentEvent> for Logger {
     /// #     fn inspect(&self, _: &AgentEvent) -> Result<(), InspectorError> { Ok(()) }
     /// # }
     /// let bundle = MiddlewareBundle::from_chain(
@@ -70,8 +70,8 @@ impl<E: Clone + Send + 'static> MiddlewareBundle<E> {
     /// # use funera_orchestrate::middleware::*;
     /// # use funera_orchestrate::middleware_bundle::MiddlewareBundle;
     /// # use funera_orchestrate::AgentEvent;
-    /// # struct Logger; impl InspectorMiddleware<AgentEvent> for Logger {
-    /// #     fn name(&self) -> &str { "log" }
+    /// # struct Logger; impl Plugin for Logger { fn name(&self) -> &str { "log" } }
+    /// # impl InspectorMiddleware<AgentEvent> for Logger {
     /// #     fn inspect(&self, _: &AgentEvent) -> Result<(), InspectorError> { Ok(()) }
     /// # }
     /// let chain = MiddlewareChain::<AgentEvent>::new()

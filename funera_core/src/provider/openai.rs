@@ -6,9 +6,16 @@ use async_openai::{
 };
 use serde_json::Value as JsonValue;
 
+use crate::plugin::Plugin;
 use crate::provider::{ChatProvider, build_standard_request_json};
 
 pub struct OpenAIProvider;
+
+impl Plugin for OpenAIProvider {
+    fn name(&self) -> &str {
+        "openai"
+    }
+}
 
 impl ChatProvider for OpenAIProvider {
     type Chunk = CreateChatCompletionStreamResponse;

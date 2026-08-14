@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use funera_core::plugin::Plugin;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 #[cfg(feature = "sandbox")]
 use funera_core::security::sandbox::{Sandbox, SandboxPolicy, format_triple_output};
@@ -59,12 +60,14 @@ impl Default for ShellTool {
     }
 }
 
-#[async_trait]
-impl Tool for ShellTool {
+impl Plugin for ShellTool {
     fn name(&self) -> &str {
         "shell"
     }
+}
 
+#[async_trait]
+impl Tool for ShellTool {
     fn description(&self) -> &str {
         "Execute shell commands. Use with caution."
     }

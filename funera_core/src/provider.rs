@@ -9,6 +9,7 @@ use serde_json::Value as JsonValue;
 use std::future::Future;
 
 use crate::event_bus::token_bus::TokenEvent;
+use crate::plugin::Plugin;
 
 #[cfg(feature = "deepseek")]
 pub mod deepseek;
@@ -30,7 +31,7 @@ pub trait StreamChunkExt: DeserializeOwned + Send + 'static {
 /// deserialization. Two built-in implementations exist: `OpenAIProvider`
 /// (requires `openai` feature) and `DeepSeekProvider` (requires `deepseek`
 /// feature).
-pub trait ChatProvider: Send + Sync + 'static {
+pub trait ChatProvider: Plugin + 'static {
     /// The deserialized stream chunk type for this provider.
     type Chunk: StreamChunkExt;
 

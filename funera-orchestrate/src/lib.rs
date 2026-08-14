@@ -212,6 +212,7 @@ pub use funera_core::event_bus::react_bus::{
     ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse,
 };
 pub use funera_core::event_bus::token_bus::TokenEvent;
+pub use funera_core::plugin::{InstanceState, Plugin, PluginInstance};
 
 /// Middleware 相关的类型和 trait。
 ///
@@ -229,4 +230,5 @@ pub use funera_core::event_bus::token_bus::TokenEvent;
 pub mod middleware {
     pub use crate::middleware_bundle::MiddlewareBundle;
     pub use funera_core::middleware::*;
+    pub use funera_core::plugin::Plugin;
 }

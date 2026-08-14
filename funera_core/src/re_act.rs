@@ -490,6 +490,8 @@ mod tests {
 
     use crate::event_bus::env_state_bus::TurnHighWayEvent;
     use crate::event_bus::react_bus::ReactBus;
+    #[cfg(feature = "tool")]
+    use crate::plugin::Plugin;
     use crate::test_helpers;
 
     use super::*;
@@ -732,6 +734,13 @@ mod tests {
 
     #[cfg(feature = "tool")]
     struct MockProvider;
+
+    #[cfg(feature = "tool")]
+    impl Plugin for MockProvider {
+        fn name(&self) -> &str {
+            "mock"
+        }
+    }
 
     #[cfg(feature = "tool")]
     impl ChatProvider for MockProvider {

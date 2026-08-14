@@ -361,16 +361,20 @@ fn demo_guarded_registry() {
 fn demo_audit_integration() {
     println!("--- 11. Audit Bus Integration ---");
     use async_trait::async_trait;
+    use funera_core::plugin::Plugin;
     use funera_core::re_act::tool::{Tool, ToolCallError};
     use serde_json::Value as JsonValue;
 
     struct DummyTool;
 
-    #[async_trait]
-    impl Tool for DummyTool {
+    impl Plugin for DummyTool {
         fn name(&self) -> &str {
             "blocked_tool"
         }
+    }
+
+    #[async_trait]
+    impl Tool for DummyTool {
         fn description(&self) -> &str {
             "a tool that is blocked by policy"
         }

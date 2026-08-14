@@ -827,16 +827,20 @@ mod tests {
     #[cfg(feature = "tool")]
     mod tool_tests {
         use super::*;
+        use funera_core::plugin::Plugin;
         use funera_core::re_act::tool::ToolCallError;
 
         #[derive(Default)]
         struct MockTool;
 
-        #[async_trait::async_trait]
-        impl Tool for MockTool {
+        impl Plugin for MockTool {
             fn name(&self) -> &str {
                 "mock_tool"
             }
+        }
+
+        #[async_trait::async_trait]
+        impl Tool for MockTool {
             fn description(&self) -> &str {
                 "A mock tool for testing"
             }

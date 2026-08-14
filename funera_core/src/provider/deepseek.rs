@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
 use crate::event_bus::token_bus::TokenEvent;
+use crate::plugin::Plugin;
 use crate::provider::{ChatProvider, StreamChunkExt, build_standard_request_json};
 
 #[derive(Debug, Deserialize)]
@@ -94,6 +95,12 @@ impl StreamChunkExt for StreamChunk {
 }
 
 pub struct DeepSeekProvider;
+
+impl Plugin for DeepSeekProvider {
+    fn name(&self) -> &str {
+        "deepseek"
+    }
+}
 
 impl ChatProvider for DeepSeekProvider {
     type Chunk = StreamChunk;

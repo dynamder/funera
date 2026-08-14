@@ -22,6 +22,7 @@ pub mod env;
 pub mod env_actor;
 pub mod event_bus;
 pub mod middleware;
+pub mod plugin;
 pub mod provider;
 pub mod re_act;
 pub mod security;
