@@ -1,0 +1,12 @@
+[book]
+title = "Funera Documentation"
+authors = ["Funera Contributors"]
+language = "en"
+src = "docs"
+
+[build]
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/dynamder/funera"
+edit-url-template = "https://github.com/dynamder/funera/edit/main/docs/{path}"
