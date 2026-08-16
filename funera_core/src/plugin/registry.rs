@@ -1,10 +1,12 @@
 //! Typestate-driven plugin registry.
 
 use std::any::TypeId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::env::FuneraEnv;
+use parking_lot::{Mutex as StdMutex, RwLock as StdRwLock};
+
+use crate::env::{FuneraEnv, ProviderId};
 use crate::plugin::Plugin;
 use crate::plugin::instance::{InstanceId, PluginInstance, TargetDigest, state};
 
@@ -29,17 +31,27 @@ pub enum PluginPhase {
 }
 
 /// Resolves an instance's `inject` requirements against the shared service
-/// table. `Some(target)` means every required service is currently provided.
-fn resolve(env: &FuneraEnv, inject: &[TypeId]) -> Option<TargetDigest> {
-    if inject.is_empty() {
-        return Some(TargetDigest::from_type_ids(std::iter::empty()));
-    }
-    for type_id in inject {
-        if !env.contains_typeid(*type_id) {
-            return None;
-        }
-    }
-    Some(TargetDigest::from_type_ids(inject.iter()))
+/// table. A binding only counts while its provider is active (provider id `0`
+/// is the root env and is always considered active).
+fn resolve(
+    env: &FuneraEnv,
+    inject: &[TypeId],
+    active_providers: &HashMap<ProviderId, InstanceId>,
+) -> Option<TargetDigest> {
+    let pairs: Vec<(&TypeId, ProviderId)> = inject
+        .iter()
+        .map(|type_id| {
+            let binding = env.binding_by_typeid(*type_id)?;
+            if binding.provider != 0 && !active_providers.contains_key(&binding.provider) {
+                return None;
+            }
+            Some((type_id, binding.provider))
+        })
+        .collect::<Option<_>>()?;
+
+    Some(TargetDigest::from_provider_pairs(
+        pairs.iter().map(|(t, p)| (*t, *p)),
+    ))
 }
 
 /// A registry that mounts [`Plugin`]s and drives their lifecycle reactively.
@@ -47,6 +59,10 @@ fn resolve(env: &FuneraEnv, inject: &[TypeId]) -> Option<TargetDigest> {
 /// Instances are stored in per-state maps, so their state lives in the map key
 /// type rather than in a runtime enum. `Loading` and `Unloading` are transient
 /// states represented by the typestate instance during an `await`.
+///
+/// The registry subscribes to the env's service-change notifications and keeps
+/// a reverse index (`inject TypeId -> instance ids`), so a `refresh` only
+/// re-evaluates instances whose declared dependencies may have changed.
 pub struct PluginRegistry {
     env: FuneraEnv,
     pending: HashMap<InstanceId, PluginInstance<state::Pending>>,
@@ -54,11 +70,33 @@ pub struct PluginRegistry {
     inactive: HashMap<InstanceId, PluginInstance<state::Inactive>>,
     failed: HashMap<InstanceId, FailedEntry>,
     next_id: InstanceId,
+    next_provider_id: ProviderId,
+    /// ProviderId -> InstanceId for providers that are currently `Active`.
+    active_providers: HashMap<ProviderId, InstanceId>,
+    /// Reverse index from an inject `TypeId` to every instance that requires it.
+    dependents: Arc<StdRwLock<HashMap<TypeId, HashSet<InstanceId>>>>,
+    /// Instance ids that need re-evaluation.
+    dirty: Arc<StdMutex<HashSet<InstanceId>>>,
 }
 
 impl PluginRegistry {
     /// Create a registry rooted at `env`.
     pub fn new(env: FuneraEnv) -> Self {
+        let dependents: Arc<StdRwLock<HashMap<TypeId, HashSet<InstanceId>>>> =
+            Arc::new(StdRwLock::new(HashMap::new()));
+        let dirty: Arc<StdMutex<HashSet<InstanceId>>> = Arc::new(StdMutex::new(HashSet::new()));
+
+        // Subscribe before `env` is moved into the registry.
+        {
+            let dependents = Arc::clone(&dependents);
+            let dirty = Arc::clone(&dirty);
+            env.on_service_change(Arc::new(move |type_id, _present| {
+                if let Some(ids) = dependents.read().get(&type_id) {
+                    dirty.lock().extend(ids.iter().copied());
+                }
+            }));
+        }
+
         Self {
             env,
             pending: HashMap::new(),
@@ -66,6 +104,10 @@ impl PluginRegistry {
             inactive: HashMap::new(),
             failed: HashMap::new(),
             next_id: 0,
+            next_provider_id: 0,
+            active_providers: HashMap::new(),
+            dependents,
+            dirty,
         }
     }
 
@@ -76,106 +118,108 @@ impl PluginRegistry {
 
     /// Mount a plugin, returning its instance id.
     ///
-    /// The instance starts in [`state::Pending`]; call
-    /// [`refresh`](Self::refresh) to (re)evaluate it against the current
-    /// services.
+    /// The instance starts in [`state::Pending`] and is marked dirty, so the
+    /// next [`refresh`](Self::refresh) re-evaluates it.
     pub fn mount(&mut self, plugin: Arc<dyn Plugin>) -> InstanceId {
         let id = self.next_id;
         self.next_id += 1;
-        let child = self.env.derive();
+        let provider_id = self.next_provider_id;
+        self.next_provider_id += 1;
+
+        let inject = plugin.inject().to_vec();
+        let child = self.env.derive_with_provider(provider_id);
         let inst = PluginInstance::create(id, plugin, child);
         self.pending.insert(id, inst);
+
+        // Reverse index for notification-driven refresh.
+        for type_id in &inject {
+            self.dependents
+                .write()
+                .entry(*type_id)
+                .or_default()
+                .insert(id);
+        }
+        self.dirty.lock().insert(id);
         id
     }
 
-    /// Re-evaluate every instance until no further transition fires.
+    /// Re-evaluate dirty instances until no further transition fires.
     ///
-    /// This is the async, typestate version of the previous `refresh`. Each
-    /// transition is a method on a concrete state, so invalid transitions do
-    /// not compile.
+    /// Each transition is a method on a concrete typestate, so invalid
+    /// transitions do not compile. Service changes made during `apply` /
+    /// `dispose` mark affected instances dirty automatically through the
+    /// service-change observer.
     pub async fn refresh(&mut self) {
-        // Bound by the number of instances plus one; cycles cannot loop
-        // forever because a deactivated instance goes through `Inactive`
-        // before becoming `Pending` again.
-        let cap = self.pending.len() + self.active.len() + self.inactive.len() + 1;
+        // Safety bound: each pass drains the dirty set; transitions add new
+        // dirty ids at most once per instance state change.
+        let cap = self.instance_count() * 4 + 4;
         for _ in 0..cap {
-            let mut changed = false;
-
-            // Pending -> Loading -> Active / Failed
-            let pending_ids: Vec<InstanceId> = self.pending.keys().copied().collect();
-            for id in pending_ids {
-                let target = {
-                    let inst = &self.pending[&id];
-                    resolve(&self.env, inst.plugin.inject())
-                };
-                if target.is_none() {
-                    self.pending.get_mut(&id).unwrap().target = None;
-                    continue;
-                }
-                changed = true;
-                let inst = self.pending.remove(&id).unwrap().with_target(target);
-                let inst = inst.begin_load();
-                let plugin = inst.plugin.clone();
-                let env = inst.env.clone();
-                let result = plugin.apply(&env).await;
-                match result {
-                    Ok(()) => {
-                        let inst = inst.finish_load();
-                        self.active.insert(id, inst);
-                    }
-                    Err(e) => {
-                        // Roll back any effects the failed apply already
-                        // registered, then record the failure.
-                        env.dispose();
-                        self.failed.insert(
-                            id,
-                            FailedEntry {
-                                inst: inst.fail(),
-                                error: e.to_string(),
-                            },
-                        );
-                    }
-                }
-            }
-
-            // Active -> Unloading -> Inactive
-            let active_ids: Vec<InstanceId> = self.active.keys().copied().collect();
-            for id in active_ids {
-                let target = {
-                    let inst = &self.active[&id];
-                    resolve(&self.env, inst.plugin.inject())
-                };
-                if target.is_some() {
-                    self.active.get_mut(&id).unwrap().target = target;
-                    continue;
-                }
-                changed = true;
-                let inst = self.active.remove(&id).unwrap();
-                let inst = inst.begin_unload();
-                let env = inst.env.clone();
-                env.dispose();
-                let inst = inst.finish_unload();
-                self.inactive.insert(id, inst);
-            }
-
-            // Inactive -> Pending (dependency may have reappeared)
-            let inactive_ids: Vec<InstanceId> = self.inactive.keys().copied().collect();
-            for id in inactive_ids {
-                let target = {
-                    let inst = &self.inactive[&id];
-                    resolve(&self.env, inst.plugin.inject())
-                };
-                if target.is_none() {
-                    self.inactive.get_mut(&id).unwrap().target = None;
-                    continue;
-                }
-                changed = true;
-                let inst = self.inactive.remove(&id).unwrap().with_target(target);
-                self.pending.insert(id, inst.to_pending());
-            }
-
-            if !changed {
+            let ids: Vec<InstanceId> = self.dirty.lock().drain().collect();
+            if ids.is_empty() {
                 break;
+            }
+
+            for id in ids {
+                if let Some(inst) = self.pending.remove(&id) {
+                    let target = resolve(&self.env, inst.plugin.inject(), &self.active_providers);
+                    if target.is_none() {
+                        self.pending.insert(id, inst);
+                        continue;
+                    }
+                    let inst = inst.with_target(target).begin_load();
+                    let plugin = inst.plugin.clone();
+                    let env = inst.env.clone();
+                    let result = plugin.apply(&env).await;
+                    match result {
+                        Ok(()) => {
+                            let provider_id = env.provider_id();
+                            self.active_providers.insert(provider_id, id);
+                            self.active.insert(id, inst.finish_load());
+                        }
+                        Err(e) => {
+                            // Roll back any effects the failed apply already
+                            // registered, then record the failure.
+                            env.dispose();
+                            self.failed.insert(
+                                id,
+                                FailedEntry {
+                                    inst: inst.fail(),
+                                    error: e.to_string(),
+                                },
+                            );
+                        }
+                    }
+                    continue;
+                }
+
+                if let Some(inst) = self.active.remove(&id) {
+                    let target = resolve(&self.env, inst.plugin.inject(), &self.active_providers);
+                    if target.is_some() {
+                        self.active.insert(id, inst.with_target(target));
+                        continue;
+                    }
+                    let provider_id = inst.env.provider_id();
+                    self.active_providers.remove(&provider_id);
+                    let inst = inst.begin_unload();
+                    let env = inst.env.clone();
+                    env.dispose();
+                    self.inactive.insert(id, inst.finish_unload());
+                    continue;
+                }
+
+                if let Some(inst) = self.inactive.remove(&id) {
+                    let target = resolve(&self.env, inst.plugin.inject(), &self.active_providers);
+                    if target.is_none() {
+                        self.inactive.insert(id, inst);
+                        continue;
+                    }
+                    // Re-enter pending; the next dirty drain will activate it.
+                    self.dirty.lock().insert(id);
+                    self.pending.insert(id, inst.to_pending());
+                    continue;
+                }
+
+                // Failed instances are not automatically retried yet.
             }
         }
     }
@@ -184,6 +228,27 @@ impl PluginRegistry {
     ///
     /// Returns the unmounted plugin, or `None` if `id` is unknown.
     pub async fn unmount(&mut self, id: InstanceId) -> Option<Arc<dyn Plugin>> {
+        // Remove the instance from the reverse index.
+        let inject = self
+            .pending
+            .get(&id)
+            .map(|i| i.plugin.inject().to_vec())
+            .or_else(|| self.active.get(&id).map(|i| i.plugin.inject().to_vec()))
+            .or_else(|| self.inactive.get(&id).map(|i| i.plugin.inject().to_vec()))
+            .or_else(|| {
+                self.failed
+                    .get(&id)
+                    .map(|f| f.inst.plugin.inject().to_vec())
+            });
+        if let Some(inject) = inject {
+            let mut deps = self.dependents.write();
+            for type_id in &inject {
+                if let Some(ids) = deps.get_mut(type_id) {
+                    ids.remove(&id);
+                }
+            }
+        }
+
         let removed = if let Some(inst) = self.pending.remove(&id) {
             Some(inst.plugin.clone())
         } else if let Some(inst) = self.inactive.remove(&id) {
@@ -191,6 +256,8 @@ impl PluginRegistry {
         } else if let Some(entry) = self.failed.remove(&id) {
             Some(entry.inst.plugin.clone())
         } else if let Some(inst) = self.active.remove(&id) {
+            let provider_id = inst.env.provider_id();
+            self.active_providers.remove(&provider_id);
             let inst = inst.begin_unload();
             let env = inst.env.clone();
             env.dispose();

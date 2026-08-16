@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::env::FuneraEnv;
+use crate::env::{FuneraEnv, ProviderId};
 use crate::plugin::Plugin;
 
 /// Runtime id of a mounted plugin instance.
@@ -19,10 +19,13 @@ pub type InstanceId = u64;
 pub struct TargetDigest(u64);
 
 impl TargetDigest {
-    pub(crate) fn from_type_ids<'a>(iter: impl Iterator<Item = &'a std::any::TypeId>) -> Self {
+    pub(crate) fn from_provider_pairs<'a>(
+        iter: impl Iterator<Item = (&'a std::any::TypeId, ProviderId)>,
+    ) -> Self {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        for type_id in iter {
+        for (type_id, provider_id) in iter {
             type_id.hash(&mut hasher);
+            provider_id.hash(&mut hasher);
         }
         Self(hasher.finish())
     }

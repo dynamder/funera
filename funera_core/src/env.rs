@@ -1,6 +1,7 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_openai::config::OpenAIConfig;
 use parking_lot::{Mutex, RwLock as StdRwLock};
@@ -42,8 +43,9 @@ pub type ServiceObserver = Arc<dyn Fn(TypeId, bool) + Send + Sync>;
 /// own effect accumulator (`disposers`) so a child can be torn down
 /// independently of its parent.
 struct EnvShared {
-    services: StdRwLock<HashMap<ServiceKey, Arc<dyn Any + Send + Sync>>>,
+    services: StdRwLock<HashMap<ServiceKey, Arc<ServiceBinding>>>,
     observers: Mutex<Vec<ServiceObserver>>,
+    generation: AtomicU64,
 }
 
 impl EnvShared {
@@ -51,17 +53,28 @@ impl EnvShared {
         Self {
             services: StdRwLock::new(HashMap::new()),
             observers: Mutex::new(Vec::new()),
+            generation: AtomicU64::new(0),
         }
     }
 
-    fn insert(&self, key: ServiceKey, value: Arc<dyn Any + Send + Sync>) {
-        self.services.write().insert(key.clone(), value);
+    fn insert(&self, key: ServiceKey, value: Arc<dyn Any + Send + Sync>, provider: ProviderId) {
+        let generation = self.generation.fetch_add(1, Ordering::Relaxed);
+        let binding = Arc::new(ServiceBinding {
+            provider,
+            value,
+            generation,
+        });
+        self.services.write().insert(key.clone(), binding);
         self.notify(key.type_id, true);
     }
 
     fn remove(&self, key: &ServiceKey) {
         self.services.write().remove(key);
         self.notify(key.type_id, false);
+    }
+
+    fn binding(&self, key: &ServiceKey) -> Option<Arc<ServiceBinding>> {
+        self.services.read().get(key).cloned()
     }
 
     fn notify(&self, key: TypeId, present: bool) {
@@ -96,6 +109,8 @@ pub struct FuneraEnv {
     shared: Arc<EnvShared>,
     /// This env's own effect accumulator (LIFO inverse stack).
     disposers: Arc<Mutex<Vec<Disposer>>>,
+    /// The plugin instance this env was derived for; `0` for the root env.
+    provider_id: ProviderId,
 }
 
 impl FuneraEnv {
@@ -135,6 +150,7 @@ impl FuneraEnv {
                 sandbox_policy: SandboxPolicy::default(),
                 shared: Arc::new(EnvShared::new()),
                 disposers: Arc::new(Mutex::new(Vec::new())),
+                provider_id: 0,
             },
             FuneraEnvWatcher {
                 #[cfg(feature = "tool")]
@@ -342,9 +358,24 @@ impl FuneraEnv {
     /// that instance ([`dispose`](Self::dispose)) reverts only the effects it
     /// registered, while the services it provided remain visible to siblings.
     pub fn derive(&self) -> FuneraEnv {
+        self.derive_with_provider(self.provider_id)
+    }
+
+    /// Derive a child env for the plugin instance with the given provider id.
+    ///
+    /// Services provided through this child env are attributed to `provider_id`
+    /// so the plugin registry can resolve dependencies against active
+    /// providers rather than against the raw service table.
+    pub(crate) fn derive_with_provider(&self, provider_id: ProviderId) -> FuneraEnv {
         let mut child = self.clone();
+        child.provider_id = provider_id;
         child.disposers = Arc::new(Mutex::new(Vec::new()));
         child
+    }
+
+    /// The provider id this env attributes `provide` calls to.
+    pub fn provider_id(&self) -> ProviderId {
+        self.provider_id
     }
 
     /// Subscribe to service provision/removal events.
@@ -399,8 +430,9 @@ impl FuneraEnv {
 
     fn provide_keyed<T: Send + Sync + 'static>(&self, key: ServiceKey, value: T) {
         let shared = Arc::clone(&self.shared);
+        let provider = self.provider_id;
         self.effect(move || {
-            shared.insert(key.clone(), Arc::new(value));
+            shared.insert(key.clone(), Arc::new(value), provider);
             let teardown_shared = Arc::clone(&shared);
             Box::new(move || {
                 teardown_shared.remove(&key);
@@ -421,10 +453,21 @@ impl FuneraEnv {
 
     fn get_keyed<T: Send + Sync + 'static>(&self, key: &ServiceKey) -> Option<Arc<T>> {
         self.shared
-            .services
-            .read()
-            .get(key)
-            .and_then(|v| v.clone().downcast::<T>().ok())
+            .binding(key)
+            .and_then(|binding| binding.value.clone().downcast::<T>().ok())
+    }
+
+    /// Resolve the raw binding for a service key.
+    pub fn binding(&self, key: &ServiceKey) -> Option<Arc<ServiceBinding>> {
+        self.shared.binding(key)
+    }
+
+    /// Resolve the raw binding for a primary service key by [`TypeId`].
+    pub fn binding_by_typeid(&self, type_id: TypeId) -> Option<Arc<ServiceBinding>> {
+        self.shared.binding(&ServiceKey {
+            type_id,
+            name: None,
+        })
     }
 
     /// Whether a service of type `T` is currently provided.

@@ -189,6 +189,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn root_service_change_marks_dependents_dirty() {
+        let mut reg = registry();
+        let consumer = reg.mount(Arc::new(ConsumerOfA::new()));
+        reg.refresh().await;
+        assert_eq!(reg.phase(consumer), Some(PluginPhase::Pending));
+
+        // Providing the service through the root env (provider id 0) must mark
+        // the dependent dirty via the service-change observer.
+        reg.env().provide(ServiceA);
+        reg.refresh().await;
+        assert_eq!(reg.phase(consumer), Some(PluginPhase::Active));
+        assert!(reg.env().contains::<ServiceB>());
+    }
+
+    #[tokio::test]
     async fn provider_satisfies_dependent() {
         let mut reg = registry();
         let provider = reg.mount(Arc::new(ProviderA::new()));
