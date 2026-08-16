@@ -17,9 +17,10 @@
 use std::any::TypeId;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use funera_core::env::FuneraEnv;
 use funera_core::loader::{Loader, PluginEntry};
-use funera_core::plugin::{InstanceState, Plugin, PluginError};
+use funera_core::plugin::{Plugin, PluginError, PluginPhase};
 
 /// A shared configuration service.
 #[derive(Clone)]
@@ -46,6 +47,7 @@ impl ConfigPlugin {
     }
 }
 
+#[async_trait]
 impl Plugin for ConfigPlugin {
     fn name(&self) -> &str {
         "config"
@@ -55,11 +57,14 @@ impl Plugin for ConfigPlugin {
         &self.provides
     }
 
-    fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+    async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
         env.provide(Config {
             greeting: self.greeting.clone(),
         });
-        println!("    [config] provided Config(greeting = {:?})", self.greeting);
+        println!(
+            "    [config] provided Config(greeting = {:?})",
+            self.greeting
+        );
         Ok(())
     }
 }
@@ -79,6 +84,7 @@ impl GreeterPlugin {
     }
 }
 
+#[async_trait]
 impl Plugin for GreeterPlugin {
     fn name(&self) -> &str {
         "greeter"
@@ -92,68 +98,64 @@ impl Plugin for GreeterPlugin {
         &self.provides
     }
 
-    fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+    async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
         let config = env.get::<Config>().expect("Config must be present");
         env.provide(Greeter);
-        println!(
-            "    [greeter] active; will greet {:?}",
-            config.greeting
-        );
+        println!("    [greeter] active; will greet {:?}", config.greeting);
         Ok(())
     }
 }
 
-fn state<'a>(loader: &'a Loader, id: &str) -> Option<&'a InstanceState> {
-    loader.entry_state(id)
-}
-
-fn main() {
+#[tokio::main]
+async fn main() {
     let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "demo");
     let mut loader = Loader::new(env);
 
     // 1. Mount only the consumer: its dependency is absent, so it stays Pending.
     println!("1. greeter alone (Config missing):");
-    loader.reconcile(&[PluginEntry::new(
-        "greeter",
-        Arc::new(GreeterPlugin::new()),
-    )]);
-    println!("    greeter = {:?}", state(&loader, "greeter"));
-    assert_eq!(state(&loader, "greeter"), Some(&InstanceState::Pending));
+    loader
+        .reconcile(&[PluginEntry::new("greeter", Arc::new(GreeterPlugin::new()))])
+        .await;
+    println!("    greeter = {:?}", loader.entry_phase("greeter"));
+    assert_eq!(loader.entry_phase("greeter"), Some(PluginPhase::Pending));
 
     // 2. Add the provider: both plugins activate reactively in one reconcile.
     println!("\n2. config + greeter (dependency satisfied):");
-    loader.reconcile(&[
-        PluginEntry::new("config", Arc::new(ConfigPlugin::new("hello"))),
-        PluginEntry::new("greeter", Arc::new(GreeterPlugin::new())),
-    ]);
-    println!("    config  = {:?}", state(&loader, "config"));
-    println!("    greeter = {:?}", state(&loader, "greeter"));
-    assert_eq!(state(&loader, "config"), Some(&InstanceState::Active));
-    assert_eq!(state(&loader, "greeter"), Some(&InstanceState::Active));
+    loader
+        .reconcile(&[
+            PluginEntry::new("config", Arc::new(ConfigPlugin::new("hello"))),
+            PluginEntry::new("greeter", Arc::new(GreeterPlugin::new())),
+        ])
+        .await;
+    println!("    config  = {:?}", loader.entry_phase("config"));
+    println!("    greeter = {:?}", loader.entry_phase("greeter"));
+    assert_eq!(loader.entry_phase("config"), Some(PluginPhase::Active));
+    assert_eq!(loader.entry_phase("greeter"), Some(PluginPhase::Active));
     assert!(loader.registry().env().contains::<Greeter>());
 
     // 3. Remove the provider: the consumer deactivates and its service is
     //    reverted.
     println!("\n3. config removed (greeter deactivates):");
-    loader.reconcile(&[PluginEntry::new(
-        "greeter",
-        Arc::new(GreeterPlugin::new()),
-    )]);
-    println!("    greeter = {:?}", state(&loader, "greeter"));
-    assert_eq!(state(&loader, "greeter"), Some(&InstanceState::Pending));
+    loader
+        .reconcile(&[PluginEntry::new("greeter", Arc::new(GreeterPlugin::new()))])
+        .await;
+    println!("    greeter = {:?}", loader.entry_phase("greeter"));
+    assert_eq!(loader.entry_phase("greeter"), Some(PluginPhase::Inactive));
     assert!(!loader.registry().env().contains::<Greeter>());
 
     // 4. Hot replacement: bump the config revision to reload it in place; the
     //    greeter reactivates against the new Config value.
     println!("\n4. config hot-replaced (revision 0 -> 1):");
-    loader.reconcile(&[
-        PluginEntry::new("config", Arc::new(ConfigPlugin::new("bonjour"))).revision(1),
-        PluginEntry::new("greeter", Arc::new(GreeterPlugin::new())),
-    ]);
-    println!("    config  = {:?}", state(&loader, "config"));
-    println!("    greeter = {:?}", state(&loader, "greeter"));
-    assert_eq!(state(&loader, "config"), Some(&InstanceState::Active));
-    assert_eq!(state(&loader, "greeter"), Some(&InstanceState::Active));
+    loader
+        .reconcile(&[
+            PluginEntry::new("config", Arc::new(ConfigPlugin::new("bonjour"))).revision(1),
+            PluginEntry::new("greeter", Arc::new(GreeterPlugin::new())),
+        ])
+        .await;
+    println!("    config  = {:?}", loader.entry_phase("config"));
+    println!("    greeter = {:?}", loader.entry_phase("greeter"));
+    assert_eq!(loader.entry_phase("config"), Some(PluginPhase::Active));
+    assert_eq!(loader.entry_phase("greeter"), Some(PluginPhase::Active));
 
     println!("\nplugin_architecture: all assertions passed");
 }

@@ -6,11 +6,11 @@
 //! - `OPENAI_API_KEY` environment variable
 //! - `cargo test --features real-llm`
 
-use funera_orchestrate::{Agent, AgentEvent, AgentRuntime};
+use funera_orchestrate::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 
 /// Create a runtime from environment variables (must have API key).
-fn make_runtime(model: &str) -> AgentRuntime {
-    AgentRuntime::builder()
+fn make_runtime(model: &str) -> AgentRuntime<DeepSeekProvider> {
+    AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set"))
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model(model)
@@ -59,7 +59,7 @@ async fn fire_with_custom_model() {
 
 #[tokio::test]
 async fn fire_respects_max_iterations() {
-    let runtime = AgentRuntime::builder()
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
         .api_key(std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set"))
         .base_url(std::env::var("OPENAI_BASE_URL").ok())
         .model("gpt-4o-mini")
@@ -81,10 +81,20 @@ async fn send_multi_turn_memory() {
         .system_prompt("You are a helpful assistant.")
         .build();
 
-    let r1 = agent.send("My name is Alice.", &mut runtime).await.unwrap();
+    let (_runtime, r1) = agent
+        .send("My name is Alice.", runtime)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
     assert!(non_empty(&r1.content));
 
-    let r2 = agent.send("What is my name?", &mut runtime).await.unwrap();
+    let (_runtime, r2) = agent
+        .send("What is my name?", _runtime)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
     let answer = r2.content.to_lowercase();
     assert!(
         answer.contains("alice"),
@@ -97,10 +107,20 @@ async fn send_reset_forgets() {
     let mut runtime = make_runtime("gpt-4o-mini");
     let agent = Agent::builder().system_prompt("You are helpful.").build();
 
-    agent.send("My name is Bob.", &mut runtime).await.unwrap();
+    let (mut runtime, _) = agent
+        .send("My name is Bob.", runtime)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
     runtime.reset();
 
-    let r2 = agent.send("What is my name?", &mut runtime).await.unwrap();
+    let (_runtime, r2) = agent
+        .send("What is my name?", runtime)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
     let answer = r2.content.to_lowercase();
     assert!(
         !answer.contains("bob"),
@@ -123,7 +143,7 @@ async fn fire_stream_receives_tokens() {
     let mut tokens = Vec::new();
     while let Some(event) = rx.recv().await {
         match event {
-            AgentEvent::Token(t) => tokens.push(t),
+            AgentEvent::Text(t) => tokens.push(t),
             AgentEvent::Done => break,
             _ => {}
         }
@@ -138,18 +158,22 @@ async fn fire_stream_receives_tokens() {
 
 #[tokio::test]
 async fn switch_runtime_isolation() {
-    let mut rt1 = make_runtime("gpt-4o-mini");
-    let mut rt2 = make_runtime("gpt-4o-mini");
+    let rt1 = make_runtime("gpt-4o-mini");
+    let rt2 = make_runtime("gpt-4o-mini");
     let agent = Agent::builder().system_prompt("You are helpful.").build();
 
-    agent
-        .send("Remember: the secret word is 'banana'.", &mut rt1)
+    let (mut rt1, _) = agent
+        .send("Remember: the secret word is 'banana'.", rt1)
+        .await
+        .unwrap()
         .await
         .unwrap();
 
     // rt2 should NOT know the secret
-    let resp = agent
-        .send("What is the secret word?", &mut rt2)
+    let (mut rt2, resp) = agent
+        .send("What is the secret word?", rt2)
+        .await
+        .unwrap()
         .await
         .unwrap();
     let answer = resp.content.to_lowercase();
@@ -159,8 +183,10 @@ async fn switch_runtime_isolation() {
     );
 
     // rt1 still remembers
-    let resp = agent
-        .send("What is the secret word?", &mut rt1)
+    let (_rt1, resp) = agent
+        .send("What is the secret word?", rt1)
+        .await
+        .unwrap()
         .await
         .unwrap();
     let answer = resp.content.to_lowercase();
@@ -175,14 +201,16 @@ async fn switch_runtime_isolation() {
 #[tokio::test]
 async fn build_without_key_fails() {
     let original_key = std::env::var("OPENAI_API_KEY").ok();
-    std::env::remove_var("OPENAI_API_KEY");
+    unsafe { std::env::remove_var("OPENAI_API_KEY") };
 
-    let result = AgentRuntime::builder().model("gpt-4o-mini").build();
+    let result = AgentRuntime::<DeepSeekProvider>::builder()
+        .model("gpt-4o-mini")
+        .build();
 
     assert!(result.is_err(), "building without API key should fail");
 
     // Restore original key if it was set
     if let Some(key) = original_key {
-        std::env::set_var("OPENAI_API_KEY", key);
+        unsafe { std::env::set_var("OPENAI_API_KEY", key) };
     }
 }

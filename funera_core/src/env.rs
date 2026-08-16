@@ -1,8 +1,9 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock as StdRwLock};
+use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
+use parking_lot::{Mutex, RwLock as StdRwLock};
 
 #[cfg(feature = "skill")]
 use crate::re_act::skills::{Skill, SkillRegistry};
@@ -15,6 +16,10 @@ use tokio::sync::{
     RwLock,
     watch::{self, error::RecvError},
 };
+
+pub mod key;
+
+pub use key::{Generation, ProviderId, ServiceBinding, ServiceKey};
 
 /// A teardown action that undoes one effect.
 ///
@@ -31,12 +36,13 @@ pub type ServiceObserver = Arc<dyn Fn(TypeId, bool) + Send + Sync>;
 
 /// Shared state behind a [`FuneraEnv`]'s capability layer.
 ///
-/// `services` is the coeffect context (a typed service table keyed by
-/// [`TypeId`]), shared between a derived env and its children. Each [`FuneraEnv`]
-/// keeps its own effect accumulator (`disposers`) so a child can be torn down
+/// `services` is the coeffect context: a typed service table keyed by
+/// [`ServiceKey`] (the primary key for `T` is its [`TypeId`]). The table is
+/// shared between a derived env and its children. Each [`FuneraEnv`] keeps its
+/// own effect accumulator (`disposers`) so a child can be torn down
 /// independently of its parent.
 struct EnvShared {
-    services: StdRwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
+    services: StdRwLock<HashMap<ServiceKey, Arc<dyn Any + Send + Sync>>>,
     observers: Mutex<Vec<ServiceObserver>>,
 }
 
@@ -48,25 +54,25 @@ impl EnvShared {
         }
     }
 
-    fn insert(&self, key: TypeId, value: Arc<dyn Any + Send + Sync>) {
-        self.services.write().unwrap().insert(key, value);
-        self.notify(key, true);
+    fn insert(&self, key: ServiceKey, value: Arc<dyn Any + Send + Sync>) {
+        self.services.write().insert(key.clone(), value);
+        self.notify(key.type_id, true);
     }
 
-    fn remove(&self, key: TypeId) {
-        self.services.write().unwrap().remove(&key);
-        self.notify(key, false);
+    fn remove(&self, key: &ServiceKey) {
+        self.services.write().remove(key);
+        self.notify(key.type_id, false);
     }
 
     fn notify(&self, key: TypeId, present: bool) {
-        let observers = self.observers.lock().unwrap();
+        let observers = self.observers.lock();
         for observer in observers.iter() {
             observer(key, present);
         }
     }
 
     fn subscribe(&self, observer: ServiceObserver) {
-        self.observers.lock().unwrap().push(observer);
+        self.observers.lock().push(observer);
     }
 }
 
@@ -363,14 +369,15 @@ impl FuneraEnv {
     /// ```
     pub fn effect(&self, body: impl FnOnce() -> Disposer) {
         let undo = body();
-        self.disposers.lock().unwrap().push(undo);
+        self.disposers.lock().push(undo);
     }
 
     /// Provide a typed service to this env.
     ///
-    /// The service is stored under its [`TypeId`] and automatically removed on
-    /// [`dispose`](Self::dispose). `provide` is itself an effect: its inverse is
-    /// "remove the service", registered in this env's own accumulator.
+    /// The service is stored under the primary [`ServiceKey`] for `T` (the
+    /// unnamed key) and automatically removed on [`dispose`](Self::dispose).
+    /// `provide` is itself an effect: its inverse is "remove the service",
+    /// registered in this env's own accumulator.
     ///
     /// ```rust,ignore
     /// #[derive(Clone)]
@@ -379,24 +386,44 @@ impl FuneraEnv {
     /// let cfg: std::sync::Arc<Config> = env.get::<Config>().unwrap();
     /// ```
     pub fn provide<T: Send + Sync + 'static>(&self, value: T) {
-        let key = TypeId::of::<T>();
+        self.provide_keyed(ServiceKey::primary::<T>(), value);
+    }
+
+    /// Provide a named typed service.
+    ///
+    /// Named keys permit multiple services of the same Rust type to coexist.
+    /// Use [`get_named`](Self::get_named) to resolve them.
+    pub fn provide_named<T: Send + Sync + 'static>(&self, name: impl Into<Arc<str>>, value: T) {
+        self.provide_keyed(ServiceKey::named::<T>(name), value);
+    }
+
+    fn provide_keyed<T: Send + Sync + 'static>(&self, key: ServiceKey, value: T) {
         let shared = Arc::clone(&self.shared);
         self.effect(move || {
-            shared.insert(key, Arc::new(value));
+            shared.insert(key.clone(), Arc::new(value));
             let teardown_shared = Arc::clone(&shared);
             Box::new(move || {
-                teardown_shared.remove(key);
+                teardown_shared.remove(&key);
             })
         });
     }
 
     /// Resolve a typed service previously provided to this env (or a parent).
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
+        self.get_keyed(&ServiceKey::primary::<T>())
+    }
+
+    /// Resolve a named typed service previously provided via
+    /// [`provide_named`](Self::provide_named).
+    pub fn get_named<T: Send + Sync + 'static>(&self, name: &str) -> Option<Arc<T>> {
+        self.get_keyed(&ServiceKey::named::<T>(name.to_string()))
+    }
+
+    fn get_keyed<T: Send + Sync + 'static>(&self, key: &ServiceKey) -> Option<Arc<T>> {
         self.shared
             .services
             .read()
-            .unwrap()
-            .get(&TypeId::of::<T>())
+            .get(key)
             .and_then(|v| v.clone().downcast::<T>().ok())
     }
 
@@ -405,17 +432,28 @@ impl FuneraEnv {
         self.contains_typeid(TypeId::of::<T>())
     }
 
+    /// Whether a named service of type `T` is currently provided.
+    pub fn contains_named<T: Send + Sync + 'static>(&self, name: &str) -> bool {
+        self.shared
+            .services
+            .read()
+            .contains_key(&ServiceKey::named::<T>(name.to_string()))
+    }
+
     /// Whether a service with the given [`TypeId`] is currently provided.
     ///
     /// The non-generic counterpart of [`contains`](Self::contains), used by the
     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).
     pub fn contains_typeid(&self, key: TypeId) -> bool {
-        self.shared.services.read().unwrap().contains_key(&key)
+        self.shared.services.read().contains_key(&ServiceKey {
+            type_id: key,
+            name: None,
+        })
     }
 
     /// Number of services currently provided.
     pub fn service_count(&self) -> usize {
-        self.shared.services.read().unwrap().len()
+        self.shared.services.read().len()
     }
 
     /// Run every registered disposer in reverse (LIFO) order.
@@ -423,10 +461,16 @@ impl FuneraEnv {
     /// This tears the env's capability layer down: each effect is undone in the
     /// reverse of the order it was registered. Only this env's own effects are
     /// reverted; services provided by sibling envs are untouched.
+    ///
+    /// The disposal is idempotent and panic-isolated: a panicking disposer is
+    /// caught and logged, and the remaining disposers still run.
     pub fn dispose(&self) {
-        let disposers = std::mem::take(&mut *self.disposers.lock().unwrap());
+        let disposers = std::mem::take(&mut *self.disposers.lock());
         for undo in disposers.into_iter().rev() {
-            undo();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| undo()));
+            if result.is_err() {
+                tracing::warn!("a disposer panicked during FuneraEnv::dispose; continuing");
+            }
         }
     }
 }
@@ -453,6 +497,24 @@ mod tests {
     }
 
     #[test]
+    fn provide_named_get_roundtrip() {
+        let (env, _watcher) = test_env();
+        #[derive(Debug, PartialEq)]
+        struct Config(u32);
+
+        env.provide_named("a", Config(1));
+        env.provide_named("b", Config(2));
+        env.provide(Config(3));
+
+        assert_eq!(env.service_count(), 3);
+        assert_eq!(env.get_named::<Config>("a").unwrap().0, 1);
+        assert_eq!(env.get_named::<Config>("b").unwrap().0, 2);
+        assert_eq!(env.get::<Config>().unwrap().0, 3);
+        assert!(env.contains_named::<Config>("a"));
+        assert!(!env.contains_named::<Config>("missing"));
+    }
+
+    #[test]
     fn get_missing_returns_none() {
         let (env, _watcher) = test_env();
         assert!(env.get::<String>().is_none());
@@ -475,12 +537,12 @@ mod tests {
         let log: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
 
         let l1 = Arc::clone(&log);
-        env.effect(|| Box::new(move || l1.lock().unwrap().push("first")));
+        env.effect(|| Box::new(move || l1.lock().push("first")));
         let l2 = Arc::clone(&log);
-        env.effect(|| Box::new(move || l2.lock().unwrap().push("second")));
+        env.effect(|| Box::new(move || l2.lock().push("second")));
 
         env.dispose();
-        assert_eq!(*log.lock().unwrap(), vec!["second", "first"]);
+        assert_eq!(*log.lock(), vec!["second", "first"]);
     }
 
     #[test]
@@ -545,12 +607,12 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             env2.set_model("m2");
         });
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            watcher.model_changed(),
-        )
-        .await;
-        assert!(result.is_ok(), "model_changed should resolve after set_model");
+        let result =
+            tokio::time::timeout(std::time::Duration::from_secs(5), watcher.model_changed()).await;
+        assert!(
+            result.is_ok(),
+            "model_changed should resolve after set_model"
+        );
         assert_eq!(watcher.watch_model(), "m2");
         handle.await.unwrap();
     }
@@ -574,12 +636,12 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             env2.set_client(async_openai::Client::new());
         });
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            watcher.client_changed(),
-        )
-        .await;
-        assert!(result.is_ok(), "client_changed should resolve after set_client");
+        let result =
+            tokio::time::timeout(std::time::Duration::from_secs(5), watcher.client_changed()).await;
+        assert!(
+            result.is_ok(),
+            "client_changed should resolve after set_client"
+        );
         handle.await.unwrap();
     }
 
@@ -623,7 +685,12 @@ mod tests {
             let mut reg = ToolRegistry::new();
             reg.add_tool(Box::new(MockTool));
             let env = env.with_tool_registry(reg);
-            assert!(watcher.watch_tool().as_array().is_some_and(|a| a.len() == 1));
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.len() == 1)
+            );
             assert!(env.tool_registry.blocking_read().tool_exists("mock"));
         }
 
@@ -631,9 +698,19 @@ mod tests {
         async fn add_then_remove_tool_updates_watcher() {
             let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             env.add_tool(Box::new(MockTool)).await;
-            assert!(watcher.watch_tool().as_array().is_some_and(|a| a.len() == 1));
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.len() == 1)
+            );
             env.remove_tool("mock").await;
-            assert!(watcher.watch_tool().as_array().is_some_and(|a| a.is_empty()));
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.is_empty())
+            );
         }
 
         #[tokio::test]
@@ -662,23 +739,22 @@ mod tests {
         async fn tool_changed_blocks_then_resolves() {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
 
-            let early = tokio::time::timeout(
-                std::time::Duration::from_millis(50),
-                watcher.tool_changed(),
-            )
-            .await;
-            assert!(early.is_err(), "tool_changed should block with no pending change");
+            let early =
+                tokio::time::timeout(std::time::Duration::from_millis(50), watcher.tool_changed())
+                    .await;
+            assert!(
+                early.is_err(),
+                "tool_changed should block with no pending change"
+            );
 
             let mut env2 = env.clone();
             let handle = tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 env2.add_tool(Box::new(MockTool)).await;
             });
-            let result = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                watcher.tool_changed(),
-            )
-            .await;
+            let result =
+                tokio::time::timeout(std::time::Duration::from_secs(5), watcher.tool_changed())
+                    .await;
             assert!(result.is_ok(), "tool_changed should resolve after add_tool");
             handle.await.unwrap();
         }
@@ -752,19 +828,23 @@ mod tests {
                 watcher.skill_changed(),
             )
             .await;
-            assert!(early.is_err(), "skill_changed should block with no pending change");
+            assert!(
+                early.is_err(),
+                "skill_changed should block with no pending change"
+            );
 
             let mut env2 = env.clone();
             let handle = tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 env2.add_skill(skill("s1", "content")).await;
             });
-            let result = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                watcher.skill_changed(),
-            )
-            .await;
-            assert!(result.is_ok(), "skill_changed should resolve after add_skill");
+            let result =
+                tokio::time::timeout(std::time::Duration::from_secs(5), watcher.skill_changed())
+                    .await;
+            assert!(
+                result.is_ok(),
+                "skill_changed should resolve after add_skill"
+            );
             handle.await.unwrap();
         }
     }

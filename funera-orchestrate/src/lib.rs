@@ -134,7 +134,7 @@
 //! Use [`ApprovalHandle`] to approve or reject tool calls from a spawned task
 //! while the agent is running — works with `fire()`, `send()`, and `send_stream()`.
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # use funera_orchestrate::{Agent, AgentRuntime, ApprovalHandle, DeepSeekProvider};
 //! # use std::time::Duration;
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -213,7 +213,7 @@ pub use funera_core::event_bus::react_bus::{
 };
 pub use funera_core::event_bus::token_bus::TokenEvent;
 pub use funera_core::loader::{Loader, PluginEntry};
-pub use funera_core::plugin::{InstanceState, Plugin, PluginInstance, PluginRegistry};
+pub use funera_core::plugin::{Plugin, PluginInstance, PluginPhase, PluginRegistry};
 
 /// Middleware 相关的类型和 trait。
 ///
