@@ -140,6 +140,15 @@ impl RawToolRegistry {
     pub fn get_tool(&self, name: &str) -> Option<&ToolRegistryEntry> {
         self.tools.get(name)
     }
+
+    /// Clone the tool's `Arc` if it exists and is available.
+    ///
+    /// Used by the executor to run a tool outside the registry lock.
+    pub fn get_tool_arc(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.get_tool(name)
+            .filter(|entry| entry.is_available())
+            .map(|entry| entry.tool.clone())
+    }
     pub fn remove_tool(&mut self, name: &str) {
         self.tools.remove(name);
     }

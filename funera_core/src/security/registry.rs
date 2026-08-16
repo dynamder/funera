@@ -138,6 +138,11 @@ impl GuardedToolRegistry {
         self.inner.get_tool(name)
     }
 
+    /// Clone the tool's `Arc` if it exists and is available.
+    pub fn get_tool_arc(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.inner.get_tool_arc(name)
+    }
+
     pub fn remove_tool(&mut self, name: &str) {
         self.inner.remove_tool(name);
     }
