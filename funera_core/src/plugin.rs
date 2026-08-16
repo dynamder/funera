@@ -40,7 +40,7 @@ pub mod instance;
 pub mod registry;
 
 pub use instance::{InstanceId, PluginInstance, TargetDigest, state};
-pub use registry::{FailedEntry, PluginPhase, PluginRegistry};
+pub use registry::{FailedEntry, PluginPhase, PluginRegistry, RegistryMetrics};
 
 #[cfg(feature = "skill")]
 pub use adapters::SkillPlugin;

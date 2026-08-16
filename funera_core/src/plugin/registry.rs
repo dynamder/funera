@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use parking_lot::{Mutex as StdMutex, RwLock as StdRwLock};
+use std::time::{Duration, Instant};
 
 use crate::env::{FuneraEnv, ProviderId};
 use crate::plugin::instance::{InstanceId, PluginInstance, TargetDigest, state};
@@ -14,6 +15,34 @@ use crate::plugin::{Plugin, PluginConfig};
 pub struct FailedEntry {
     pub inst: PluginInstance<state::Failed>,
     pub error: String,
+    /// Number of consecutive apply failures so far.
+    pub attempts: u32,
+    /// When the registry may retry the instance.
+    pub next_retry_at: Option<Instant>,
+}
+
+impl FailedEntry {
+    fn new(inst: PluginInstance<state::Failed>, error: String) -> Self {
+        let attempts = 1;
+        let next_retry_at = Some(Instant::now() + Duration::from_millis(100));
+        Self {
+            inst,
+            error,
+            attempts,
+            next_retry_at,
+        }
+    }
+}
+
+/// Counters collected by a [`PluginRegistry`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RegistryMetrics {
+    /// Number of dirty-batch refresh passes.
+    pub refresh_passes: u64,
+    /// Number of state transitions performed.
+    pub transitions: u64,
+    /// Number of failed `apply` attempts.
+    pub apply_failures: u64,
 }
 
 /// Read-only view of a plugin instance's lifecycle phase.
@@ -77,6 +106,7 @@ pub struct PluginRegistry {
     dependents: Arc<StdRwLock<HashMap<TypeId, HashSet<InstanceId>>>>,
     /// Instance ids that need re-evaluation.
     dirty: Arc<StdMutex<HashSet<InstanceId>>>,
+    metrics: RegistryMetrics,
 }
 
 impl PluginRegistry {
@@ -108,6 +138,7 @@ impl PluginRegistry {
             active_providers: HashMap::new(),
             dependents,
             dirty,
+            metrics: RegistryMetrics::default(),
         }
     }
 
@@ -163,6 +194,27 @@ impl PluginRegistry {
         // dirty ids at most once per instance state change.
         let cap = self.instance_count() * 4 + 4;
         for _ in 0..cap {
+            self.metrics.refresh_passes += 1;
+
+            // Move failed instances whose backoff expired back to pending.
+            let now = Instant::now();
+            let due_failed: Vec<InstanceId> = self
+                .failed
+                .iter()
+                .filter_map(|(id, entry)| {
+                    if entry.next_retry_at.is_some_and(|at| now >= at) {
+                        Some(*id)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            for id in due_failed {
+                let entry = self.failed.remove(&id).unwrap();
+                self.dirty.lock().insert(id);
+                self.pending.insert(id, entry.inst.to_pending());
+            }
+
             let ids: Vec<InstanceId> = self.dirty.lock().drain().collect();
             if ids.is_empty() {
                 break;
@@ -175,6 +227,7 @@ impl PluginRegistry {
                         self.pending.insert(id, inst);
                         continue;
                     }
+                    self.metrics.transitions += 1;
                     let inst = inst.with_target(target).begin_load();
                     let plugin = inst.plugin.clone();
                     let config = inst.config.clone();
@@ -189,14 +242,10 @@ impl PluginRegistry {
                         Err(e) => {
                             // Roll back any effects the failed apply already
                             // registered, then record the failure.
+                            self.metrics.apply_failures += 1;
                             env.dispose();
-                            self.failed.insert(
-                                id,
-                                FailedEntry {
-                                    inst: inst.fail(),
-                                    error: e.to_string(),
-                                },
-                            );
+                            self.failed
+                                .insert(id, FailedEntry::new(inst.fail(), e.to_string()));
                         }
                     }
                     continue;
@@ -208,6 +257,7 @@ impl PluginRegistry {
                         self.active.insert(id, inst.with_target(target));
                         continue;
                     }
+                    self.metrics.transitions += 1;
                     let provider_id = inst.env.provider_id();
                     self.active_providers.remove(&provider_id);
                     let inst = inst.begin_unload();
@@ -224,6 +274,7 @@ impl PluginRegistry {
                         continue;
                     }
                     // Re-enter pending; the next dirty drain will activate it.
+                    self.metrics.transitions += 1;
                     self.dirty.lock().insert(id);
                     self.pending.insert(id, inst.to_pending());
                     continue;
@@ -280,6 +331,11 @@ impl PluginRegistry {
             self.refresh().await;
         }
         removed
+    }
+
+    /// A snapshot of the registry's counters.
+    pub fn metrics(&self) -> &RegistryMetrics {
+        &self.metrics
     }
 
     /// Current lifecycle phase of an instance.
