@@ -41,10 +41,10 @@ fn resolve(
     let pairs: Vec<(&TypeId, ProviderId)> = inject
         .iter()
         .map(|type_id| {
-            let binding = env.binding_by_typeid(*type_id)?;
-            if binding.provider != 0 && !active_providers.contains_key(&binding.provider) {
-                return None;
-            }
+            let bindings = env.bindings_by_typeid(*type_id);
+            let binding = bindings.iter().find(|binding| {
+                binding.provider == 0 || active_providers.contains_key(&binding.provider)
+            })?;
             Some((type_id, binding.provider))
         })
         .collect::<Option<_>>()?;

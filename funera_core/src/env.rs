@@ -43,7 +43,10 @@ pub type ServiceObserver = Arc<dyn Fn(TypeId, bool) + Send + Sync>;
 /// own effect accumulator (`disposers`) so a child can be torn down
 /// independently of its parent.
 struct EnvShared {
-    services: StdRwLock<HashMap<ServiceKey, Arc<ServiceBinding>>>,
+    /// One slot per provider per key. Several providers may bind the same key
+    /// concurrently (service multiplexing / HMR replacement); a dependent
+    /// resolves the active provider through the plugin registry.
+    services: StdRwLock<HashMap<ServiceKey, Vec<Arc<ServiceBinding>>>>,
     observers: Mutex<Vec<ServiceObserver>>,
     generation: AtomicU64,
 }
@@ -64,17 +67,55 @@ impl EnvShared {
             value,
             generation,
         });
-        self.services.write().insert(key.clone(), binding);
+        {
+            let mut services = self.services.write();
+            let bindings = services.entry(key.clone()).or_default();
+            if let Some(existing) = bindings.iter_mut().find(|b| b.provider == provider) {
+                *existing = binding;
+            } else {
+                bindings.push(binding);
+            }
+        }
         self.notify(key.type_id, true);
     }
 
-    fn remove(&self, key: &ServiceKey) {
-        self.services.write().remove(key);
-        self.notify(key.type_id, false);
+    /// Remove the binding installed by `provider`, returning `true` if a
+    /// binding was actually removed.
+    fn remove(&self, key: &ServiceKey, provider: ProviderId) -> bool {
+        let removed = {
+            let mut services = self.services.write();
+            let mut removed = false;
+            let mut remove_key = false;
+            if let Some(bindings) = services.get_mut(key) {
+                if let Some(pos) = bindings.iter().position(|b| b.provider == provider) {
+                    bindings.swap_remove(pos);
+                    removed = true;
+                }
+                remove_key = bindings.is_empty();
+            }
+            if remove_key {
+                services.remove(key);
+            }
+            removed
+        };
+        if removed {
+            self.notify(key.type_id, false);
+        }
+        removed
     }
 
+    /// The most recently installed binding for `key`.
     fn binding(&self, key: &ServiceKey) -> Option<Arc<ServiceBinding>> {
-        self.services.read().get(key).cloned()
+        self.bindings(key).into_iter().last()
+    }
+
+    /// All bindings currently installed for `key`.
+    fn bindings(&self, key: &ServiceKey) -> Vec<Arc<ServiceBinding>> {
+        self.services
+            .read()
+            .get(key)
+            .map(|bindings| bindings.clone())
+            .unwrap_or_default()
     }
 
     fn notify(&self, key: TypeId, present: bool) {
@@ -435,7 +476,7 @@ impl FuneraEnv {
             shared.insert(key.clone(), Arc::new(value), provider);
             let teardown_shared = Arc::clone(&shared);
             Box::new(move || {
-                teardown_shared.remove(&key);
+                teardown_shared.remove(&key, provider);
             })
         });
     }
@@ -470,6 +511,14 @@ impl FuneraEnv {
         })
     }
 
+    /// All raw bindings for a primary service key by [`TypeId`].
+    pub fn bindings_by_typeid(&self, type_id: TypeId) -> Vec<Arc<ServiceBinding>> {
+        self.shared.bindings(&ServiceKey {
+            type_id,
+            name: None,
+        })
+    }
+
     /// Whether a service of type `T` is currently provided.
     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
         self.contains_typeid(TypeId::of::<T>())
@@ -488,10 +537,12 @@ impl FuneraEnv {
     /// The non-generic counterpart of [`contains`](Self::contains), used by the
     /// plugin registry to check `inject` requirements (which are [`TypeId`]s).
     pub fn contains_typeid(&self, key: TypeId) -> bool {
-        self.shared.services.read().contains_key(&ServiceKey {
-            type_id: key,
-            name: None,
-        })
+        self.shared
+            .binding(&ServiceKey {
+                type_id: key,
+                name: None,
+            })
+            .is_some()
     }
 
     /// Number of services currently provided.

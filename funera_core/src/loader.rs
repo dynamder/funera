@@ -15,6 +15,19 @@ use std::sync::Arc;
 use crate::env::FuneraEnv;
 use crate::plugin::{Plugin, PluginConfig, PluginPhase, PluginRegistry};
 
+/// How the loader hot-replaces an entry whose `revision` changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum HmrPolicy {
+    /// Mount the new revision first; only after it reaches `Active` is the old
+    /// instance unmounted. If the new revision fails, it is rolled back and the
+    /// old instance stays in place.
+    #[default]
+    Replace,
+    /// Unmount the old revision first, then mount the new one. This has a
+    /// small availability window but is simpler and always consistent.
+    Swap,
+}
+
 /// A declarative entry describing one desired plugin instance.
 #[derive(Clone)]
 pub struct PluginEntry {
@@ -28,6 +41,8 @@ pub struct PluginEntry {
     pub disabled: bool,
     /// Opaque generation marker; a changed value triggers a reload (HMR).
     pub revision: u64,
+    /// Hot-replacement strategy used when `revision` changes.
+    pub hmr: HmrPolicy,
 }
 
 impl PluginEntry {
@@ -39,7 +54,14 @@ impl PluginEntry {
             config: None,
             disabled: false,
             revision: 0,
+            hmr: HmrPolicy::Replace,
         }
+    }
+
+    /// Set the hot-replacement strategy (default: [`HmrPolicy::Replace`]).
+    pub fn hmr(mut self, hmr: HmrPolicy) -> Self {
+        self.hmr = hmr;
+        self
     }
 
     /// Attach a config that is passed to the plugin's `apply` hook.
@@ -123,20 +145,16 @@ impl Loader {
     pub async fn reconcile(&mut self, entries: &[PluginEntry]) -> ReconcileReport {
         let mut report = ReconcileReport::default();
 
-        // Phase 1: drop entries that vanished or were disabled.
+        // Phase 1: drop entries that vanished or were disabled. Revision
+        // changes are left mounted and handled by phase 3 (HMR).
         let ids: Vec<String> = self.mounted.keys().cloned().collect();
         for id in ids {
-            let current_rev = self.mounted[&id].1;
             let desired = entries.iter().find(|e| e.id == id);
-            let keep = desired.is_some_and(|e| !e.disabled && e.revision == current_rev);
-            if !keep {
+            let vanished_or_disabled = desired.is_none_or(|e| e.disabled);
+            if vanished_or_disabled {
                 let (inst, _) = self.mounted.remove(&id).unwrap();
                 self.registry.unmount(inst).await;
-                if desired.is_some_and(|e| !e.disabled) {
-                    report.reloaded.push(id.clone());
-                } else {
-                    report.unloaded.push(id.clone());
-                }
+                report.unloaded.push(id.clone());
             }
         }
 
@@ -157,6 +175,57 @@ impl Loader {
             self.mounted
                 .insert(entry.id.clone(), (inst, entry.revision));
             report.loaded.push(entry.id.clone());
+        }
+
+        // Phase 3: hot-replace entries whose revision changed.
+        let changed: Vec<String> = self
+            .mounted
+            .iter()
+            .filter_map(|(id, (_, rev))| {
+                let desired = entries.iter().find(|e| e.id == *id)?;
+                if desired.revision != *rev {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for id in changed {
+            let entry = entries.iter().find(|e| e.id == id).unwrap().clone();
+            let (old_inst, old_rev) = self.mounted.remove(&id).unwrap();
+
+            match entry.hmr {
+                HmrPolicy::Swap => {
+                    self.registry.unmount(old_inst).await;
+                    let new_inst = self
+                        .registry
+                        .mount_with_config(entry.plugin.clone(), entry.config.clone());
+                    self.mounted.insert(id.clone(), (new_inst, entry.revision));
+                    report.reloaded.push(id.clone());
+                }
+                HmrPolicy::Replace => {
+                    let new_inst = self
+                        .registry
+                        .mount_with_config(entry.plugin.clone(), entry.config.clone());
+                    self.registry.refresh().await;
+                    if self.registry.phase(new_inst) == Some(PluginPhase::Active) {
+                        // New revision is live; now retire the old one.
+                        self.registry.unmount(old_inst).await;
+                        self.mounted.insert(id.clone(), (new_inst, entry.revision));
+                        report.reloaded.push(id.clone());
+                    } else {
+                        // Roll back: discard the new revision, keep the old one.
+                        let new_phase = self.registry.phase(new_inst);
+                        self.registry.unmount(new_inst).await;
+                        self.mounted.insert(id.clone(), (old_inst, old_rev));
+                        report.failed.push((
+                            id.clone(),
+                            format!("new revision failed to activate: {new_phase:?}"),
+                        ));
+                    }
+                }
+            }
         }
 
         self.registry.refresh().await;
@@ -326,6 +395,50 @@ mod tests {
             1,
             "old effects reverted, new applied"
         );
+    }
+
+    #[tokio::test]
+    async fn replace_hmr_rolls_back_failed_revision() {
+        struct MaybeFail;
+        #[async_trait]
+        impl Plugin for MaybeFail {
+            fn name(&self) -> &str {
+                "maybe_fail"
+            }
+            async fn apply(
+                &self,
+                _env: &FuneraEnv,
+                config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
+                let fail = config
+                    .and_then(|c| c.value().get("fail"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if fail {
+                    Err("configured to fail".into())
+                } else {
+                    Ok(())
+                }
+            }
+        }
+
+        let mut l = loader();
+        l.reconcile(&[PluginEntry::new("p", Arc::new(MaybeFail))
+            .revision(1)
+            .config(PluginConfig::new(json!({"fail": false})))])
+            .await;
+        assert_eq!(l.entry_phase("p"), Some(PluginPhase::Active));
+
+        let report = l
+            .reconcile(&[PluginEntry::new("p", Arc::new(MaybeFail))
+                .revision(2)
+                .config(PluginConfig::new(json!({"fail": true})))])
+            .await;
+
+        assert_eq!(report.failed.len(), 1, "new revision should fail");
+        assert_eq!(report.reloaded.len(), 0);
+        assert_eq!(l.entry_phase("p"), Some(PluginPhase::Active));
+        assert_eq!(l.registry().instance_count(), 1, "old instance must stay");
     }
 
     #[tokio::test]
