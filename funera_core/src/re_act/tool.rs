@@ -82,6 +82,7 @@ pub enum ToolCallError {
 }
 
 /// An entry in the tool registry, pairing a tool with its availability status.
+#[derive(Clone)]
 pub struct ToolRegistryEntry {
     pub tool: Arc<dyn Tool>,
     pub available: bool,
@@ -114,6 +115,7 @@ impl ToolRegistryEntry {
 /// [`GuardedToolRegistry`](crate::security::registry::GuardedToolRegistry)
 /// instead, which wraps this registry with policy checks and audit logging.
 #[doc(hidden)]
+#[derive(Clone)]
 pub struct RawToolRegistry {
     tools: HashMap<String, ToolRegistryEntry>,
 }

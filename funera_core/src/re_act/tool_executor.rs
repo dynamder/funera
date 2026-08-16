@@ -42,11 +42,16 @@ impl ToolExecutor {
                     }
                 }
 
-                // The guarded registry performs policy, boundary, approval, and
-                // audit work during the call, so it still runs under the lock.
+                // Clone the guarded registry so policy/boundary/approval/audit
+                // run against a snapshot while the tool itself executes outside
+                // the registry lock. Pending approvals and the react bus are
+                // `Arc`-shared, so cloned registries still cooperate.
                 #[cfg(feature = "security")]
                 {
-                    let registry = self.tool_registry.read().await;
+                    let registry = {
+                        let guard = self.tool_registry.read().await;
+                        guard.clone()
+                    };
                     registry.set_react_bus(cmd.react_bus.clone());
                     registry.call_tool(&cmd.name, cmd.args).await
                 }

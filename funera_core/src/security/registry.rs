@@ -16,6 +16,7 @@ use crate::security::policy::ToolPolicy;
 /// Callback signature for tool approval requests.
 pub type ApprovalCallback = Arc<dyn Fn(&str, &str, &str, &[PathBuf]) + Send + Sync>;
 
+#[derive(Clone)]
 pub struct GuardedToolRegistry {
     inner: RawToolRegistry,
     policy: ToolPolicy,
@@ -26,7 +27,7 @@ pub struct GuardedToolRegistry {
     pending_approvals: std::sync::Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<bool>>>>,
     approval_timeout: Option<std::time::Duration>,
     approval_callback: Option<ApprovalCallback>,
-    react_bus: std::sync::Mutex<Option<ReactBus>>,
+    react_bus: std::sync::Arc<std::sync::Mutex<Option<ReactBus>>>,
 }
 
 impl GuardedToolRegistry {
@@ -41,7 +42,7 @@ impl GuardedToolRegistry {
             pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             approval_timeout: None,
             approval_callback: None,
-            react_bus: std::sync::Mutex::new(None),
+            react_bus: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -56,7 +57,7 @@ impl GuardedToolRegistry {
             pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             approval_timeout: None,
             approval_callback: None,
-            react_bus: std::sync::Mutex::new(None),
+            react_bus: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
