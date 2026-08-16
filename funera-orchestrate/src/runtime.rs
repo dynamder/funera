@@ -50,6 +50,7 @@ use crate::middleware_bundle::MiddlewareBundle;
 use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
 
 use crate::error::OrchestrateError;
+use crate::r#loop::{AgentLoop, DefaultAgentLoop};
 
 /// Builds an [`AgentRuntime`].
 ///
@@ -90,6 +91,7 @@ pub struct AgentRuntimeBuilder {
     approval_timeout: Option<std::time::Duration>,
     #[cfg(feature = "middleware")]
     middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
+    loop_impl: Option<Arc<dyn AgentLoop>>,
 }
 
 impl Default for AgentRuntimeBuilder {
@@ -127,6 +129,7 @@ impl AgentRuntimeBuilder {
             approval_timeout: None,
             #[cfg(feature = "middleware")]
             middleware_bundle: None,
+            loop_impl: None,
         }
     }
 
@@ -171,6 +174,12 @@ impl AgentRuntimeBuilder {
     /// Internal channel buffer size (default 32).
     pub fn channel_buffer(mut self, n: usize) -> Self {
         self.channel_buffer = n;
+        self
+    }
+
+    /// Replace the built-in ReAct loop with a custom [`AgentLoop`].
+    pub fn with_loop(mut self, agent_loop: Arc<dyn AgentLoop>) -> Self {
+        self.loop_impl = Some(agent_loop);
         self
     }
 
@@ -557,11 +566,17 @@ impl AgentRuntimeBuilder {
 
         let session_tx = spawn_session_actor();
 
+        let loop_impl: Arc<dyn AgentLoop> = self
+            .loop_impl
+            .take()
+            .unwrap_or_else(|| Arc::new(DefaultAgentLoop::<P>::default()));
+
         Ok(AgentRuntime::<P> {
             env_cmd_tx,
             session_tx,
             #[cfg(feature = "middleware")]
             middleware_chain,
+            loop_impl,
             _state: PhantomData,
             _phantom: PhantomData,
         })
@@ -614,6 +629,7 @@ pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
     #[cfg(feature = "middleware")]
     pub(crate) middleware_chain: Arc<StdRwLock<MiddlewareChain<AgentEvent, ErrorsEnabled>>>,
+    pub(crate) loop_impl: Arc<dyn AgentLoop>,
     _state: PhantomData<S>,
     _phantom: PhantomData<fn() -> P>,
 }
@@ -784,6 +800,11 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         self.middleware_chain.clone()
     }
 
+    /// Access the agent loop implementation.
+    pub fn agent_loop(&self) -> Arc<dyn AgentLoop> {
+        self.loop_impl.clone()
+    }
+
     /// Approve or reject a pending tool call that is awaiting user approval.
     #[cfg(all(feature = "tool", feature = "security"))]
     pub async fn approve_tool_call(&self, call_id: &str, approved: bool) -> Result<(), String> {
@@ -829,6 +850,7 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
             session_tx: self.session_tx,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
+            loop_impl: self.loop_impl,
             _state: PhantomData,
             _phantom: PhantomData,
         }
@@ -851,6 +873,7 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
             session_tx: self.session_tx,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
+            loop_impl: self.loop_impl,
             _state: PhantomData,
             _phantom: PhantomData,
         }

@@ -179,6 +179,7 @@ pub mod agent;
 pub mod dispatcher;
 pub mod error;
 pub mod event;
+pub mod r#loop;
 pub mod response;
 pub mod runtime;
 pub mod send_handle;
@@ -194,6 +195,7 @@ pub use event::{AgentEvent, RawAgentEvent};
 pub use funera_core::provider::deepseek::DeepSeekProvider;
 #[cfg(feature = "openai")]
 pub use funera_core::provider::openai::OpenAIProvider;
+pub use r#loop::{AgentLoop, DefaultAgentLoop};
 pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
 #[cfg(all(feature = "tool", feature = "security"))]
