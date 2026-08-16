@@ -15,6 +15,8 @@ use std::sync::Arc;
 use crate::env::FuneraEnv;
 use crate::plugin::{Plugin, PluginConfig, PluginPhase, PluginRegistry};
 
+pub mod config;
+
 /// How the loader hot-replaces an entry whose `revision` changed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum HmrPolicy {
@@ -43,6 +45,19 @@ pub struct PluginEntry {
     pub revision: u64,
     /// Hot-replacement strategy used when `revision` changes.
     pub hmr: HmrPolicy,
+}
+
+impl std::fmt::Debug for PluginEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginEntry")
+            .field("id", &self.id)
+            .field("plugin", &self.plugin.name())
+            .field("disabled", &self.disabled)
+            .field("revision", &self.revision)
+            .field("hmr", &self.hmr)
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 impl PluginEntry {
