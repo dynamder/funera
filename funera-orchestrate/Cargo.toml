@@ -71,6 +71,9 @@ name = "custom_tool"
 name = "loader_declarative"
 
 [[example]]
+name = "service_broker"
+
+[[example]]
 name = "minimal"
 
 [[example]]
