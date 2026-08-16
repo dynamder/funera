@@ -149,6 +149,7 @@ funera composes agents from **plugins** — one unified abstraction over tools, 
 - **Capability layer** — a `FuneraEnv` carries a typed service table (primary `TypeId` slots plus named `ServiceKey` slots) and a per-env effect accumulator: `env.effect(..)` registers a reversible effect (the returned disposer runs on unload, in LIFO order), while `env.provide::<T>(..)` / `env.get::<T>()` publish and resolve typed services.
 - **`PluginRegistry`** — a notification-driven, typestate lifecycle (`Pending → Loading → Active → Unloading → Inactive/Failed`) with provider identity, retry backoff, and metrics. It activates a plugin only once its `inject` requirements are met and deactivates it when they are withdrawn.
 - **`Loader`** — reconciles a declarative plugin set (a list of `PluginEntry`s) against the registry with minimal mount/unmount operations; bumping an entry's `revision` hot-replaces it in place, with `HmrPolicy::Replace` (new-first, rollback on failure) or `HmrPolicy::Swap`. `AgentRuntime::reconcile_plugins` exposes the same reconciliation at runtime.
+- **`ServiceBroker`** — a round-robin broker for multi-provider services. Providers register through [`BrokerProvider`](funera_core::plugin::BrokerProvider), consumers inject the broker and call [`next`](funera_core::plugin::ServiceBroker::next). Run `cargo run -p funera-orchestrate --example service_broker`.
 
 Run the end-to-end demo:
 
@@ -196,6 +197,11 @@ Run the declarative loader demo:
 ```bash
 cargo run -p funera-orchestrate --example loader_declarative
 ```
+
+### Limitations
+
+- `FuneraEnv::dispose` runs sync disposers in LIFO order with panic isolation. A sync disposer cannot be safely timed out by the runtime; plugin authors should keep disposers short and non-blocking. Async teardown can be scheduled from the disposer (as the built-in tool/skill adapters do) and awaited by the caller if needed.
+- `security`-featured tool execution runs outside the registry lock via a cloned guarded registry; the clone shares approval and react-bus state, while policy/path configuration is snapshotted at call time.
 
 ## Installation
 
