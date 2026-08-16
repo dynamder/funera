@@ -154,6 +154,19 @@ impl RawToolRegistry {
     pub fn remove_tool(&mut self, name: &str) {
         self.tools.remove(name);
     }
+
+    /// Remove the tool only if the registered entry is the same `Arc` value.
+    /// This prevents a stale disposer from deleting a replacement tool that
+    /// reuses the same name (e.g. HMR replacement).
+    pub fn remove_tool_if_same(&mut self, name: &str, tool: &Arc<dyn Tool>) -> bool {
+        match self.tools.get(name) {
+            Some(entry) if Arc::ptr_eq(&entry.tool, tool) => {
+                self.tools.remove(name);
+                true
+            }
+            _ => false,
+        }
+    }
     pub fn tool_exists(&self, name: &str) -> bool {
         self.tools.contains_key(name)
     }

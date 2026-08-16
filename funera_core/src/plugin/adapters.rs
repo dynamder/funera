@@ -45,14 +45,16 @@ impl Plugin for ToolPlugin {
         _config: Option<&PluginConfig>,
     ) -> Result<(), PluginError> {
         let tool_name = self.tool.name().to_string();
-        env.add_tool(self.tool.clone()).await;
+        let tool = self.tool.clone();
+        env.add_tool(tool.clone()).await;
 
         let teardown_env = env.clone();
         env.effect(|| {
             Box::new(move || {
                 let tool_name = tool_name.clone();
+                let tool = Arc::clone(&tool);
                 spawn_teardown(async move {
-                    let _ = teardown_env.remove_tool(&tool_name).await;
+                    let _ = teardown_env.remove_tool_if_same(&tool_name, &tool).await;
                 });
             })
         });

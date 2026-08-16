@@ -251,6 +251,16 @@ impl FuneraEnv {
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
+    /// Remove a tool only if the currently registered tool is the same `Arc`.
+    pub async fn remove_tool_if_same(&self, name: &str, tool: &Arc<dyn Tool>) -> bool {
+        let mut registry = self.tool_registry.write().await;
+        let removed = registry.remove_tool_if_same(name, tool);
+        if removed {
+            let _ = self.tool_tx.send(registry.available_tools_json());
+        }
+        removed
+    }
+
     #[cfg(feature = "tool")]
     pub async fn set_tool_availability(&self, _name: &str, _available: bool) {
         let registry = self.tool_registry.read().await;

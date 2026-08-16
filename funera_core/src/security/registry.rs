@@ -148,6 +148,10 @@ impl GuardedToolRegistry {
         self.inner.remove_tool(name);
     }
 
+    pub fn remove_tool_if_same(&mut self, name: &str, tool: &Arc<dyn Tool>) -> bool {
+        self.inner.remove_tool_if_same(name, tool)
+    }
+
     pub fn tool_exists(&self, name: &str) -> bool {
         self.inner.tool_exists(name)
     }
