@@ -17,6 +17,9 @@ pub enum LoaderConfigError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    #[error("YAML error: {0}")]
+    Yaml(#[from] serde_yaml::Error),
+
     #[error("invalid hmr policy: {0}")]
     InvalidHmrPolicy(String),
 }
@@ -121,6 +124,17 @@ pub fn load_entries_from_json(
         .collect()
 }
 
+/// Parse a YAML array of plugin entries and instantiate them via `factory`.
+pub fn load_entries_from_yaml(
+    yaml: &str,
+    factory: &PluginFactory,
+) -> Result<Vec<PluginEntry>, LoaderConfigError> {
+    let raw: Vec<RawEntry> = serde_yaml::from_str(yaml)?;
+    raw.into_iter()
+        .map(|raw| raw_to_entry(raw, factory))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +193,31 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].hmr, HmrPolicy::Swap);
         assert_eq!(entries[0].revision, 1);
+        assert!(entries[1].config.is_some());
+    }
+
+    #[test]
+    fn load_entries_parses_yaml() {
+        let mut factory = PluginFactory::new();
+        factory.register("hello", |_cfg| HelloPlugin { prefix: "x".into() });
+
+        let entries = load_entries_from_yaml(
+            r#"
+- id: a
+  plugin: hello
+  revision: 1
+  hmr: swap
+- id: b
+  plugin: hello
+  config:
+    prefix: hi
+"#,
+            &factory,
+        )
+        .unwrap();
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].hmr, HmrPolicy::Swap);
         assert!(entries[1].config.is_some());
     }
 

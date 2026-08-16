@@ -358,6 +358,49 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn chaotic_mount_unmount_settles_without_leaks() {
+        let mut reg = registry();
+        let mut mounted: Vec<u64> = Vec::new();
+        let mut seed: u64 = 0x1234_5678_9abc_def0;
+
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            seed
+        };
+
+        for _ in 0..40 {
+            match next() % 3 {
+                0 => {
+                    let id = reg.mount(Arc::new(ProviderA::new()));
+                    mounted.push(id);
+                }
+                1 => {
+                    let id = reg.mount(Arc::new(ConsumerOfA::new()));
+                    mounted.push(id);
+                }
+                _ => {
+                    if !mounted.is_empty() {
+                        let idx = (next() as usize) % mounted.len();
+                        let id = mounted.swap_remove(idx);
+                        reg.unmount(id).await;
+                    }
+                }
+            }
+            reg.refresh().await;
+        }
+
+        for id in mounted {
+            reg.unmount(id).await;
+        }
+        reg.refresh().await;
+
+        assert_eq!(reg.instance_count(), 0, "all instances must be unmounted");
+        assert_eq!(reg.env().service_count(), 0, "service table must be empty");
+    }
+
     #[test]
     fn service_change_observer_fires_on_provide_and_remove() {
         let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
