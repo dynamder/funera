@@ -145,7 +145,7 @@ sequenceDiagram
 
 funera composes agents from **plugins** — one unified abstraction over tools, providers, skills, and middleware.
 
-- **`Plugin` trait** — `name` (identity), `inject` (dependencies it reads), `provides` (services it writes), and an async `apply` (load hook). `Tool`, `ChatProvider`, `InspectorMiddleware`, and `MutatorMiddleware` are all subtraits of `Plugin`, so any capability is also a mountable plugin. Adapter plugins (`ToolPlugin`, `SkillPlugin`) wrap existing capability traits.
+- **`Plugin` trait** — `name` (identity), `inject` (dependencies it reads), `provides` (services it writes), and an async `apply` (load hook). `Tool`, `ChatProvider`, `InspectorMiddleware`, and `MutatorMiddleware` are all subtraits of `Plugin`, so any capability is also a mountable plugin. Adapter plugins (`ToolPlugin`, `SkillPlugin`, `MiddlewarePlugin`, `ProviderPlugin`, `CallbackPlugin`) wrap existing capability traits.
 - **Capability layer** — a `FuneraEnv` carries a typed service table (primary `TypeId` slots plus named `ServiceKey` slots) and a per-env effect accumulator: `env.effect(..)` registers a reversible effect (the returned disposer runs on unload, in LIFO order), while `env.provide::<T>(..)` / `env.get::<T>()` publish and resolve typed services.
 - **`PluginRegistry`** — a notification-driven, typestate lifecycle (`Pending → Loading → Active → Unloading → Inactive/Failed`) with provider identity, retry backoff, and metrics. It activates a plugin only once its `inject` requirements are met and deactivates it when they are withdrawn.
 - **`Loader`** — reconciles a declarative plugin set (a list of `PluginEntry`s) against the registry with minimal mount/unmount operations; bumping an entry's `revision` hot-replaces it in place, with `HmrPolicy::Replace` (new-first, rollback on failure) or `HmrPolicy::Swap`. `AgentRuntime::reconcile_plugins` exposes the same reconciliation at runtime.
@@ -157,6 +157,45 @@ cargo run -p funera-orchestrate --example plugin_architecture
 ```
 
 See `funera-orchestrate/examples/plugin_architecture.rs` for the full reactive-lifecycle walkthrough: dependency-driven activation, deactivation on provider removal, and hot reload.
+
+Declarative plugin sets can be loaded from JSON/YAML via [`PluginFactory`](funera_core::loader::config::PluginFactory):
+
+```rust,no_run
+use funera_core::loader::config::{PluginFactory, load_entries_from_json};
+use funera_core::plugin::{Plugin, PluginConfig};
+
+struct HelloPlugin;
+impl Plugin for HelloPlugin { fn name(&self) -> &str { "hello" } }
+
+let mut factory = PluginFactory::new();
+factory.register("hello", |_cfg: Option<PluginConfig>| HelloPlugin);
+
+let entries = load_entries_from_json(
+    r#"[{"id": "hello-1", "plugin": "hello", "revision": 1}]"#,
+    &factory,
+)?;
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+At runtime, an `AgentRuntime` can reconcile a desired plugin set without rebuilding the runtime:
+
+```rust,no_run
+# use funera_core::loader::PluginEntry;
+# use funera_core::plugin::ToolPlugin;
+# use std::sync::Arc;
+# async fn example(rt: &funera_orchestrate::AgentRuntime<funera_orchestrate::DeepSeekProvider>) {
+# struct MyTool; impl funera_core::plugin::Plugin for MyTool { fn name(&self) -> &str { "my_tool" } }
+let report = rt.reconcile_plugins(vec![
+    PluginEntry::new("tool:my_tool", Arc::new(ToolPlugin::new(Arc::new(MyTool)))),
+]).await;
+# }
+```
+
+Run the declarative loader demo:
+
+```bash
+cargo run -p funera-orchestrate --example loader_declarative
+```
 
 ## Installation
 
