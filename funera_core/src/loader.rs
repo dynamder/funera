@@ -413,6 +413,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn replace_hmr_keeps_old_binding_until_new_active() {
+        use std::any::TypeId;
+        use std::sync::Mutex;
+
+        static BINDING_COUNTS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+        struct ServiceA;
+
+        struct ProbeProvider {
+            provides: Vec<TypeId>,
+        }
+        #[async_trait]
+        impl Plugin for ProbeProvider {
+            fn name(&self) -> &str {
+                "probe-provider"
+            }
+            fn provides(&self) -> &[TypeId] {
+                &self.provides
+            }
+            async fn apply(
+                &self,
+                env: &FuneraEnv,
+                _config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
+                let before = env.bindings_by_typeid(TypeId::of::<ServiceA>()).len();
+                env.provide(ServiceA);
+                let after = env.bindings_by_typeid(TypeId::of::<ServiceA>()).len();
+                BINDING_COUNTS.lock().unwrap().push(before);
+                BINDING_COUNTS.lock().unwrap().push(after);
+                Ok(())
+            }
+        }
+
+        let mut l = loader();
+        let plugin = Arc::new(ProbeProvider {
+            provides: vec![TypeId::of::<ServiceA>()],
+        });
+        l.reconcile(&[PluginEntry::new("p", plugin.clone()).revision(1)])
+            .await;
+        BINDING_COUNTS.lock().unwrap().clear();
+
+        l.reconcile(&[PluginEntry::new("p", plugin).revision(2)])
+            .await;
+
+        let counts = BINDING_COUNTS.lock().unwrap().clone();
+        assert_eq!(
+            counts,
+            vec![1, 2],
+            "new apply must see old binding and add its own before old is unmounted"
+        );
+        assert_eq!(
+            l.registry()
+                .env()
+                .bindings_by_typeid(TypeId::of::<ServiceA>())
+                .len(),
+            1,
+            "old binding must be removed after replacement"
+        );
+    }
+
+    #[tokio::test]
     async fn replace_hmr_rolls_back_failed_revision() {
         struct MaybeFail;
         #[async_trait]
