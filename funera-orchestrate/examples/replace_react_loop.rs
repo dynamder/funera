@@ -13,6 +13,7 @@ use funera_core::event_bus::env_state_bus::EnvStateEvent;
 use funera_core::event_bus::react_bus::ReactEvent;
 use funera_core::event_bus::token_bus::TokenEvent;
 use funera_core::middleware::{EventSenderFn, MiddlewareEvent, MiddlewareProcessor};
+use funera_core::plugin::Plugin;
 use funera_core::re_act::ReActLoopConfig;
 use funera_orchestrate::{Agent, AgentEvent, AgentLoop, AgentRuntime, DeepSeekProvider};
 
@@ -22,6 +23,12 @@ use funera_orchestrate::{Agent, AgentEvent, AgentLoop, AgentRuntime, DeepSeekPro
 /// normal middleware/event pipeline, and signals `Done`.
 #[derive(Default)]
 struct FixedAgentLoop;
+
+impl Plugin for FixedAgentLoop {
+    fn name(&self) -> &str {
+        "fixed-agent-loop"
+    }
+}
 
 #[async_trait]
 impl AgentLoop for FixedAgentLoop {

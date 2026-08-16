@@ -10,6 +10,7 @@ use funera_core::chat::message::FuneraMessage;
 use funera_core::chat::session::FuneraSession;
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 use funera_core::middleware::{EventSenderFn, MiddlewareProcessor};
+use funera_core::plugin::Plugin;
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 
@@ -39,7 +40,7 @@ use crate::event::AgentEvent;
 /// `event_sender` (including a final [`AgentEvent::Done`]) and keep the session
 /// history consistent by pushing assistant/tool messages to `session`.
 #[async_trait]
-pub trait AgentLoop: Send + Sync + 'static {
+pub trait AgentLoop: Plugin {
     /// Run one turn for `session` with the given init message and config.
     async fn run(
         &self,
@@ -62,6 +63,12 @@ impl<P> Default for DefaultAgentLoop<P> {
         Self {
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<P: ChatProvider + 'static> Plugin for DefaultAgentLoop<P> {
+    fn name(&self) -> &str {
+        "default-react-loop"
     }
 }
 
