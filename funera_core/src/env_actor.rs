@@ -157,7 +157,7 @@ pub fn spawn_env_actor(
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<EnvCmd>();
     let (state_tx, _) = broadcast::channel::<EnvStateEvent>(32);
 
-    let mut env = loader.registry().env().clone();
+    let env = loader.registry().env().clone();
 
     // ── Spawn ToolExecutor internally ─────────────────────────
     #[cfg(feature = "tool")]

@@ -313,7 +313,7 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub(crate) fn set_skill_prompt(&mut self, prompt: String) {
+    pub(crate) fn set_skill_prompt(&self, prompt: String) {
         let _ = self.skill_tx.send(prompt);
     }
 
@@ -911,7 +911,7 @@ mod tests {
 
         #[test]
         fn set_skill_prompt_and_has_changed() {
-            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             assert!(!watcher.has_skill_changed());
             env.set_skill_prompt("hello".into());
             assert!(watcher.has_skill_changed());

@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+#[cfg(feature = "middleware")]
 use parking_lot::RwLock as StdRwLock;
 
 use async_openai::config::OpenAIConfig;
@@ -385,7 +386,7 @@ impl AgentRuntimeBuilder {
                 None => ToolRegistry::new(),
             };
             #[cfg(not(feature = "security"))]
-            let mut reg = ToolRegistry::new();
+            let reg = ToolRegistry::new();
 
             #[cfg(feature = "security")]
             reg.set_audit_bus(audit_bus.clone());
