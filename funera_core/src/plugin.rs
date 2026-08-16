@@ -273,6 +273,9 @@ mod tests {
         assert_eq!(reg.phase(provider), Some(PluginPhase::Active));
         assert_eq!(reg.phase(consumer), Some(PluginPhase::Active));
         assert!(reg.env().contains::<ServiceB>());
+        assert_eq!(reg.instance_count(), 2);
+        assert!(reg.metrics().refresh_passes > 0);
+        assert!(reg.metrics().transitions >= 2);
     }
 
     #[tokio::test]
@@ -359,6 +362,7 @@ mod tests {
             !reg.env().contains::<String>(),
             "partial effects must be rolled back"
         );
+        assert_eq!(reg.metrics().apply_failures, 1);
     }
 
     #[tokio::test]
