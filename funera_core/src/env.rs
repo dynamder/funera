@@ -136,8 +136,8 @@ pub struct FuneraEnv {
     pub(crate) tool_registry: Arc<RwLock<ToolRegistry>>,
     #[cfg(feature = "skill")]
     pub(crate) skill_registry: Arc<RwLock<SkillRegistry>>,
-    llm_client: async_openai::Client<OpenAIConfig>,
-    model: String,
+    llm_client: Arc<StdRwLock<async_openai::Client<OpenAIConfig>>>,
+    model: Arc<StdRwLock<String>>,
     #[cfg(feature = "tool")]
     tool_tx: watch::Sender<JsonValue>,
     client_tx: watch::Sender<async_openai::Client<OpenAIConfig>>,
@@ -179,8 +179,8 @@ impl FuneraEnv {
                 tool_registry,
                 #[cfg(feature = "skill")]
                 skill_registry,
-                llm_client,
-                model,
+                llm_client: Arc::new(StdRwLock::new(llm_client)),
+                model: Arc::new(StdRwLock::new(model)),
                 #[cfg(feature = "tool")]
                 tool_tx,
                 client_tx,
@@ -257,15 +257,20 @@ impl FuneraEnv {
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
-    pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
-        self.llm_client = client.clone();
+    pub(crate) fn set_client(&self, client: async_openai::Client<OpenAIConfig>) {
+        *self.llm_client.write() = client.clone();
         let _ = self.client_tx.send(client);
     }
 
-    pub(crate) fn set_model(&mut self, model: impl Into<String>) {
+    pub(crate) fn set_model(&self, model: impl Into<String>) {
         let model = model.into();
-        self.model = model.clone();
+        *self.model.write() = model.clone();
         let _ = self.model_tx.send(model);
+    }
+
+    /// The current LLM client (read snapshot).
+    pub(crate) fn current_client(&self) -> async_openai::Client<OpenAIConfig> {
+        self.llm_client.read().clone()
     }
 
     #[cfg(feature = "skill")]
@@ -312,8 +317,8 @@ impl FuneraEnv {
         let _ = self.skill_tx.send(prompt);
     }
 
-    pub(crate) fn model(&self) -> &str {
-        &self.model
+    pub(crate) fn model(&self) -> String {
+        self.model.read().clone()
     }
 }
 

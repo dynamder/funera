@@ -62,7 +62,7 @@ impl AgentBuilder {
     }
 
     /// Fired for each text token streamed from the LLM.
-    pub fn on_token<F>(mut self, f: F) -> Self
+    pub fn on_token<F>(self, f: F) -> Self
     where
         F: Fn(String) + Send + Sync + 'static,
     {
@@ -75,7 +75,7 @@ impl AgentBuilder {
     }
 
     /// Fired when a tool call is detected (before execution).
-    pub fn on_tool_call<F>(mut self, f: F) -> Self
+    pub fn on_tool_call<F>(self, f: F) -> Self
     where
         F: Fn(String, serde_json::Value) + Send + Sync + 'static,
     {
@@ -88,7 +88,7 @@ impl AgentBuilder {
     }
 
     /// Fired when a tool execution completes.
-    pub fn on_tool_result<F>(mut self, f: F) -> Self
+    pub fn on_tool_result<F>(self, f: F) -> Self
     where
         F: Fn(String, Result<String, String>) + Send + Sync + 'static,
     {
@@ -101,7 +101,7 @@ impl AgentBuilder {
     }
 
     /// Fired at the start of each ReAct turn.
-    pub fn on_turn_start<F>(mut self, f: F) -> Self
+    pub fn on_turn_start<F>(self, f: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
@@ -114,7 +114,7 @@ impl AgentBuilder {
     }
 
     /// Fired at the end of each ReAct turn.
-    pub fn on_turn_end<F>(mut self, f: F) -> Self
+    pub fn on_turn_end<F>(self, f: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
@@ -127,7 +127,7 @@ impl AgentBuilder {
     }
 
     /// Fired for every [`AgentEvent`] (catch-all).
-    pub fn on_event<F>(mut self, f: F) -> Self
+    pub fn on_event<F>(self, f: F) -> Self
     where
         F: Fn(AgentEvent) + Send + Sync + 'static,
     {

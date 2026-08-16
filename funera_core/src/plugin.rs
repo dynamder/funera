@@ -42,11 +42,11 @@ pub mod registry;
 pub use instance::{InstanceId, PluginInstance, TargetDigest, state};
 pub use registry::{FailedEntry, PluginPhase, PluginRegistry, RegistryMetrics};
 
-pub use adapters::MiddlewarePlugin;
 #[cfg(feature = "skill")]
 pub use adapters::SkillPlugin;
 #[cfg(feature = "tool")]
 pub use adapters::ToolPlugin;
+pub use adapters::{MiddlewarePlugin, ProviderPlugin};
 
 /// Boxed error returned by [`Plugin::apply`].
 pub type PluginError = Box<dyn std::error::Error + Send + Sync>;

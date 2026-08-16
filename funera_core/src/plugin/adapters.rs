@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use async_openai::config::OpenAIConfig;
+
 use crate::env::FuneraEnv;
 use crate::plugin::{Plugin, PluginConfig, PluginError};
 
@@ -119,6 +121,59 @@ impl Plugin for SkillPlugin {
                 spawn_teardown(async move {
                     let _ = teardown_env.remove_skill(&skill_name).await;
                 });
+            })
+        });
+
+        Ok(())
+    }
+}
+
+/// Mounts an LLM client/model pair as a provider plugin.
+///
+/// `apply` pushes the client and model into the env's hot-reload watch
+/// channels; the previous values are restored on unload.
+pub struct ProviderPlugin {
+    pub name: String,
+    pub client: async_openai::Client<OpenAIConfig>,
+    pub model: String,
+}
+
+impl ProviderPlugin {
+    pub fn new(
+        name: impl Into<String>,
+        client: async_openai::Client<OpenAIConfig>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            client,
+            model: model.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl Plugin for ProviderPlugin {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
+        let old_model = env.model();
+        let old_client = env.current_client();
+
+        env.set_client(self.client.clone());
+        env.set_model(self.model.clone());
+
+        let revert_env = env.clone();
+        env.effect(|| {
+            Box::new(move || {
+                revert_env.set_client(old_client);
+                revert_env.set_model(old_model);
             })
         });
 
@@ -331,5 +386,33 @@ mod middleware_tests {
 
         reg.unmount(id).await;
         assert_eq!(chain.read().process("hi".into()).unwrap(), "hi");
+    }
+}
+
+#[cfg(test)]
+mod provider_tests {
+    use super::*;
+    use crate::plugin::PluginRegistry;
+    use crate::plugin::registry::PluginPhase;
+
+    #[tokio::test]
+    async fn provider_plugin_switches_and_reverts_model() {
+        let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "old-model");
+        let mut reg = PluginRegistry::new(env);
+
+        let id = reg.mount(Arc::new(ProviderPlugin::new(
+            "provider",
+            async_openai::Client::new(),
+            "new-model",
+        )));
+        reg.refresh().await;
+
+        assert_eq!(reg.phase(id), Some(PluginPhase::Active));
+        assert_eq!(reg.env().model(), "new-model");
+        assert_eq!(watcher.watch_model(), "new-model");
+
+        reg.unmount(id).await;
+        assert_eq!(reg.env().model(), "old-model");
+        assert_eq!(watcher.watch_model(), "old-model");
     }
 }

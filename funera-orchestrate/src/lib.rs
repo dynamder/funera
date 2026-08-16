@@ -187,7 +187,7 @@ pub mod send_handle;
 pub mod middleware_bundle;
 
 pub use agent::{Agent, AgentBuilder};
-pub use dispatcher::CallbackRegistry;
+pub use dispatcher::{CallbackPlugin, CallbackRegistry};
 pub use error::OrchestrateError;
 pub use event::{AgentEvent, RawAgentEvent};
 #[cfg(feature = "deepseek")]

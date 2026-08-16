@@ -1,47 +1,133 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use parking_lot::Mutex;
 use tokio::sync::broadcast;
 
+use funera_core::env::FuneraEnv;
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "security")]
 use funera_core::event_bus::react_bus::ReactEvent;
+use funera_core::plugin::{Plugin, PluginConfig, PluginError};
 
 use crate::event::{AgentEvent, RawAgentEvent};
 
-type CallbackFn = Arc<dyn Fn(AgentEvent) + Send + Sync>;
+pub type CallbackFn = Arc<dyn Fn(AgentEvent) + Send + Sync>;
 
-#[derive(Default, Clone)]
+static NEXT_CALLBACK_ID: AtomicU64 = AtomicU64::new(0);
+
+/// A cloneable registry of named callbacks.
+///
+/// The interior lock lets a [`crate::CallbackPlugin`] add and remove callbacks
+/// through the plugin lifecycle without taking `&mut self` on the registry.
+#[derive(Clone)]
 pub struct CallbackRegistry {
-    callbacks: Vec<CallbackFn>,
+    callbacks: Arc<Mutex<Vec<(String, CallbackFn)>>>,
+}
+
+impl Default for CallbackRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CallbackRegistry {
     pub fn new() -> Self {
         Self {
-            callbacks: Vec::new(),
+            callbacks: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    pub fn add(&mut self, f: CallbackFn) {
-        self.callbacks.push(f);
+    /// Add an anonymous callback with an auto-generated name.
+    pub fn add(&self, f: CallbackFn) {
+        let name = format!("auto:{}", NEXT_CALLBACK_ID.fetch_add(1, Ordering::Relaxed));
+        self.add_named(name, f);
+    }
+
+    /// Add a callback under an explicit name.
+    pub fn add_named(&self, name: impl Into<String>, f: CallbackFn) {
+        self.callbacks.lock().push((name.into(), f));
+    }
+
+    /// Remove every callback registered under `name`.
+    pub fn remove_named(&self, name: &str) {
+        self.callbacks.lock().retain(|(n, _)| n != name);
     }
 
     pub fn is_empty(&self) -> bool {
-        self.callbacks.is_empty()
+        self.callbacks.lock().is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.callbacks.len()
+        self.callbacks.lock().len()
     }
 
     pub fn dispatch(&self, event: AgentEvent) {
-        for f in &self.callbacks {
+        let callbacks: Vec<CallbackFn> = self
+            .callbacks
+            .lock()
+            .iter()
+            .map(|(_, f)| Arc::clone(f))
+            .collect();
+        for f in callbacks {
             f(event.clone());
         }
     }
 
-    pub fn combine(&mut self, other: CallbackRegistry) {
-        self.callbacks.extend(other.callbacks);
+    pub fn combine(&self, other: &CallbackRegistry) {
+        let other_callbacks = other.callbacks.lock().clone();
+        self.callbacks.lock().extend(other_callbacks);
+    }
+}
+
+/// Mounts a callback into an [`Agent`](crate::Agent)'s [`CallbackRegistry`].
+///
+/// The callback is installed when the plugin activates and removed when the
+/// plugin is unmounted, so callbacks participate in the same lifecycle as
+/// tools, skills, and middleware.
+pub struct CallbackPlugin {
+    pub name: String,
+    pub registry: Arc<CallbackRegistry>,
+    pub callback: CallbackFn,
+}
+
+impl CallbackPlugin {
+    pub fn new(
+        name: impl Into<String>,
+        registry: Arc<CallbackRegistry>,
+        callback: CallbackFn,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            registry,
+            callback,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Plugin for CallbackPlugin {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
+        self.registry
+            .add_named(self.name.clone(), self.callback.clone());
+
+        let registry = Arc::clone(&self.registry);
+        let name = self.name.clone();
+        env.effect(|| {
+            Box::new(move || {
+                registry.remove_named(&name);
+            })
+        });
+
+        Ok(())
     }
 }
 
@@ -155,14 +241,14 @@ mod tests {
 
     #[test]
     fn registry_add_not_empty() {
-        let mut r = CallbackRegistry::new();
+        let r = CallbackRegistry::new();
         r.add(Arc::new(|_| {}));
         assert!(!r.is_empty());
     }
 
     #[test]
     fn registry_dispatch_calls_all() {
-        let mut r = CallbackRegistry::new();
+        let r = CallbackRegistry::new();
         let c1 = Arc::new(AtomicUsize::new(0));
         let c2 = Arc::new(AtomicUsize::new(0));
         {
@@ -185,7 +271,7 @@ mod tests {
     #[test]
     fn registry_dispatch_with_arg() {
         let captured = Arc::new(AtomicUsize::new(0));
-        let mut r = CallbackRegistry::new();
+        let r = CallbackRegistry::new();
         {
             let c = captured.clone();
             r.add(Arc::new(move |event| {
@@ -201,7 +287,7 @@ mod tests {
 
     #[test]
     fn registry_clone_independent() {
-        let mut r = CallbackRegistry::new();
+        let r = CallbackRegistry::new();
         r.add(Arc::new(|_| {}));
         let r2 = r.clone();
         assert!(!r.is_empty());
@@ -211,7 +297,7 @@ mod tests {
     #[test]
     fn registry_combine_merges() {
         let mut r1 = CallbackRegistry::new();
-        let mut r2 = CallbackRegistry::new();
+        let r2 = CallbackRegistry::new();
         let c = Arc::new(AtomicUsize::new(0));
         {
             let cnt = c.clone();
@@ -231,9 +317,44 @@ mod tests {
                 cnt.fetch_add(1, Ordering::SeqCst);
             }));
         }
-        r1.combine(r2);
+        r1.combine(&r2);
         r1.dispatch(AgentEvent::Done);
         assert_eq!(c.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn callback_plugin_adds_and_removes() {
+        use funera_core::plugin::{PluginPhase, PluginRegistry};
+        use std::sync::Arc;
+
+        let registry = Arc::new(CallbackRegistry::new());
+        let counter = Arc::new(AtomicUsize::new(0));
+        let callback_counter = Arc::clone(&counter);
+        let plugin = CallbackPlugin::new(
+            "count",
+            Arc::clone(&registry),
+            Arc::new(move |_| {
+                callback_counter.fetch_add(1, Ordering::SeqCst);
+            }),
+        );
+
+        let (env, _watcher) =
+            funera_core::env::FuneraEnv::new(async_openai::Client::new(), "test-model");
+        let mut reg = PluginRegistry::new(env);
+        let id = reg.mount(Arc::new(plugin));
+        reg.refresh().await;
+
+        assert_eq!(reg.phase(id), Some(PluginPhase::Active));
+        registry.dispatch(AgentEvent::Done);
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+
+        reg.unmount(id).await;
+        registry.dispatch(AgentEvent::Done);
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            1,
+            "callback should be removed"
+        );
     }
 
     // ── CallbackDispatcher ─────────────────────────────────────────
