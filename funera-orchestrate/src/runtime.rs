@@ -3,6 +3,8 @@ use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use parking_lot::RwLock as StdRwLock;
+
 use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc};
 
@@ -486,7 +488,7 @@ impl AgentRuntimeBuilder {
                     tracing::warn!("[middleware:{name}] inspector error: {err}");
                 }
             });
-            Arc::new(chain)
+            Arc::new(StdRwLock::new(chain))
         } else {
             let (chain, error_rx) = MiddlewareChain::<AgentEvent>::new().activate_error_channel();
             tokio::spawn(async move {
@@ -495,7 +497,7 @@ impl AgentRuntimeBuilder {
                     tracing::warn!("[middleware:{name}] inspector error: {err}");
                 }
             });
-            Arc::new(chain)
+            Arc::new(StdRwLock::new(chain))
         };
 
         // Create tool bus for ToolExecutor
@@ -610,7 +612,7 @@ pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     pub(crate) env_cmd_tx: mpsc::UnboundedSender<EnvCmd>,
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
     #[cfg(feature = "middleware")]
-    pub(crate) middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
+    pub(crate) middleware_chain: Arc<StdRwLock<MiddlewareChain<AgentEvent, ErrorsEnabled>>>,
     _state: PhantomData<S>,
     _phantom: PhantomData<fn() -> P>,
 }
@@ -772,9 +774,12 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
 
     // ── End env mutation methods ──────────────────────────────
 
-    /// Access the middleware chain for event filtering.
+    /// Access the lock-protected middleware chain for event filtering.
+    ///
+    /// The returned lock can also be used to mount [`MiddlewarePlugin`]s at
+    /// runtime; the ReAct loop reads through this lock on every event.
     #[cfg(feature = "middleware")]
-    pub fn middleware_chain(&self) -> Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>> {
+    pub fn middleware_chain(&self) -> Arc<StdRwLock<MiddlewareChain<AgentEvent, ErrorsEnabled>>> {
         self.middleware_chain.clone()
     }
 

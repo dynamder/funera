@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 
 use crate::event_bus::tool_bus::ToolExecCommand;
-use crate::re_act::tool::{ToolCallError, ToolRegistry};
+use crate::re_act::tool::ToolRegistry;
 
 pub struct ToolExecutor {
     tool_registry: Arc<RwLock<ToolRegistry>>,
@@ -31,6 +31,7 @@ impl ToolExecutor {
                 // dynamic tool add/remove/availability changes.
                 #[cfg(not(feature = "security"))]
                 {
+                    use crate::re_act::tool::ToolCallError;
                     let tool = {
                         let registry = self.tool_registry.read().await;
                         registry.get_tool_arc(&cmd.name)

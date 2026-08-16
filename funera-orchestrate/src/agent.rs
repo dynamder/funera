@@ -6,8 +6,7 @@ use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::FuneraSession;
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
 use funera_core::middleware::EventSenderFn;
-#[cfg(feature = "middleware")]
-use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
+use funera_core::middleware::MiddlewareProcessor;
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 
@@ -560,25 +559,18 @@ fn build_event_sender(
     })
 }
 
-/// Return the middleware chain from runtime, or None.
+/// Return a type-erased middleware processor backed by the runtime's chain.
 #[cfg(feature = "middleware")]
 fn middleware_opt<P: ChatProvider, S>(
     runtime: &AgentRuntime<P, S>,
-) -> Option<Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>> {
+) -> Option<Arc<dyn MiddlewareProcessor<AgentEvent>>> {
     Some(runtime.middleware_chain())
 }
 
 #[cfg(not(feature = "middleware"))]
 fn middleware_opt<P: ChatProvider, S>(
     _runtime: &AgentRuntime<P, S>,
-) -> Option<
-    Arc<
-        funera_core::middleware::MiddlewareChain<
-            AgentEvent,
-            funera_core::middleware::ErrorsEnabled,
-        >,
-    >,
-> {
+) -> Option<Arc<dyn MiddlewareProcessor<AgentEvent>>> {
     None
 }
 

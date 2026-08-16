@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::{
     chat::message::FuneraMessage,
     event_bus::env_state_bus::EnvStateEvent,
-    middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent},
+    middleware::{EventSenderFn, MiddlewareEvent, MiddlewareProcessor},
     re_act::{ReActLoop, ReActLoopConfig},
 };
 
@@ -123,7 +123,7 @@ impl FuneraSession {
         init_msg: FuneraMessage,
         mut config: ReActLoopConfig,
         env_state_tx: broadcast::Sender<EnvStateEvent>,
-        middleware: Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
+        middleware: Option<Arc<dyn MiddlewareProcessor<E>>>,
         event_sender: Option<EventSenderFn<E>>,
     ) -> anyhow::Result<()> {
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);

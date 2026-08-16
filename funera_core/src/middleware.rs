@@ -263,6 +263,25 @@ pub enum MiddlewareLayer<Evt> {
     Mutator(Vec<Arc<dyn MutatorMiddleware<Evt>>>),
 }
 
+impl<Evt> Clone for MiddlewareLayer<Evt> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Inspector(inspectors) => Self::Inspector(inspectors.clone()),
+            Self::Mutator(mutators) => Self::Mutator(mutators.clone()),
+        }
+    }
+}
+
+impl<Evt> MiddlewareLayer<Evt> {
+    /// Whether the layer has no middleware.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Inspector(inspectors) => inspectors.is_empty(),
+            Self::Mutator(mutators) => mutators.is_empty(),
+        }
+    }
+}
+
 // ── Typestate markers ─────────────────────────────────────────
 
 /// 错误通道**尚未**启用的 typestate 标记。
@@ -483,6 +502,29 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
         self.layers.len()
     }
 
+    /// Append a pre-built middleware layer.
+    pub fn add_layer(&mut self, layer: MiddlewareLayer<Evt>) {
+        if !layer.is_empty() {
+            self.layers.push(layer);
+        }
+    }
+
+    /// Remove every inspector/mutator with the given plugin name, dropping
+    /// layers that become empty.
+    pub fn remove_plugin(&mut self, name: &str) {
+        for layer in &mut self.layers {
+            match layer {
+                MiddlewareLayer::Inspector(inspectors) => {
+                    inspectors.retain(|inspector| inspector.name() != name)
+                }
+                MiddlewareLayer::Mutator(mutators) => {
+                    mutators.retain(|mutator| mutator.name() != name)
+                }
+            }
+        }
+        self.layers.retain(|layer| !layer.is_empty());
+    }
+
     /// 按注册顺序逐层执行。
     ///
     /// ## 执行流程
@@ -588,6 +630,34 @@ impl std::fmt::Display for MiddlewareBlocked {
             "[middleware:{}] event blocked: {}",
             self.middleware_name, self.reason
         )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MiddlewareProcessor — type-erased middleware chain access
+// ═══════════════════════════════════════════════════════════════
+
+/// Type-erased access to a middleware chain.
+///
+/// The ReAct loop consumes this trait object instead of a concrete
+/// [`MiddlewareChain`], so a runtime may back the chain by a lock and mutate it
+/// dynamically while a turn is in flight.
+pub trait MiddlewareProcessor<Evt>: Send + Sync {
+    /// Run the event through the middleware chain.
+    fn process(&self, event: Evt) -> Result<Evt, MiddlewareBlocked>;
+}
+
+impl<Evt: Clone + Send + 'static> MiddlewareProcessor<Evt> for MiddlewareChain<Evt, ErrorsEnabled> {
+    fn process(&self, event: Evt) -> Result<Evt, MiddlewareBlocked> {
+        MiddlewareChain::process(self, event)
+    }
+}
+
+impl<Evt: Clone + Send + 'static> MiddlewareProcessor<Evt>
+    for parking_lot::RwLock<MiddlewareChain<Evt, ErrorsEnabled>>
+{
+    fn process(&self, event: Evt) -> Result<Evt, MiddlewareBlocked> {
+        self.read().process(event)
     }
 }
 

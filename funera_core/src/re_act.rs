@@ -19,7 +19,7 @@ use crate::event_bus::react_bus::{
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 #[cfg(feature = "tool")]
 use crate::event_bus::tool_bus::ToolBus;
-use crate::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent};
+use crate::middleware::{EventSenderFn, MiddlewareEvent, MiddlewareProcessor};
 use crate::provider::ChatProvider;
 
 #[cfg(feature = "skill")]
@@ -145,7 +145,7 @@ impl<P: ChatProvider> ReActLoop<P> {
 
     pub fn run<E: MiddlewareEvent>(
         mut self,
-        middleware: Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
+        middleware: Option<Arc<dyn MiddlewareProcessor<E>>>,
         event_sender: Option<EventSenderFn<E>>,
     ) -> ReActLoopHandle {
         let token = CancellationToken::new();
@@ -272,7 +272,7 @@ fn emit_event<E: MiddlewareEvent>(sender: &Option<EventSenderFn<E>>, event: E) {
 
 fn filter_and_store<E: MiddlewareEvent>(
     events: Vec<E>,
-    middleware: &Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
+    middleware: &Option<Arc<dyn MiddlewareProcessor<E>>>,
     event_sender: &Option<EventSenderFn<E>>,
     session_tx: &Option<mpsc::UnboundedSender<SessionCmd>>,
 ) {

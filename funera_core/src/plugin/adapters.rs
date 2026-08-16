@@ -13,6 +13,8 @@ use crate::re_act::tool::Tool;
 #[cfg(feature = "skill")]
 use crate::re_act::skills::Skill;
 
+use crate::middleware::{ErrorsEnabled, MiddlewareChain, MiddlewareLayer};
+
 /// Spawns an async teardown action on the current tokio runtime.
 ///
 /// Used by adapters whose underlying registry is async. If no runtime is
@@ -120,6 +122,56 @@ impl Plugin for SkillPlugin {
             })
         });
 
+        Ok(())
+    }
+}
+
+/// Mounts a middleware layer into a lock-protected [`MiddlewareChain`].
+///
+/// The ReAct loop reads from the same lock on every event, so middleware can
+/// be added/removed at runtime through the plugin lifecycle.
+pub struct MiddlewarePlugin<Evt: Clone + Send + 'static> {
+    pub name: String,
+    pub layer: MiddlewareLayer<Evt>,
+    pub chain: Option<Arc<parking_lot::RwLock<MiddlewareChain<Evt, ErrorsEnabled>>>>,
+}
+
+impl<Evt: Clone + Send + 'static> MiddlewarePlugin<Evt> {
+    pub fn new(
+        name: impl Into<String>,
+        layer: MiddlewareLayer<Evt>,
+        chain: Arc<parking_lot::RwLock<MiddlewareChain<Evt, ErrorsEnabled>>>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            layer,
+            chain: Some(chain),
+        }
+    }
+}
+
+#[async_trait]
+impl<Evt: Clone + Send + 'static> Plugin for MiddlewarePlugin<Evt> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
+        if let Some(chain) = &self.chain {
+            chain.write().add_layer(self.layer.clone());
+
+            let teardown_chain = Arc::clone(chain);
+            let plugin_name = self.name.clone();
+            env.effect(|| {
+                Box::new(move || {
+                    teardown_chain.write().remove_plugin(&plugin_name);
+                })
+            });
+        }
         Ok(())
     }
 }
@@ -239,5 +291,45 @@ mod skill_tests {
                 .unwrap_or(false)
         })
         .await;
+    }
+}
+
+#[cfg(test)]
+mod middleware_tests {
+    use super::*;
+    use crate::middleware::{InspectorError, MiddlewareLayer, MutatorAction, MutatorMiddleware};
+    use crate::plugin::registry::PluginPhase;
+    use crate::plugin::{Plugin, PluginError, PluginRegistry};
+    use parking_lot::RwLock;
+
+    struct AppendMutator;
+    impl Plugin for AppendMutator {
+        fn name(&self) -> &str {
+            "append"
+        }
+    }
+    impl MutatorMiddleware<String> for AppendMutator {
+        fn process(&self, event: String) -> MutatorAction<String> {
+            MutatorAction::Modify(format!("{event}!"))
+        }
+    }
+
+    #[tokio::test]
+    async fn middleware_plugin_adds_and_removes_layer() {
+        let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
+        let chain = MiddlewareChain::<String>::new().activate_error_channel().0;
+        let chain = Arc::new(RwLock::new(chain));
+        let layer = MiddlewareLayer::Mutator(vec![Arc::new(AppendMutator)]);
+        let plugin = MiddlewarePlugin::new("append", layer, Arc::clone(&chain));
+
+        let mut reg = PluginRegistry::new(env);
+        let id = reg.mount(Arc::new(plugin));
+        reg.refresh().await;
+
+        assert_eq!(reg.phase(id), Some(PluginPhase::Active));
+        assert_eq!(chain.read().process("hi".into()).unwrap(), "hi!");
+
+        reg.unmount(id).await;
+        assert_eq!(chain.read().process("hi".into()).unwrap(), "hi");
     }
 }
