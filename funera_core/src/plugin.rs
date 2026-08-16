@@ -31,6 +31,7 @@
 use std::any::TypeId;
 
 use async_trait::async_trait;
+use serde_json::Value as JsonValue;
 
 use crate::env::FuneraEnv;
 
@@ -42,6 +43,45 @@ pub use registry::{FailedEntry, PluginPhase, PluginRegistry};
 
 /// Boxed error returned by [`Plugin::apply`].
 pub type PluginError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Opaque configuration passed to [`Plugin::apply`].
+///
+/// The loader carries a `PluginConfig` on a [`crate::loader::PluginEntry`] and
+/// hands it to the plugin at mount/reload time. It is a thin `Arc` wrapper
+/// around JSON, so it is cheap to clone and can be loaded from JSON or YAML.
+#[derive(Clone, Debug)]
+pub struct PluginConfig {
+    value: std::sync::Arc<JsonValue>,
+}
+
+impl PluginConfig {
+    /// Wrap an existing JSON value.
+    pub fn new(value: impl Into<JsonValue>) -> Self {
+        Self {
+            value: std::sync::Arc::new(value.into()),
+        }
+    }
+
+    /// Parse a JSON document.
+    pub fn from_json_str(s: &str) -> Result<Self, serde_json::Error> {
+        Ok(Self::new(serde_json::from_str::<JsonValue>(s)?))
+    }
+
+    /// Parse a YAML document.
+    pub fn from_yaml_str(s: &str) -> Result<Self, serde_yaml::Error> {
+        Ok(Self::new(serde_yaml::from_str::<JsonValue>(s)?))
+    }
+
+    /// Borrow the underlying JSON value.
+    pub fn value(&self) -> &JsonValue {
+        &self.value
+    }
+
+    /// Unwrap the underlying `Arc<JsonValue>`.
+    pub fn into_value(self) -> std::sync::Arc<JsonValue> {
+        self.value
+    }
+}
 
 /// The unified abstraction over every loadable capability.
 ///
@@ -84,7 +124,11 @@ pub trait Plugin: Send + Sync {
     /// a no-op; capability subtraits are registered by the framework (which
     /// still knows their concrete type) rather than registering themselves
     /// from inside `apply`.
-    async fn apply(&self, _env: &FuneraEnv) -> Result<(), PluginError> {
+    async fn apply(
+        &self,
+        _env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
         Ok(())
     }
 }
@@ -140,7 +184,11 @@ mod tests {
         fn provides(&self) -> &[TypeId] {
             &self.provides
         }
-        async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+        async fn apply(
+            &self,
+            env: &FuneraEnv,
+            _config: Option<&PluginConfig>,
+        ) -> Result<(), PluginError> {
             env.provide(ServiceA);
             Ok(())
         }
@@ -170,7 +218,11 @@ mod tests {
         fn provides(&self) -> &[TypeId] {
             &self.provides
         }
-        async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+        async fn apply(
+            &self,
+            env: &FuneraEnv,
+            _config: Option<&PluginConfig>,
+        ) -> Result<(), PluginError> {
             assert!(
                 env.contains::<ServiceA>(),
                 "apply must run only once ServiceA is present"
@@ -240,7 +292,11 @@ mod tests {
             fn name(&self) -> &str {
                 "effect"
             }
-            async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+            async fn apply(
+                &self,
+                env: &FuneraEnv,
+                _config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
                 DROPS.fetch_add(1, Ordering::SeqCst);
                 env.effect(|| {
                     Box::new(|| {
@@ -273,7 +329,11 @@ mod tests {
             fn name(&self) -> &str {
                 "failing"
             }
-            async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+            async fn apply(
+                &self,
+                env: &FuneraEnv,
+                _config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
                 env.provide(String::from("partial"));
                 Err("boom".into())
             }

@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::env::FuneraEnv;
-use crate::plugin::{Plugin, PluginPhase, PluginRegistry};
+use crate::plugin::{Plugin, PluginConfig, PluginPhase, PluginRegistry};
 
 /// A declarative entry describing one desired plugin instance.
 #[derive(Clone)]
@@ -22,6 +22,8 @@ pub struct PluginEntry {
     pub id: String,
     /// The plugin to load.
     pub plugin: Arc<dyn Plugin>,
+    /// Optional config passed to [`Plugin::apply`](Plugin::apply).
+    pub config: Option<Arc<PluginConfig>>,
     /// Administrative switch: disabled entries stay in config but are not loaded.
     pub disabled: bool,
     /// Opaque generation marker; a changed value triggers a reload (HMR).
@@ -34,9 +36,16 @@ impl PluginEntry {
         Self {
             id: id.into(),
             plugin,
+            config: None,
             disabled: false,
             revision: 0,
         }
+    }
+
+    /// Attach a config that is passed to the plugin's `apply` hook.
+    pub fn config(mut self, config: PluginConfig) -> Self {
+        self.config = Some(Arc::new(config));
+        self
     }
 
     /// Mark the entry administratively disabled (or enabled).
@@ -50,6 +59,21 @@ impl PluginEntry {
         self.revision = revision;
         self
     }
+}
+
+/// The result of a [`Loader::reconcile`] pass.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReconcileReport {
+    /// Ids mounted for the first time.
+    pub loaded: Vec<String>,
+    /// Ids that were removed because they vanished or were disabled.
+    pub unloaded: Vec<String>,
+    /// Ids whose `revision` changed and were hot-replaced.
+    pub reloaded: Vec<String>,
+    /// Ids that could not be reconciled, with an error string.
+    pub failed: Vec<(String, String)>,
+    /// Ids skipped (disabled entries that remain disabled).
+    pub skipped: Vec<String>,
 }
 
 /// Keeps a [`PluginRegistry`] in step with a declarative plugin set.
@@ -93,38 +117,50 @@ impl Loader {
 
     /// Reconcile the registry against `entries`.
     ///
-    /// Applies the minimal set of changes: unmounts entries that vanished, were
-    /// disabled, or changed `revision`; mounts entries that are desired, enabled,
-    /// and not already mounted. Returns the ids that were (re)loaded.
-    pub async fn reconcile(&mut self, entries: &[PluginEntry]) -> Vec<String> {
-        let mut loaded = Vec::new();
+    /// Applies the minimal set of changes: unmounts entries that vanished or
+    /// were disabled; hot-replaces entries whose `revision` changed; mounts
+    /// entries that are desired, enabled, and not already mounted.
+    pub async fn reconcile(&mut self, entries: &[PluginEntry]) -> ReconcileReport {
+        let mut report = ReconcileReport::default();
 
-        // Phase 1: drop entries that vanished, were disabled, or changed revision.
+        // Phase 1: drop entries that vanished or were disabled.
         let ids: Vec<String> = self.mounted.keys().cloned().collect();
         for id in ids {
             let current_rev = self.mounted[&id].1;
-            let keep = entries
-                .iter()
-                .any(|e| e.id == id && !e.disabled && e.revision == current_rev);
+            let desired = entries.iter().find(|e| e.id == id);
+            let keep = desired.is_some_and(|e| !e.disabled && e.revision == current_rev);
             if !keep {
                 let (inst, _) = self.mounted.remove(&id).unwrap();
                 self.registry.unmount(inst).await;
+                if desired.is_some_and(|e| !e.disabled) {
+                    report.reloaded.push(id.clone());
+                } else {
+                    report.unloaded.push(id.clone());
+                }
             }
         }
 
         // Phase 2: mount entries that are desired, enabled, and not yet mounted.
         for entry in entries {
-            if entry.disabled || self.mounted.contains_key(&entry.id) {
+            if entry.disabled {
+                if !self.mounted.contains_key(&entry.id) {
+                    report.skipped.push(entry.id.clone());
+                }
                 continue;
             }
-            let inst = self.registry.mount(entry.plugin.clone());
+            if self.mounted.contains_key(&entry.id) {
+                continue;
+            }
+            let inst = self
+                .registry
+                .mount_with_config(entry.plugin.clone(), entry.config.clone());
             self.mounted
                 .insert(entry.id.clone(), (inst, entry.revision));
-            loaded.push(entry.id.clone());
+            report.loaded.push(entry.id.clone());
         }
 
         self.registry.refresh().await;
-        loaded
+        report
     }
 }
 
@@ -133,6 +169,7 @@ mod tests {
     use super::*;
     use crate::plugin::PluginError;
     use async_trait::async_trait;
+    use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn loader() -> Loader {
@@ -153,13 +190,14 @@ mod tests {
     #[tokio::test]
     async fn reconcile_mounts_entries() {
         let mut l = loader();
-        let loaded = l
+        let report = l
             .reconcile(&[
                 PluginEntry::new("a", noop("a")),
                 PluginEntry::new("b", noop("b")),
             ])
             .await;
-        assert_eq!(loaded.len(), 2);
+        assert_eq!(report.loaded.len(), 2);
+        assert!(report.unloaded.is_empty());
         assert_eq!(l.registry().instance_count(), 2);
         assert_eq!(l.mounted_count(), 2);
     }
@@ -172,8 +210,8 @@ mod tests {
             PluginEntry::new("b", noop("b")),
         ];
         l.reconcile(&entries).await;
-        let loaded_again = l.reconcile(&entries).await;
-        assert!(loaded_again.is_empty(), "unchanged config loads nothing");
+        let report = l.reconcile(&entries).await;
+        assert!(report.loaded.is_empty(), "unchanged config loads nothing");
         assert_eq!(l.registry().instance_count(), 2);
     }
 
@@ -184,7 +222,8 @@ mod tests {
         let b = PluginEntry::new("b", noop("b"));
         l.reconcile(&[a.clone(), b]).await;
 
-        l.reconcile(&[a]).await;
+        let report = l.reconcile(&[a]).await;
+        assert_eq!(report.unloaded, vec!["b".to_string()]);
         assert_eq!(l.registry().instance_count(), 1);
         assert_eq!(l.mounted_count(), 1);
     }
@@ -194,7 +233,9 @@ mod tests {
         let mut l = loader();
         let a = PluginEntry::new("a", noop("a"));
         let b = PluginEntry::new("b", noop("b")).disabled(true);
-        l.reconcile(&[a, b]).await;
+        let report = l.reconcile(&[a, b]).await;
+        assert_eq!(report.loaded, vec!["a".to_string()]);
+        assert_eq!(report.skipped, vec!["b".to_string()]);
         assert_eq!(l.registry().instance_count(), 1);
     }
 
@@ -208,7 +249,11 @@ mod tests {
             fn name(&self) -> &str {
                 "counting"
             }
-            async fn apply(&self, _env: &FuneraEnv) -> Result<(), PluginError> {
+            async fn apply(
+                &self,
+                _env: &FuneraEnv,
+                _config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
                 APPLIES.fetch_add(1, Ordering::SeqCst);
                 Ok(())
             }
@@ -220,10 +265,10 @@ mod tests {
         assert_eq!(APPLIES.load(Ordering::SeqCst), 1);
 
         // Same id, new revision → hot replacement.
-        let reloaded = l
+        let report = l
             .reconcile(&[PluginEntry::new("p", Arc::new(Counting)).revision(2)])
             .await;
-        assert_eq!(reloaded, vec!["p".to_string()]);
+        assert_eq!(report.reloaded, vec!["p".to_string()]);
         assert_eq!(
             APPLIES.load(Ordering::SeqCst),
             2,
@@ -254,7 +299,11 @@ mod tests {
             fn name(&self) -> &str {
                 "effectful"
             }
-            async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+            async fn apply(
+                &self,
+                env: &FuneraEnv,
+                _config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
                 LIVE.fetch_add(1, Ordering::SeqCst);
                 env.effect(|| {
                     Box::new(|| {
@@ -277,5 +326,36 @@ mod tests {
             1,
             "old effects reverted, new applied"
         );
+    }
+
+    #[tokio::test]
+    async fn config_is_passed_to_apply() {
+        static SEEN: AtomicUsize = AtomicUsize::new(0);
+
+        struct ConfigReader;
+        #[async_trait]
+        impl Plugin for ConfigReader {
+            fn name(&self) -> &str {
+                "config_reader"
+            }
+            async fn apply(
+                &self,
+                _env: &FuneraEnv,
+                config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
+                if let Some(cfg) = config {
+                    if cfg.value().get("k").and_then(|v| v.as_u64()) == Some(7) {
+                        SEEN.fetch_add(1, Ordering::SeqCst);
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        let mut l = loader();
+        l.reconcile(&[PluginEntry::new("p", Arc::new(ConfigReader))
+            .config(PluginConfig::new(json!({"k": 7})))])
+            .await;
+        assert_eq!(SEEN.load(Ordering::SeqCst), 1);
     }
 }

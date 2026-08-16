@@ -7,8 +7,8 @@ use std::sync::Arc;
 use parking_lot::{Mutex as StdMutex, RwLock as StdRwLock};
 
 use crate::env::{FuneraEnv, ProviderId};
-use crate::plugin::Plugin;
 use crate::plugin::instance::{InstanceId, PluginInstance, TargetDigest, state};
+use crate::plugin::{Plugin, PluginConfig};
 
 /// A failed instance: the instance itself plus its failure record.
 pub struct FailedEntry {
@@ -116,11 +116,20 @@ impl PluginRegistry {
         &self.env
     }
 
-    /// Mount a plugin, returning its instance id.
+    /// Mount a plugin with no config, returning its instance id.
     ///
     /// The instance starts in [`state::Pending`] and is marked dirty, so the
     /// next [`refresh`](Self::refresh) re-evaluates it.
     pub fn mount(&mut self, plugin: Arc<dyn Plugin>) -> InstanceId {
+        self.mount_with_config(plugin, None)
+    }
+
+    /// Mount a plugin with an optional config, returning its instance id.
+    pub fn mount_with_config(
+        &mut self,
+        plugin: Arc<dyn Plugin>,
+        config: Option<Arc<PluginConfig>>,
+    ) -> InstanceId {
         let id = self.next_id;
         self.next_id += 1;
         let provider_id = self.next_provider_id;
@@ -128,7 +137,7 @@ impl PluginRegistry {
 
         let inject = plugin.inject().to_vec();
         let child = self.env.derive_with_provider(provider_id);
-        let inst = PluginInstance::create(id, plugin, child);
+        let inst = PluginInstance::create(id, plugin, config, child);
         self.pending.insert(id, inst);
 
         // Reverse index for notification-driven refresh.
@@ -168,8 +177,9 @@ impl PluginRegistry {
                     }
                     let inst = inst.with_target(target).begin_load();
                     let plugin = inst.plugin.clone();
+                    let config = inst.config.clone();
                     let env = inst.env.clone();
-                    let result = plugin.apply(&env).await;
+                    let result = plugin.apply(&env, config.as_deref()).await;
                     match result {
                         Ok(()) => {
                             let provider_id = env.provider_id();

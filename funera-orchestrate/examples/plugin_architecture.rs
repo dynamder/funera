@@ -20,7 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use funera_core::env::FuneraEnv;
 use funera_core::loader::{Loader, PluginEntry};
-use funera_core::plugin::{Plugin, PluginError, PluginPhase};
+use funera_core::plugin::{Plugin, PluginConfig, PluginError, PluginPhase};
 
 /// A shared configuration service.
 #[derive(Clone)]
@@ -57,7 +57,11 @@ impl Plugin for ConfigPlugin {
         &self.provides
     }
 
-    async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
         env.provide(Config {
             greeting: self.greeting.clone(),
         });
@@ -98,7 +102,11 @@ impl Plugin for GreeterPlugin {
         &self.provides
     }
 
-    async fn apply(&self, env: &FuneraEnv) -> Result<(), PluginError> {
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
         let config = env.get::<Config>().expect("Config must be present");
         env.provide(Greeter);
         println!("    [greeter] active; will greet {:?}", config.greeting);

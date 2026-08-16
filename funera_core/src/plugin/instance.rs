@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crate::env::{FuneraEnv, ProviderId};
-use crate::plugin::Plugin;
+use crate::plugin::{Plugin, PluginConfig};
 
 /// Runtime id of a mounted plugin instance.
 pub type InstanceId = u64;
@@ -55,6 +55,7 @@ pub mod state {
 pub struct PluginInstance<S> {
     pub id: InstanceId,
     pub plugin: Arc<dyn Plugin>,
+    pub config: Option<Arc<PluginConfig>>,
     pub env: FuneraEnv,
     pub target: Option<TargetDigest>,
     pub committed: Option<TargetDigest>,
@@ -65,6 +66,7 @@ impl<S> PluginInstance<S> {
     fn new(
         id: InstanceId,
         plugin: Arc<dyn Plugin>,
+        config: Option<Arc<PluginConfig>>,
         env: FuneraEnv,
         target: Option<TargetDigest>,
         committed: Option<TargetDigest>,
@@ -72,6 +74,7 @@ impl<S> PluginInstance<S> {
         Self {
             id,
             plugin,
+            config,
             env,
             target,
             committed,
@@ -83,6 +86,7 @@ impl<S> PluginInstance<S> {
         PluginInstance {
             id: self.id,
             plugin: self.plugin,
+            config: self.config,
             env: self.env,
             target: self.target,
             committed: self.committed,
@@ -107,8 +111,13 @@ impl<S> PluginInstance<S> {
 }
 
 impl PluginInstance<state::Pending> {
-    pub(crate) fn create(id: InstanceId, plugin: Arc<dyn Plugin>, env: FuneraEnv) -> Self {
-        Self::new(id, plugin, env, None, None)
+    pub(crate) fn create(
+        id: InstanceId,
+        plugin: Arc<dyn Plugin>,
+        config: Option<Arc<PluginConfig>>,
+        env: FuneraEnv,
+    ) -> Self {
+        Self::new(id, plugin, config, env, None, None)
     }
 
     /// Move into [`state::Loading`], committing the currently resolved target.
