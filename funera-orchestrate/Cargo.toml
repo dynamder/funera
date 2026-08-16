@@ -81,6 +81,9 @@ required-features = ["funera-builtin-tools"]
 name = "replace_react_loop"
 
 [[example]]
+name = "replace_loop"
+
+[[example]]
 name = "minimal"
 
 [[example]]
