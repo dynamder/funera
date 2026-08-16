@@ -18,6 +18,7 @@ use funera_core::env_actor::{EnvCmd, ReActConfig, spawn_env_actor};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "tool")]
 use funera_core::event_bus::tool_bus::ToolBus;
+use funera_core::loader::{Loader, PluginEntry, ReconcileReport};
 use funera_core::provider::ChatProvider;
 #[cfg(feature = "deepseek")]
 use funera_core::provider::deepseek::DeepSeekProvider;
@@ -383,9 +384,6 @@ impl AgentRuntimeBuilder {
             };
             #[cfg(not(feature = "security"))]
             let mut reg = ToolRegistry::new();
-            for t in self.tools {
-                reg.add_tool(Arc::from(t));
-            }
 
             #[cfg(feature = "security")]
             reg.set_audit_bus(audit_bus.clone());
@@ -421,27 +419,40 @@ impl AgentRuntimeBuilder {
         };
 
         #[cfg(feature = "skill")]
-        let mut skill_registry = SkillRegistry::new();
+        let skill_registry = SkillRegistry::new();
+
+        let (env, env_watcher) = FuneraEnv::new(client, &model);
+
+        // Initial plugin set. Tools and skills are mounted through the loader
+        // so they share one lifecycle path with runtime-reconciled plugins.
+        let mut initial_plugins: Vec<PluginEntry> = Vec::new();
 
         #[cfg(feature = "skill")]
         {
+            use funera_core::plugin::SkillPlugin;
+            use std::collections::HashSet;
+
+            let mut active_names: HashSet<String> =
+                self.skill_names_to_activate.iter().cloned().collect();
+            let mut skills_to_load: Vec<Skill> = Vec::new();
+
             if self.load_default_skills {
-                let default_skills = Skill::from_default_path();
-                for skill in default_skills {
-                    let name = skill.name.clone();
-                    skill_registry.add(skill);
-                    self.skill_names_to_activate.push(name);
+                for skill in Skill::from_default_path() {
+                    active_names.insert(skill.name.clone());
+                    skills_to_load.push(skill);
                 }
             }
-            for skill in self.skills {
-                skill_registry.add(skill);
-            }
-            for name in &self.skill_names_to_activate {
-                skill_registry.activate(name);
+            skills_to_load.extend(self.skills);
+
+            for skill in skills_to_load {
+                let skill_name = skill.name.clone();
+                let active = active_names.contains(&skill_name);
+                initial_plugins.push(PluginEntry::new(
+                    format!("skill:{skill_name}"),
+                    Arc::new(SkillPlugin::new(skill).active(active)),
+                ));
             }
         }
-
-        let (env, env_watcher) = FuneraEnv::new(client, &model);
 
         #[cfg(feature = "sandbox")]
         let env = if let Some(ref sp) = self.sandbox_policy {
@@ -454,6 +465,16 @@ impl AgentRuntimeBuilder {
         let env = env.with_tool_registry(registry);
         #[cfg(feature = "skill")]
         let env = env.with_skill_registry(skill_registry);
+
+        #[cfg(feature = "tool")]
+        for (idx, tool) in self.tools.into_iter().enumerate() {
+            use funera_core::plugin::ToolPlugin;
+            let tool_name = tool.name().to_string();
+            initial_plugins.push(PluginEntry::new(
+                format!("tool:{tool_name}:{idx}"),
+                Arc::new(ToolPlugin::new(Arc::from(tool))),
+            ));
+        }
 
         // Build middleware chain
         #[cfg(feature = "middleware")]
@@ -518,8 +539,18 @@ impl AgentRuntimeBuilder {
             }
         };
 
-        // Spawn env actor — owns FuneraEnv, watcher, ToolExecutor, all config
-        let env_cmd_tx = spawn_env_actor(env, env_watcher, max_iters, chan_buf, tool_cfg, sec_cfg);
+        // Spawn env actor — owns Loader (and therefore FuneraEnv), watcher,
+        // ToolExecutor, all config.
+        let loader = Loader::new(env);
+        let env_cmd_tx = spawn_env_actor(
+            loader,
+            initial_plugins,
+            env_watcher,
+            max_iters,
+            chan_buf,
+            tool_cfg,
+            sec_cfg,
+        );
 
         let session_tx = spawn_session_actor();
 
@@ -617,6 +648,19 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         let _ = self.env_cmd_tx.send(EnvCmd::SubscribeAudit { respond });
         rx.await
             .unwrap_or_else(|_| broadcast::channel::<AuditEvent>(1).1)
+    }
+
+    /// Reconcile the runtime's plugin set against the given declarative entries.
+    ///
+    /// Returns a [`ReconcileReport`] describing what was loaded, unloaded,
+    /// reloaded, failed, or skipped. This is the dynamic counterpart of the
+    /// builder's static configuration.
+    pub async fn reconcile_plugins(&self, entries: Vec<PluginEntry>) -> ReconcileReport {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self
+            .env_cmd_tx
+            .send(EnvCmd::ReconcilePlugins { entries, respond });
+        rx.await.unwrap_or_default()
     }
 
     /// Query the current LLM model name from the env actor.
@@ -884,6 +928,28 @@ mod tests {
                 .unwrap();
             let names = rt.tool_names().await;
             assert!(names.is_empty());
+        }
+
+        #[tokio::test]
+        async fn reconcile_plugins_adds_tool_dynamically() {
+            use funera_core::plugin::ToolPlugin;
+            use std::sync::Arc;
+
+            let rt = AgentRuntimeBuilder::new()
+                .api_key("sk-test")
+                .model("x")
+                .build()
+                .unwrap();
+
+            let report = rt
+                .reconcile_plugins(vec![PluginEntry::new(
+                    "tool:mock",
+                    Arc::new(ToolPlugin::new(Arc::new(MockTool))),
+                )])
+                .await;
+            assert_eq!(report.loaded, vec!["tool:mock".to_string()]);
+            let names = rt.tool_names().await;
+            assert!(names.contains(&"mock_tool".to_string()));
         }
     }
 
