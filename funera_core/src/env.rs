@@ -238,21 +238,21 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn add_tool(&self, tool: Arc<dyn Tool>) {
+    pub async fn add_tool(&self, tool: Arc<dyn Tool>) {
         let mut registry = self.tool_registry.write().await;
         registry.add_tool(tool);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn remove_tool(&self, name: &str) {
+    pub async fn remove_tool(&self, name: &str) {
         let mut registry = self.tool_registry.write().await;
         registry.remove_tool(name);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn set_tool_availability(&self, _name: &str, _available: bool) {
+    pub async fn set_tool_availability(&self, _name: &str, _available: bool) {
         let registry = self.tool_registry.read().await;
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
@@ -269,21 +269,21 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub(crate) async fn add_skill(&mut self, skill: Skill) {
+    pub async fn add_skill(&self, skill: Skill) {
         let mut registry = self.skill_registry.write().await;
         registry.add(skill);
         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
     }
 
     #[cfg(feature = "skill")]
-    pub(crate) async fn remove_skill(&mut self, name: &str) {
+    pub async fn remove_skill(&self, name: &str) {
         let mut registry = self.skill_registry.write().await;
         registry.remove(name);
         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
     }
 
     #[cfg(feature = "skill")]
-    pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {
+    pub async fn activate_skill(&self, name: &str) -> bool {
         let mut registry = self.skill_registry.write().await;
         let ok = registry.activate(name);
         if ok {
@@ -293,7 +293,7 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {
+    pub async fn deactivate_skill(&self, name: &str) -> bool {
         let mut registry = self.skill_registry.write().await;
         let ok = registry.deactivate(name);
         if ok {

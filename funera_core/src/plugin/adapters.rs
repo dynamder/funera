@@ -1,0 +1,243 @@
+//! Adapter plugins for existing capability traits.
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+
+use crate::env::FuneraEnv;
+use crate::plugin::{Plugin, PluginConfig, PluginError};
+
+#[cfg(feature = "tool")]
+use crate::re_act::tool::Tool;
+
+#[cfg(feature = "skill")]
+use crate::re_act::skills::Skill;
+
+/// Spawns an async teardown action on the current tokio runtime.
+///
+/// Used by adapters whose underlying registry is async. If no runtime is
+/// available the teardown is dropped (and `tracing::warn`ed).
+fn spawn_teardown(task: impl std::future::Future<Output = ()> + Send + 'static) {
+    match tokio::runtime::Handle::try_current() {
+        Ok(handle) => {
+            handle.spawn(task);
+        }
+        Err(_) => {
+            tracing::warn!("cannot schedule async plugin teardown: no tokio runtime");
+        }
+    }
+}
+
+#[cfg(feature = "tool")]
+#[async_trait]
+impl Plugin for ToolPlugin {
+    fn name(&self) -> &str {
+        self.tool.name()
+    }
+
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
+        let tool_name = self.tool.name().to_string();
+        env.add_tool(self.tool.clone()).await;
+
+        let teardown_env = env.clone();
+        env.effect(|| {
+            Box::new(move || {
+                let tool_name = tool_name.clone();
+                spawn_teardown(async move {
+                    let _ = teardown_env.remove_tool(&tool_name).await;
+                });
+            })
+        });
+
+        Ok(())
+    }
+}
+
+/// Mounts a [`Tool`] into the shared tool registry as a plugin.
+#[cfg(feature = "tool")]
+pub struct ToolPlugin {
+    pub tool: Arc<dyn Tool>,
+}
+
+#[cfg(feature = "tool")]
+impl ToolPlugin {
+    pub fn new(tool: Arc<dyn Tool>) -> Self {
+        Self { tool }
+    }
+}
+
+/// Mounts a [`Skill`] into the shared skill registry as a plugin.
+#[cfg(feature = "skill")]
+pub struct SkillPlugin {
+    pub skill: Skill,
+    pub active: bool,
+}
+
+#[cfg(feature = "skill")]
+impl SkillPlugin {
+    pub fn new(skill: Skill) -> Self {
+        Self {
+            skill,
+            active: false,
+        }
+    }
+
+    pub fn active(mut self, active: bool) -> Self {
+        self.active = active;
+        self
+    }
+}
+
+#[cfg(feature = "skill")]
+#[async_trait]
+impl Plugin for SkillPlugin {
+    fn name(&self) -> &str {
+        &self.skill.name
+    }
+
+    async fn apply(
+        &self,
+        env: &FuneraEnv,
+        _config: Option<&PluginConfig>,
+    ) -> Result<(), PluginError> {
+        let skill_name = self.skill.name.clone();
+        env.add_skill(self.skill.clone()).await;
+        if self.active {
+            env.activate_skill(&skill_name).await;
+        }
+
+        let teardown_env = env.clone();
+        env.effect(|| {
+            Box::new(move || {
+                let skill_name = skill_name.clone();
+                spawn_teardown(async move {
+                    let _ = teardown_env.remove_skill(&skill_name).await;
+                });
+            })
+        });
+
+        Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "tool"))]
+mod tool_tests {
+    use super::*;
+    use crate::plugin::PluginRegistry;
+    use crate::plugin::registry::PluginPhase;
+    use crate::re_act::tool::ToolCallError;
+    use serde_json::Value as JsonValue;
+    use std::time::Duration;
+
+    struct MockTool;
+
+    impl Plugin for MockTool {
+        fn name(&self) -> &str {
+            "mock_tool"
+        }
+    }
+
+    #[async_trait]
+    impl Tool for MockTool {
+        fn description(&self) -> &str {
+            "mock tool"
+        }
+
+        fn schema(&self) -> JsonValue {
+            serde_json::json!({"type": "function", "function": {"name": "mock_tool"}})
+        }
+
+        async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+            Ok("ok".into())
+        }
+    }
+
+    async fn wait_until<F: Fn() -> bool>(mut cond: F) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if cond() {
+                break;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                panic!("condition not met within timeout");
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn tool_plugin_adds_and_removes_tool() {
+        let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
+        let mut reg = PluginRegistry::new(env);
+        let id = reg.mount(Arc::new(ToolPlugin::new(Arc::new(MockTool))));
+        reg.refresh().await;
+
+        assert_eq!(reg.phase(id), Some(PluginPhase::Active));
+        assert!(
+            reg.env()
+                .tool_registry
+                .read()
+                .await
+                .tool_exists("mock_tool")
+        );
+
+        reg.unmount(id).await;
+        wait_until(|| {
+            reg.env()
+                .tool_registry
+                .try_read()
+                .map(|r| !r.tool_exists("mock_tool"))
+                .unwrap_or(false)
+        })
+        .await;
+    }
+}
+
+#[cfg(all(test, feature = "skill"))]
+mod skill_tests {
+    use super::*;
+    use crate::plugin::PluginRegistry;
+    use crate::plugin::registry::PluginPhase;
+    use crate::re_act::skills::Skill;
+    use std::time::Duration;
+
+    async fn wait_until<F: Fn() -> bool>(mut cond: F) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if cond() {
+                break;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                panic!("condition not met within timeout");
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn skill_plugin_adds_and_removes_skill() {
+        let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
+        let mut reg = PluginRegistry::new(env);
+        let skill = Skill::new("s1", "desc", "content");
+        let id = reg.mount(Arc::new(SkillPlugin::new(skill).active(true)));
+        reg.refresh().await;
+
+        assert_eq!(reg.phase(id), Some(PluginPhase::Active));
+        assert!(reg.env().skill_registry.read().await.contains("s1"));
+        assert!(reg.env().skill_registry.read().await.is_active("s1"));
+
+        reg.unmount(id).await;
+        wait_until(|| {
+            reg.env()
+                .skill_registry
+                .try_read()
+                .map(|r| !r.contains("s1"))
+                .unwrap_or(false)
+        })
+        .await;
+    }
+}

@@ -35,11 +35,15 @@ use serde_json::Value as JsonValue;
 
 use crate::env::FuneraEnv;
 
+pub mod adapters;
 pub mod instance;
 pub mod registry;
 
 pub use instance::{InstanceId, PluginInstance, TargetDigest, state};
 pub use registry::{FailedEntry, PluginPhase, PluginRegistry};
+
+#[cfg(feature = "tool")]
+pub use adapters::ToolPlugin;
 
 /// Boxed error returned by [`Plugin::apply`].
 pub type PluginError = Box<dyn std::error::Error + Send + Sync>;
