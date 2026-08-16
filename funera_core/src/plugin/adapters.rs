@@ -280,7 +280,9 @@ mod tool_tests {
     async fn tool_plugin_adds_and_removes_tool() {
         let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
         let mut reg = PluginRegistry::new(env);
-        let id = reg.mount(Arc::new(ToolPlugin::new(Arc::new(MockTool))));
+        let tool_plugin = ToolPlugin::new(Arc::new(MockTool));
+        assert_eq!(tool_plugin.name(), "mock_tool");
+        let id = reg.mount(Arc::new(tool_plugin));
         reg.refresh().await;
 
         assert_eq!(reg.phase(id), Some(PluginPhase::Active));
@@ -330,7 +332,9 @@ mod skill_tests {
         let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
         let mut reg = PluginRegistry::new(env);
         let skill = Skill::new("s1", "desc", "content");
-        let id = reg.mount(Arc::new(SkillPlugin::new(skill).active(true)));
+        let skill_plugin = SkillPlugin::new(skill).active(true);
+        assert_eq!(skill_plugin.name(), "s1");
+        let id = reg.mount(Arc::new(skill_plugin));
         reg.refresh().await;
 
         assert_eq!(reg.phase(id), Some(PluginPhase::Active));
@@ -376,6 +380,7 @@ mod middleware_tests {
         let chain = Arc::new(RwLock::new(chain));
         let layer = MiddlewareLayer::Mutator(vec![Arc::new(AppendMutator)]);
         let plugin = MiddlewarePlugin::new("append", layer, Arc::clone(&chain));
+        assert_eq!(plugin.name(), "append");
 
         let mut reg = PluginRegistry::new(env);
         let id = reg.mount(Arc::new(plugin));
@@ -400,11 +405,10 @@ mod provider_tests {
         let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "old-model");
         let mut reg = PluginRegistry::new(env);
 
-        let id = reg.mount(Arc::new(ProviderPlugin::new(
-            "provider",
-            async_openai::Client::new(),
-            "new-model",
-        )));
+        let provider_plugin =
+            ProviderPlugin::new("provider", async_openai::Client::new(), "new-model");
+        assert_eq!(provider_plugin.name(), "provider");
+        let id = reg.mount(Arc::new(provider_plugin));
         reg.refresh().await;
 
         assert_eq!(reg.phase(id), Some(PluginPhase::Active));

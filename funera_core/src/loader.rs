@@ -271,6 +271,14 @@ mod tests {
         Arc::new(P(name.to_string()))
     }
 
+    #[test]
+    fn plugin_entry_debug_is_informative() {
+        let entry = PluginEntry::new("a", noop("a"));
+        let debug = format!("{entry:?}");
+        assert!(debug.contains("PluginEntry"), "got: {debug}");
+        assert!(debug.contains("a"), "got: {debug}");
+    }
+
     #[tokio::test]
     async fn reconcile_mounts_entries() {
         let mut l = loader();

@@ -174,17 +174,24 @@ mod tests {
         let mut reg = PluginRegistry::new(env);
 
         let broker = ServiceBroker::<String>::new();
-        reg.mount(Arc::new(BrokerPlugin::new(broker.clone())));
-        reg.mount(Arc::new(BrokerProvider::new(
-            "a",
-            Arc::new("a".to_string()),
-        )));
-        reg.mount(Arc::new(BrokerProvider::new(
-            "b",
-            Arc::new("b".to_string()),
-        )));
+        assert!(broker.is_empty());
+
+        let broker_plugin = BrokerPlugin::new(broker.clone());
+        assert_eq!(
+            broker_plugin.name(),
+            format!("broker:{}", std::any::type_name::<String>())
+        );
+        let provider_a = BrokerProvider::new("a", Arc::new("a".to_string()));
+        assert_eq!(provider_a.name(), "a");
+        let provider_b = BrokerProvider::new("b", Arc::new("b".to_string()));
+        assert_eq!(provider_b.name(), "b");
+
+        reg.mount(Arc::new(broker_plugin));
+        reg.mount(Arc::new(provider_a));
+        reg.mount(Arc::new(provider_b));
         reg.refresh().await;
 
+        assert!(!broker.is_empty());
         assert_eq!(broker.len(), 2);
         let first = broker.next().unwrap();
         let second = broker.next().unwrap();

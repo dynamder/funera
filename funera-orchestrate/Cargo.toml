@@ -74,6 +74,10 @@ name = "loader_declarative"
 name = "service_broker"
 
 [[example]]
+name = "replace_core_tool"
+required-features = ["funera-builtin-tools"]
+
+[[example]]
 name = "minimal"
 
 [[example]]
