@@ -107,6 +107,7 @@ pub struct PluginRegistry {
     /// Instance ids that need re-evaluation.
     dirty: Arc<StdMutex<HashSet<InstanceId>>>,
     metrics: RegistryMetrics,
+    apply_timeout: Option<Duration>,
 }
 
 impl PluginRegistry {
@@ -139,12 +140,19 @@ impl PluginRegistry {
             dependents,
             dirty,
             metrics: RegistryMetrics::default(),
+            apply_timeout: None,
         }
     }
 
     /// The root env (shared service table).
     pub fn env(&self) -> &FuneraEnv {
         &self.env
+    }
+
+    /// Set a timeout for [`Plugin::apply`] calls. `None` means no timeout.
+    pub fn with_apply_timeout(mut self, timeout: Duration) -> Self {
+        self.apply_timeout = Some(timeout);
+        self
     }
 
     /// Mount a plugin with no config, returning its instance id.
@@ -232,7 +240,16 @@ impl PluginRegistry {
                     let plugin = inst.plugin.clone();
                     let config = inst.config.clone();
                     let env = inst.env.clone();
-                    let result = plugin.apply(&env, config.as_deref()).await;
+                    let apply_fut = plugin.apply(&env, config.as_deref());
+                    let result = match self.apply_timeout {
+                        Some(timeout) => match tokio::time::timeout(timeout, apply_fut).await {
+                            Ok(result) => result,
+                            Err(_) => Err(Box::<dyn std::error::Error + Send + Sync>::from(
+                                "plugin apply timed out",
+                            )),
+                        },
+                        None => apply_fut.await,
+                    };
                     match result {
                         Ok(()) => {
                             let provider_id = env.provider_id();

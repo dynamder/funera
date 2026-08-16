@@ -360,6 +360,36 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn apply_timeout_marks_failed() {
+        struct SlowPlugin;
+        #[async_trait]
+        impl Plugin for SlowPlugin {
+            fn name(&self) -> &str {
+                "slow"
+            }
+            async fn apply(
+                &self,
+                _env: &FuneraEnv,
+                _config: Option<&PluginConfig>,
+            ) -> Result<(), PluginError> {
+                tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                Ok(())
+            }
+        }
+
+        let (env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "test-model");
+        let mut reg =
+            PluginRegistry::new(env).with_apply_timeout(std::time::Duration::from_millis(10));
+        let id = reg.mount(Arc::new(SlowPlugin));
+        reg.refresh().await;
+
+        match reg.phase(id) {
+            Some(PluginPhase::Failed(msg)) => assert!(msg.contains("timed out"), "got: {msg}"),
+            other => panic!("expected Failed after timeout, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn chaotic_mount_unmount_settles_without_leaks() {
         let mut reg = registry();
         let mut mounted: Vec<u64> = Vec::new();
