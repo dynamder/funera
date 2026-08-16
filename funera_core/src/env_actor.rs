@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -66,7 +68,7 @@ pub enum EnvCmd {
     SetModel(String),
     SetClient(async_openai::Client<OpenAIConfig>),
     #[cfg(feature = "tool")]
-    AddTool(Box<dyn Tool>),
+    AddTool(Arc<dyn Tool>),
     #[cfg(feature = "tool")]
     RemoveTool(String),
     #[cfg(feature = "tool")]

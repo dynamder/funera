@@ -364,6 +364,7 @@ fn demo_audit_integration() {
     use funera_core::plugin::Plugin;
     use funera_core::re_act::tool::{Tool, ToolCallError};
     use serde_json::Value as JsonValue;
+    use std::sync::Arc;
 
     struct DummyTool;
 
@@ -398,7 +399,7 @@ fn demo_audit_integration() {
 
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(DummyTool));
+        registry.add_tool(Arc::new(DummyTool));
 
         // Attempt to call the denied tool
         let result = registry.call_tool("blocked_tool", json!({})).await;

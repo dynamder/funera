@@ -32,6 +32,8 @@ pub use read::ReadTool;
 pub use shell::ShellTool;
 pub use write::WriteTool;
 
+use std::sync::Arc;
+
 #[cfg(feature = "sandbox")]
 pub use funera_core::security::sandbox::SandboxPolicy;
 
@@ -42,10 +44,10 @@ use funera_core::re_act::tool::ToolRegistry;
 /// The `shell` tool is registered **without** kernel sandboxing.
 /// Use [`register_all_tools_with_sandbox`] to enable it.
 pub fn register_all_tools(registry: &mut ToolRegistry) {
-    registry.add_tool(Box::new(ReadTool));
-    registry.add_tool(Box::new(WriteTool));
-    registry.add_tool(Box::new(EditTool));
-    registry.add_tool(Box::new(ShellTool::new()));
+    registry.add_tool(Arc::new(ReadTool));
+    registry.add_tool(Arc::new(WriteTool));
+    registry.add_tool(Arc::new(EditTool));
+    registry.add_tool(Arc::new(ShellTool::new()));
 }
 
 /// Register all built-in tools, configuring the `shell` tool with a
@@ -60,10 +62,10 @@ pub fn register_all_tools(registry: &mut ToolRegistry) {
 /// Unsupported platforms/kernels gracefully degrade to normal execution.
 #[cfg(feature = "sandbox")]
 pub fn register_all_tools_with_sandbox(registry: &mut ToolRegistry, policy: SandboxPolicy) {
-    registry.add_tool(Box::new(ReadTool));
-    registry.add_tool(Box::new(WriteTool));
-    registry.add_tool(Box::new(EditTool));
-    registry.add_tool(Box::new(ShellTool::with_sandbox(policy)));
+    registry.add_tool(Arc::new(ReadTool));
+    registry.add_tool(Arc::new(WriteTool));
+    registry.add_tool(Arc::new(EditTool));
+    registry.add_tool(Arc::new(ShellTool::with_sandbox(policy)));
 }
 
 #[cfg(test)]

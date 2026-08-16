@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 #[cfg(feature = "skill")]
 use std::path::PathBuf;
-#[cfg(any(feature = "middleware", feature = "security"))]
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
@@ -385,7 +384,7 @@ impl AgentRuntimeBuilder {
             #[cfg(not(feature = "security"))]
             let mut reg = ToolRegistry::new();
             for t in self.tools {
-                reg.add_tool(t);
+                reg.add_tool(Arc::from(t));
             }
 
             #[cfg(feature = "security")]
@@ -661,7 +660,7 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
     /// Register a new tool at runtime.
     #[cfg(feature = "tool")]
     pub fn add_tool(&self, tool: Box<dyn Tool>) {
-        let _ = self.env_cmd_tx.send(EnvCmd::AddTool(tool));
+        let _ = self.env_cmd_tx.send(EnvCmd::AddTool(Arc::from(tool)));
     }
 
     /// Remove a tool by name at runtime.

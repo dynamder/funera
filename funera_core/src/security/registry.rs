@@ -130,7 +130,7 @@ impl GuardedToolRegistry {
         }
     }
 
-    pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
+    pub fn add_tool(&mut self, tool: Arc<dyn Tool>) {
         self.inner.add_tool(tool);
     }
 
@@ -384,7 +384,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_tool_works() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
         let result = registry.call_tool("ok_tool", json!({})).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "done");
@@ -395,7 +395,7 @@ mod tests {
         let mut policy = ToolPolicy::default();
         policy.denied_tools.insert("danger".into());
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
         let result = registry.call_tool("danger", json!({})).await;
         assert!(result.is_err());
     }
@@ -406,7 +406,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new();
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
 
@@ -445,7 +445,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("evil", json!({})).await.err();
         let event = rx.try_recv();
@@ -477,7 +477,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
 
@@ -515,7 +515,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
 
@@ -554,7 +554,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_rejected_outside_sandbox() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         let result = registry
@@ -569,7 +569,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_rejected_no_callback() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         // Use a path that canonicalizes; "src" exists in the project root
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
@@ -589,7 +589,7 @@ mod tests {
         let invoked = std::sync::Arc::new(std::sync::Mutex::new(false));
         let inv = invoked.clone();
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         registry.set_approval_callback(std::sync::Arc::new(move |_id, name, _reason, _paths| {
@@ -610,7 +610,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_approval_timeout() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         registry.set_approval_timeout(Some(std::time::Duration::from_millis(1)));
@@ -628,7 +628,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_auto_approved_within_pathguard() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_path_guard(PathGuard::new(["."]));
         let result = registry
             .call_tool("approvable", json!({"filePath": "Cargo.toml"}))
@@ -649,7 +649,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_no_pathguard_no_sandbox_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         let result = registry
             .call_tool("approvable", json!({"command": "echo hello"}))
             .await;
@@ -664,7 +664,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_with_pathguard_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_path_guard(PathGuard::new(["."]));
         let result = registry
             .call_tool("approvable", json!({"command": "echo hello"}))
@@ -682,7 +682,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_with_sandbox_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         let result = registry
             .call_tool("approvable", json!({"command": "echo hello"}))
@@ -699,7 +699,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_sandbox_plus_pathguard_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         registry.set_path_guard(PathGuard::new(["."]));
         let result = registry

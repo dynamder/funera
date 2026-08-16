@@ -1,6 +1,6 @@
 #![cfg(feature = "tool")]
 
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -83,12 +83,12 @@ pub enum ToolCallError {
 
 /// An entry in the tool registry, pairing a tool with its availability status.
 pub struct ToolRegistryEntry {
-    pub tool: Box<dyn Tool>,
+    pub tool: Arc<dyn Tool>,
     pub available: bool,
 }
 impl ToolRegistryEntry {
     /// Create a new registry entry with explicit availability.
-    pub fn new(tool: Box<dyn Tool>, available: bool) -> Self {
+    pub fn new(tool: Arc<dyn Tool>, available: bool) -> Self {
         Self { tool, available }
     }
 
@@ -98,12 +98,12 @@ impl ToolRegistryEntry {
     }
 
     /// Create a new registry entry with the tool available.
-    pub fn new_available(tool: Box<dyn Tool>) -> Self {
+    pub fn new_available(tool: Arc<dyn Tool>) -> Self {
         Self::new(tool, true)
     }
 
     /// Create a new registry entry with the tool unavailable.
-    pub fn new_unavailable(tool: Box<dyn Tool>) -> Self {
+    pub fn new_unavailable(tool: Arc<dyn Tool>) -> Self {
         Self::new(tool, false)
     }
 }
@@ -131,7 +131,7 @@ impl RawToolRegistry {
         }
     }
 
-    pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
+    pub fn add_tool(&mut self, tool: Arc<dyn Tool>) {
         self.tools.insert(
             tool.name().to_string(),
             ToolRegistryEntry::new_available(tool),

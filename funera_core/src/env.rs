@@ -238,21 +238,21 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn add_tool(&mut self, tool: Box<dyn Tool>) {
+    pub(crate) async fn add_tool(&self, tool: Arc<dyn Tool>) {
         let mut registry = self.tool_registry.write().await;
         registry.add_tool(tool);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn remove_tool(&mut self, name: &str) {
+    pub(crate) async fn remove_tool(&self, name: &str) {
         let mut registry = self.tool_registry.write().await;
         registry.remove_tool(name);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
+    pub(crate) async fn set_tool_availability(&self, _name: &str, _available: bool) {
         let registry = self.tool_registry.read().await;
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
@@ -777,7 +777,7 @@ mod tests {
         fn with_tool_registry_updates_watcher_and_registry() {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             let mut reg = ToolRegistry::new();
-            reg.add_tool(Box::new(MockTool));
+            reg.add_tool(Arc::new(MockTool));
             let env = env.with_tool_registry(reg);
             assert!(
                 watcher
@@ -791,7 +791,7 @@ mod tests {
         #[tokio::test]
         async fn add_then_remove_tool_updates_watcher() {
             let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
-            env.add_tool(Box::new(MockTool)).await;
+            env.add_tool(Arc::new(MockTool)).await;
             assert!(
                 watcher
                     .watch_tool()
@@ -810,7 +810,7 @@ mod tests {
         #[tokio::test]
         async fn set_tool_availability_rebroadcasts_snapshot() {
             let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
-            env.add_tool(Box::new(MockTool)).await;
+            env.add_tool(Arc::new(MockTool)).await;
             let _ = watcher.watch_tool();
             assert!(!watcher.has_tool_changed());
             env.set_tool_availability("mock", false).await;
@@ -822,7 +822,7 @@ mod tests {
             let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             assert!(!watcher.has_tool_changed());
             let mut reg = ToolRegistry::new();
-            reg.add_tool(Box::new(MockTool));
+            reg.add_tool(Arc::new(MockTool));
             let _env = env.with_tool_registry(reg);
             assert!(watcher.has_tool_changed());
             let _ = watcher.watch_tool();
@@ -844,7 +844,7 @@ mod tests {
             let mut env2 = env.clone();
             let handle = tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                env2.add_tool(Box::new(MockTool)).await;
+                env2.add_tool(Arc::new(MockTool)).await;
             });
             let result =
                 tokio::time::timeout(std::time::Duration::from_secs(5), watcher.tool_changed())
