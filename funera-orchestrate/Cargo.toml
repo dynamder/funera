@@ -68,6 +68,9 @@ required-features = ["security", "funera-builtin-tools"]
 name = "custom_tool"
 
 [[example]]
+name = "loader_declarative"
+
+[[example]]
 name = "minimal"
 
 [[example]]
