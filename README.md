@@ -1,15 +1,49 @@
 # Funera
 
-An LLM agent framework for Rust. Build AI agents with tools, skills, middleware, and pluggable
-LLM backends — all with multi-layered security and a flexible pipeline.
+> **Everything is a plugin.** A Rust LLM agent framework where tools, skills, middleware,
+> providers, callbacks, and even the agent loop itself are dynamically composable plugins.
 
 WARNING: This crate is still under development, the documentation may be incomplete or wrong. And the API may change.
 WARNING: The security features are still under development and testing, and cannot be trusted to be secure.
 
 [![CI](https://github.com/dynamder/funera/actions/workflows/ci.yml/badge.svg)](https://github.com/dynamder/funera/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/funera.svg)](https://crates.io/crates/funera)
+[![docs.rs](https://docs.rs/funera/badge.svg)](https://docs.rs/funera)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://github.com/dynamder/funera/blob/main/CONTRIBUTING.md#minimum-supported-rust-version-msrv)
 [![Rust](https://img.shields.io/badge/edition-2024-orange)](https://rust-lang.org)
+
+## Why Funera?
+
+- **Everything is a plugin** — `Tool`, `Skill`, `Middleware`, `Provider`, `Callback`, and even
+  the `AgentLoop` are all `Plugin` subtraits with one unified lifecycle.
+- **Dynamic composition** — load, unload, hot-replace, and reconcile plugins at runtime without
+  restarting the process.
+- **Typestate lifecycle** — plugin state transitions are compile-time checked.
+- **Service multiplexing** — multiple providers can back one service via `ServiceBroker`.
+- **Security-oriented** — tool policies, path guards, audit, sandbox, and reversible effects.
+
+## Quick Start
+
+```rust
+use funera::{Agent, AgentRuntime, DeepSeekProvider};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+        .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+        .model("deepseek-v4-flash")
+        .build()?;
+
+    let agent = Agent::builder()
+        .system_prompt("You are a helpful assistant.")
+        .build();
+
+    let resp = agent.fire("Hello!", &runtime).await?;
+    println!("{}", resp.content);
+    Ok(())
+}
+```
 
 ## Architecture
 
@@ -140,6 +174,22 @@ sequenceDiagram
 - **Middleware pipeline** — intercept agent events with inspectors (read-only, parallel) and mutators (pass/modify/block, sequential)
 - **Security layer** — tool/shell policies, path allowlisting, audit logging, secure API key storage
 - **Type-state session** — compile-time enforcement of session ownership (`Idle` / `Acquired`)
+
+## Examples
+
+| Example | Description |
+|---|---|
+| `minimal` | One-shot `Agent::fire` |
+| `multi_turn` | Persistent multi-turn conversation |
+| `streaming` / `streaming_with_tools` | Token streaming with/without tools |
+| `custom_tool` | Define and register a custom tool |
+| `middleware` | Inspector/Mutator middleware pipeline |
+| `plugin_architecture` | Reactive plugin lifecycle and HMR (no LLM) |
+| `loader_declarative` | JSON/YAML declarative plugin loading |
+| `service_broker` | Multi-provider round-robin routing |
+| `replace_core_tool` | Replace a built-in tool at runtime |
+| `replace_loop` / `replace_react_loop` | Replace the built-in ReAct loop with a custom `AgentLoop` |
+| `tool_policy` / `security` / `sandbox` | Security policies, audit, and sandboxing |
 
 ## Plugin architecture
 

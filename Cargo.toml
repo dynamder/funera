@@ -7,6 +7,7 @@ description = "Flexible and security-oriented LLM agent framework for Rust — R
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
+documentation = "https://docs.rs/funera"
 keywords = ["llm", "agent", "framework", "harness"]
 categories = ["artificial-intelligence", "asynchronous"]
 
@@ -20,6 +21,7 @@ edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/dynamder/funera"
+homepage = "https://github.com/dynamder/funera"
 
 [dependencies]
 funera-orchestrate = { path = "./funera-orchestrate", version = "0.2.6" }

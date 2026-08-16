@@ -6,6 +6,8 @@ rust-version.workspace = true
 description = "Core LLM agent engine — ReAct loop, providers, tools, skills, middleware, security"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/funera-core"
 readme = "../README.md"
 
 [dependencies]

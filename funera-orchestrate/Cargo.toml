@@ -6,6 +6,8 @@ rust-version.workspace = true
 description = "Easy-to-use orchestration layer for funera-core — build LLM agents with a simple builder API"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/funera-orchestrate"
 
 [dependencies]
 funera-core = { path = "../funera_core", version = "0.2.6" }
