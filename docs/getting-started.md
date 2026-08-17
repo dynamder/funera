@@ -35,11 +35,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 cargo run -p funera-orchestrate --example minimal
 ```
 
-Many examples do not require an LLM API key, such as:
+Examples that do not require an LLM API key:
 
 ```bash
-cargo run -p funera-orchestrate --example plugin_architecture
-cargo run -p funera-orchestrate --example loader_declarative
-cargo run -p funera-orchestrate --example service_broker
-cargo run -p funera-orchestrate --example replace_loop
+cargo run -p funera-orchestrate --example reversible_effects
+cargo run -p funera-orchestrate --example tool_policy
 ```

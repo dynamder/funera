@@ -10,13 +10,8 @@ cargo run -p funera-orchestrate --example <name> [--features <features>]
 
 No-LLM examples:
 
-- `plugin_architecture`
-- `loader_declarative`
-- `service_broker`
-- `replace_loop`
-- `replace_react_loop`
-- `replace_core_tool`
-- `tool_policy`
+- `reversible_effects` — LIFO teardown of registered effects
+- `tool_policy` — deny-list policy + audit bus (requires `--features security`)
 
 LLM examples require an API key:
 

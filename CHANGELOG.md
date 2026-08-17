@@ -9,28 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Unified `Plugin` abstraction (`name` / `inject` / `provides` / `apply`), with
-  `Tool`, `ChatProvider`, `InspectorMiddleware`, and `MutatorMiddleware` as
-  subtraits of it.
-- `FuneraEnv` capability layer: reversible effects (`effect` / `dispose`) and
-  typed services (`provide` / `get` / `contains`), plus `derive()` for child
-  envs and a `ServiceObserver` notification primitive.
-- Reactive `PluginRegistry`: mounts plugins as `PluginInstance`s on derived
-  envs and drives the `Pending → Loading → Active → Unloading → Disposed/Failed`
-  lifecycle, with partial-effect rollback on `apply` failure.
-- Declarative `Loader`: reconciles a desired `PluginEntry` set against the
-  registry with minimal mount/unmount operations, and hot-replaces an entry on
-  a `revision` bump.
-- `funera-orchestrate/examples/plugin_architecture.rs` — an end-to-end,
-  no-LLM walkthrough of the reactive lifecycle.
-- `impl_plugin!` macro for the one-line `Plugin` supertrait migration.
+- `FuneraEnv::effect` / `dispose` — reversible effects with LIFO teardown: every
+  registration can be paired with its inverse, and disposal runs all inverses in
+  reverse registration order (idempotent and panic-isolated). `EnvActor` calls
+  `dispose()` automatically when the runtime is dropped, so registrations never
+  leak memory or services.
+- `remove_tool_if_same` on the tool registries and `FuneraEnv` — the safe
+  inverse of `add_tool` for a disposer (removes a tool only if the registered
+  entry is the same `Arc`, so a stale teardown cannot delete a replacement that
+  reuses the same name).
+- `funera-orchestrate/examples/reversible_effects.rs` — a no-LLM walkthrough of
+  LIFO teardown and leak-safe registration.
+- Open-source project infrastructure: CI and audit workflows, issue/PR
+  templates, `CODEOWNERS`, code of conduct, contributing guide, security
+  policy, changelog, mdBook documentation skeleton, `deny.toml` / `release.toml`
+  tooling config, and MSRV 1.88 declaration.
 
 ### Changed
 
-- Re-export `Plugin`, `PluginRegistry`, `PluginInstance`, `InstanceState`,
-  `Loader`, and `PluginEntry` from `funera-orchestrate`.
+- Tools are stored and executed behind `Arc<dyn Tool>`; without the `security`
+  feature the executor runs a tool outside the registry lock, and with it the
+  guarded registry is cloned so policy/audit run against a snapshot. Slow tools
+  no longer block dynamic add/remove/availability changes.
 - Made `nono` an optional dependency, enabled only by the `sandbox` feature
   (it was previously pulled in unconditionally on non-Windows targets).
+- `AgentRuntime::with_tool_instance` / `add_tool` now take `Arc<dyn Tool>`
+  instead of `Box<dyn Tool>`.
+
+### Removed
+
+- The unified `Plugin` abstraction and its machinery: `PluginRegistry`,
+  `PluginInstance`, typestate lifecycle, `Loader` with declarative config and
+  hot module replacement, `ServiceBroker`, `MiddlewareProcessor` type erasure,
+  and `AgentLoop` as a plugin subtrait. The core is back to plain extensible
+  traits (`Tool`, `ChatProvider`, `InspectorMiddleware`, `MutatorMiddleware`)
+  with the actor-based runtime as the single mutation owner.
 
 ## [0.2.6] - 2026-07-25
 

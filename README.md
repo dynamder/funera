@@ -1,7 +1,7 @@
 # Funera
 
-> **Everything is a plugin.** A Rust LLM agent framework where tools, skills, middleware,
-> providers, callbacks, and even the agent loop itself are dynamically composable plugins.
+> A security-oriented Rust LLM agent framework — ReAct loop, tools, skills, middleware, and
+> pluggable LLM backends, with reversible effects that make teardown leak-free by construction.
 
 WARNING: This crate is still under development, the documentation may be incomplete or wrong. And the API may change.
 WARNING: The security features are still under development and testing, and cannot be trusted to be secure.
@@ -15,13 +15,18 @@ WARNING: The security features are still under development and testing, and cann
 
 ## Why Funera?
 
-- **Everything is a plugin** — `Tool`, `Skill`, `Middleware`, `Provider`, `Callback`, and even
-  the `AgentLoop` are all `Plugin` subtraits with one unified lifecycle.
-- **Dynamic composition** — load, unload, hot-replace, and reconcile plugins at runtime without
-  restarting the process.
-- **Typestate lifecycle** — plugin state transitions are compile-time checked.
-- **Service multiplexing** — multiple providers can back one service via `ServiceBroker`.
-- **Security-oriented** — tool policies, path guards, audit, sandbox, and reversible effects.
+- **Simple core, broad extensibility** — `ChatProvider`, `Tool`, `Skill`, and middleware are
+  plain Rust traits; the runtime is a thin channel wrapper around an `EnvActor` that owns all
+  state.
+- **Reversible effects** — `FuneraEnv::effect` pairs every registration with its inverse; a
+  single `dispose()` runs all inverses in reverse (LIFO) order, so memory and services never
+  leak. The `EnvActor` disposes automatically when the runtime is dropped.
+- **Runtime hot-reload** — model, client, tools, and skills can change mid-conversation; the
+  ReAct loop picks changes up on the next iteration.
+- **Actor-based architecture** — all mutable state lives in background tasks; `AgentRuntime` is
+  a thin channel wrapper.
+- **Security-oriented** — tool policies, path guards, audit logging, secure key storage, and a
+  kernel-backed sandbox on supported platforms.
 
 ## Quick Start
 
@@ -168,6 +173,7 @@ sequenceDiagram
 
 - **ReAct loop** — iterative tool-calling agent execution with configurable max iterations and runtime hot-reloading
 - **Actor-based architecture** — all mutable state lives in background tasks (EnvActor, SessionActor, ToolExecutor); `AgentRuntime` is a thin channel-wrapper
+- **Reversible effects** — `FuneraEnv::effect` / `dispose` run registered teardown actions in LIFO order (idempotent, panic-isolated), so registrations never leak
 - **Pluggable providers** — OpenAI and DeepSeek backends with streaming support
 - **Tool system** — define custom tools by implementing the `Tool` trait; built-in file I/O and shell
 - **Skill system** — load prompt templates from YAML-frontmatter Markdown files
@@ -184,74 +190,52 @@ sequenceDiagram
 | `streaming` / `streaming_with_tools` | Token streaming with/without tools |
 | `custom_tool` | Define and register a custom tool |
 | `middleware` | Inspector/Mutator middleware pipeline |
-| `plugin_architecture` | Reactive plugin lifecycle and HMR (no LLM) |
-| `loader_declarative` | JSON/YAML declarative plugin loading |
-| `service_broker` | Multi-provider round-robin routing |
-| `replace_core_tool` | Replace a built-in tool at runtime |
-| `replace_loop` / `replace_react_loop` | Replace the built-in ReAct loop with a custom `AgentLoop` |
+| `reversible_effects` | LIFO teardown of registered effects (no LLM) |
 | `tool_policy` / `security` / `sandbox` | Security policies, audit, and sandboxing |
 
-## Plugin architecture
+## Reversible effects
 
-funera composes agents from **plugins** — one unified abstraction over tools, providers, skills, and middleware.
-
-- **`Plugin` trait** — `name` (identity), `inject` (dependencies it reads), `provides` (services it writes), and an async `apply` (load hook). `Tool`, `ChatProvider`, `InspectorMiddleware`, and `MutatorMiddleware` are all subtraits of `Plugin`, so any capability is also a mountable plugin. Adapter plugins (`ToolPlugin`, `SkillPlugin`, `MiddlewarePlugin`, `ProviderPlugin`, `CallbackPlugin`) wrap existing capability traits.
-- **Capability layer** — a `FuneraEnv` carries a typed service table (primary `TypeId` slots plus named `ServiceKey` slots) and a per-env effect accumulator: `env.effect(..)` registers a reversible effect (the returned disposer runs on unload, in LIFO order), while `env.provide::<T>(..)` / `env.get::<T>()` publish and resolve typed services.
-- **`PluginRegistry`** — a notification-driven, typestate lifecycle (`Pending → Loading → Active → Unloading → Inactive/Failed`) with provider identity, retry backoff, and metrics. It activates a plugin only once its `inject` requirements are met and deactivates it when they are withdrawn.
-- **`Loader`** — reconciles a declarative plugin set (a list of `PluginEntry`s) against the registry with minimal mount/unmount operations; bumping an entry's `revision` hot-replaces it in place, with `HmrPolicy::Replace` (new-first, rollback on failure) or `HmrPolicy::Swap`. `AgentRuntime::reconcile_plugins` exposes the same reconciliation at runtime.
-- **`ServiceBroker`** — a round-robin broker for multi-provider services. Providers register through [`BrokerProvider`](funera_core::plugin::BrokerProvider), consumers inject the broker and call [`next`](funera_core::plugin::ServiceBroker::next). Run `cargo run -p funera-orchestrate --example service_broker`.
-
-Run the end-to-end demo:
-
-```bash
-cargo run -p funera-orchestrate --example plugin_architecture
-```
-
-See `funera-orchestrate/examples/plugin_architecture.rs` for the full reactive-lifecycle walkthrough: dependency-driven activation, deactivation on provider removal, and hot reload.
-
-Declarative plugin sets can be loaded from JSON/YAML via [`PluginFactory`](funera_core::loader::config::PluginFactory):
+Funera guarantees leak-free teardown with a single generic primitive:
 
 ```rust,no_run
-use funera_core::loader::config::{PluginFactory, load_entries_from_json};
-use funera_core::plugin::{Plugin, PluginConfig};
+use funera_core::env::FuneraEnv;
 
-struct HelloPlugin;
-impl Plugin for HelloPlugin { fn name(&self) -> &str { "hello" } }
-
-let mut factory = PluginFactory::new();
-factory.register("hello", |_cfg: Option<PluginConfig>| HelloPlugin);
-
-let entries = load_entries_from_json(
-    r#"[{"id": "hello-1", "plugin": "hello", "revision": 1}]"#,
-    &factory,
-)?;
-# Ok::<(), Box<dyn std::error::Error>>(())
-```
-
-At runtime, an `AgentRuntime` can reconcile a desired plugin set without rebuilding the runtime:
-
-```rust,no_run
-# use funera_core::loader::PluginEntry;
-# use funera_core::plugin::ToolPlugin;
-# use std::sync::Arc;
-# async fn example(rt: &funera_orchestrate::AgentRuntime<funera_orchestrate::DeepSeekProvider>) {
-# struct MyTool; impl funera_core::plugin::Plugin for MyTool { fn name(&self) -> &str { "my_tool" } }
-let report = rt.reconcile_plugins(vec![
-    PluginEntry::new("tool:my_tool", Arc::new(ToolPlugin::new(Arc::new(MyTool)))),
-]).await;
+# fn example(env: &FuneraEnv) {
+env.effect(|| {
+    let resource = acquire();              // setup: the effect
+    Box::new(move || release(resource))    // teardown: its inverse
+});
 # }
+# fn acquire() -> String { String::new() }
+# fn release(_: String) {}
 ```
 
-Run the declarative loader demo:
+- `effect(body)` runs `body` now and pushes the returned disposer onto the env's accumulator.
+- `dispose()` runs every disposer in **reverse registration order** (LIFO), so later effects —
+  which may depend on earlier ones — are undone first.
+- Disposal is **idempotent** (the accumulator is drained) and **panic-isolated** (a panicking
+  disposer is caught and logged; the rest still run).
+- `EnvActor` calls `dispose()` automatically once the runtime is dropped, so anything registered
+  against the env is reverted — no memory or service leaks.
+- For tool registrations, the safe inverse is `remove_tool_if_same`: it removes a tool only if
+  the registered entry is the *same* `Arc`, so a stale teardown never deletes a replacement
+  tool that reuses the same name.
+
+Run the demo:
 
 ```bash
-cargo run -p funera-orchestrate --example loader_declarative
+cargo run -p funera-orchestrate --example reversible_effects
 ```
 
 ### Limitations
 
-- `FuneraEnv::dispose` runs sync disposers in LIFO order with panic isolation. A sync disposer cannot be safely timed out by the runtime; plugin authors should keep disposers short and non-blocking. Async teardown can be scheduled from the disposer (as the built-in tool/skill adapters do) and awaited by the caller if needed.
-- `security`-featured tool execution runs outside the registry lock via a cloned guarded registry; the clone shares approval and react-bus state, while policy/path configuration is snapshotted at call time.
+- `FuneraEnv::dispose` runs sync disposers in LIFO order with panic isolation. A sync disposer
+  cannot be safely timed out by the runtime; keep disposers short and non-blocking. Async
+  teardown can be scheduled from the disposer onto a tokio runtime and awaited by the caller if
+  needed.
+- `security`-featured tool execution runs outside the registry lock via a cloned guarded
+  registry; the clone shares approval and react-bus state, while policy/path configuration is
+  snapshotted at call time.
 
 ## Installation
 
@@ -355,7 +339,7 @@ let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 runtime.set_model("deepseek-r1");
 
 // Dynamically add a tool
-runtime.add_tool(Box::new(MyTool));
+runtime.add_tool(std::sync::Arc::new(MyTool));
 
 // Subscribe to env state changes
 let mut env_rx = runtime.subscribe_env_state().await;
@@ -365,18 +349,14 @@ let mut env_rx = runtime.subscribe_env_state().await;
 
 ```rust
 use async_trait::async_trait;
-use funera::core::plugin::Plugin;
 use funera::core::re_act::tool::{Tool, ToolCallError};
 use serde_json::{json, Value as JsonValue};
 
 struct Calculator;
 
-impl Plugin for Calculator {
-    fn name(&self) -> &str { "calculator" }
-}
-
 #[async_trait]
 impl Tool for Calculator {
+    fn name(&self) -> &str { "calculator" }
     fn description(&self) -> &str { "Evaluate a math expression" }
     fn schema(&self) -> JsonValue {
         json!({
@@ -403,7 +383,7 @@ impl Tool for Calculator {
 let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
     .model("deepseek-v4-flash")
-    .with_tool_instance(Box::new(Calculator))
+    .with_tool_instance(std::sync::Arc::new(Calculator))
     .build()?;
 ```
 
@@ -443,12 +423,10 @@ funera/
 ├── funera_core/          Core agent engine
 │   └── src/
 │       ├── chat/         Message types, session actor
-│       ├── env.rs        Runtime environment, watch hot-reload, capability layer
+│       ├── env.rs        Runtime environment, watch hot-reload, reversible effects
 │       ├── env_actor.rs  EnvActor — single source of truth for all env state
 │       ├── event_bus/    Token, React, EnvState, Tool buses
-│       ├── loader.rs     Declarative plugin loader (PluginEntry, Loader, HMR)
 │       ├── middleware.rs  Event interception pipeline
-│       ├── plugin.rs     Plugin trait, PluginRegistry, PluginInstance
 │       ├── provider/     OpenAI & DeepSeek backends
 │       ├── re_act/       ReAct loop, Tool trait, Skill system
 │       └── security/     Policies, path guard, audit, secrets
@@ -459,7 +437,7 @@ funera/
 │   │   ├── event.rs      AgentEvent enum
 │   │   ├── dispatcher.rs  Callback dispatch
 │   │   └── send_handle.rs Ownership handles
-│   └── examples/         Example programs (incl. plugin_architecture)
+│   └── examples/         Example programs (incl. reversible_effects)
 ├── funera_builtin_tools/  Default tool implementations
 │   └── src/
 │       ├── read.rs       ReadTool (file/dir, hashline output)

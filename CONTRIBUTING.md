@@ -34,7 +34,7 @@ compiler, call it out in the pull request and CHANGELOG.
 | Crate | Role |
 |-------|------|
 | `funera` | Top-level crate re-exporting the orchestration and core APIs |
-| `funera-core` | Core engine: ReAct loop, providers, tools, skills, middleware, security, and the plugin system |
+| `funera-core` | Core engine: ReAct loop, providers, tools, skills, middleware, security, and reversible effects |
 | `funera-orchestrate` | High-level builder API (`Agent`, `AgentRuntime`) |
 | `funera-builtin-tools` | Bundled Read/Write/Edit/Shell tools |
 
@@ -65,7 +65,7 @@ test quality on new logic:
 
 ```sh
 cargo install cargo-mutants
-cargo mutants -p funera-core --file 'funera_core/src/plugin.rs' --all-features
+cargo mutants -p funera-core --file 'funera_core/src/env.rs' --all-features
 ```
 
 Aim for zero `missed` mutants on the code you touch.

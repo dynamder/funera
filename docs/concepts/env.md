@@ -1,23 +1,31 @@
-# FuneraEnv and Services
+# FuneraEnv
 
-`FuneraEnv` is the runtime environment:
+`FuneraEnv` is the shared runtime environment owned by the `EnvActor`:
 
-- A typed service table keyed by `ServiceKey`
-- Per-env reversible effect accumulator (`effect` / `dispose`)
-- Hot-reload watch channels for model/client/tools/skills
-
-## Services
+- **Hot-reload watch channels** for the LLM client, model, tools, and skills — the `ReActLoop`
+  picks changes up on the next iteration via `FuneraEnvWatcher`.
+- **Tool / skill registries** with availability flags, mutated through `EnvCmd` commands.
+- **A reversible-effects accumulator** (`effect` / `dispose`) — see
+  [Reversible Effects](effects.md).
 
 ```rust,no_run
 # use funera_core::env::FuneraEnv;
-# use std::sync::Arc;
-# async fn example(env: &FuneraEnv) {
-#[derive(Clone)]
-struct Config { url: String }
+# use funera_core::env::Disposer;
+# fn example() {
+let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "gpt-4o");
 
-env.provide(Config { url: "db://example".into() });
-let cfg: Option<Arc<Config>> = env.get::<Config>();
+// Register a reversible effect: its inverse runs on dispose (LIFO).
+env.effect(|| {
+    println!("acquiring resource");
+    let resource = String::from("leased");
+    let undo: Disposer = Box::new(move || println!("releasing {resource}"));
+    undo
+});
+
+let model = watcher.watch_model(); // "gpt-4o"
+# let _ = model;
 # }
 ```
 
-Named services allow multiple implementations of the same type to coexist.
+`FuneraEnv` derives `Clone`; a clone shares the registries and watch channels, so child envs
+can be handed to tasks while the owner keeps the watcher.
