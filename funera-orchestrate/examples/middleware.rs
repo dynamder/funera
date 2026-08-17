@@ -35,13 +35,11 @@ use funera_orchestrate::{Agent, AgentEvent, AgentRuntime, DeepSeekProvider};
 /// 由于 inspector 在后台并行执行，此日志不会阻塞正常的事件流。
 struct EventLogger;
 
-impl Plugin for EventLogger {
+impl InspectorMiddleware<AgentEvent> for EventLogger {
     fn name(&self) -> &str {
         "event_logger"
     }
-}
 
-impl InspectorMiddleware<AgentEvent> for EventLogger {
     fn inspect(&self, event: &AgentEvent) -> Result<(), InspectorError> {
         match event {
             AgentEvent::Text(t) => eprintln!("[log] token: {t}"),
@@ -79,13 +77,11 @@ struct TurnCounter {
     count: AtomicUsize,
 }
 
-impl Plugin for TurnCounter {
+impl InspectorMiddleware<AgentEvent> for TurnCounter {
     fn name(&self) -> &str {
         "turn_counter"
     }
-}
 
-impl InspectorMiddleware<AgentEvent> for TurnCounter {
     fn inspect(&self, event: &AgentEvent) -> Result<(), InspectorError> {
         if matches!(event, AgentEvent::TurnStart) {
             let n = self.count.fetch_add(1, Ordering::Relaxed) + 1;
@@ -104,13 +100,11 @@ struct Censor {
     words: Vec<&'static str>,
 }
 
-impl Plugin for Censor {
+impl MutatorMiddleware<AgentEvent> for Censor {
     fn name(&self) -> &str {
         "censor"
     }
-}
 
-impl MutatorMiddleware<AgentEvent> for Censor {
     fn process(&self, event: AgentEvent) -> MutatorAction<AgentEvent> {
         match event {
             AgentEvent::Text(t) => {
@@ -140,21 +134,19 @@ struct BlockTool {
     tool_name: String,
 }
 
-impl Plugin for BlockTool {
+impl MutatorMiddleware<AgentEvent> for BlockTool {
     fn name(&self) -> &str {
         "block_tool"
     }
-}
 
-impl MutatorMiddleware<AgentEvent> for BlockTool {
     fn process(&self, event: AgentEvent) -> MutatorAction<AgentEvent> {
-        if let AgentEvent::ToolCallRequest { name, .. } = &event {
-            if self.tool_name.eq_ignore_ascii_case(name) {
-                eprintln!("[block_tool] blocked tool call: {name}");
-                return MutatorAction::Block {
-                    reason: format!("tool '{}' is blocked", name),
-                };
-            }
+        if let AgentEvent::ToolCallRequest { name, .. } = &event
+            && self.tool_name.eq_ignore_ascii_case(name)
+        {
+            eprintln!("[block_tool] blocked tool call: {name}");
+            return MutatorAction::Block {
+                reason: format!("tool '{}' is blocked", name),
+            };
         }
         MutatorAction::Pass
     }

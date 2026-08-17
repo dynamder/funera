@@ -15,7 +15,6 @@
 //! This example prints both streams side-by-side for comparison.
 
 use async_trait::async_trait;
-use funera_core::plugin::Plugin;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use funera_orchestrate::{
     Agent, AgentEvent, AgentRuntime, DeepSeekProvider, EnvStateEvent, RawAgentEvent, ReactEvent,
@@ -26,14 +25,11 @@ use serde_json::Value as JsonValue;
 #[derive(Default)]
 struct WeatherTool;
 
-impl Plugin for WeatherTool {
+#[async_trait]
+impl Tool for WeatherTool {
     fn name(&self) -> &str {
         "get_weather"
     }
-}
-
-#[async_trait]
-impl Tool for WeatherTool {
     fn description(&self) -> &str {
         "Get the current weather for a city"
     }

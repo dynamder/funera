@@ -368,18 +368,13 @@ mod tests {
     use async_trait::async_trait;
     use serde_json::json;
 
-    use crate::plugin::Plugin;
-
     struct OkTool;
-
-    impl Plugin for OkTool {
-        fn name(&self) -> &str {
-            "ok_tool"
-        }
-    }
 
     #[async_trait]
     impl Tool for OkTool {
+        fn name(&self) -> &str {
+            "ok_tool"
+        }
         fn description(&self) -> &str {
             "always succeeds"
         }
@@ -542,14 +537,11 @@ mod tests {
 
     struct ApprovableTool;
 
-    impl Plugin for ApprovableTool {
+    #[async_trait]
+    impl Tool for ApprovableTool {
         fn name(&self) -> &str {
             "approvable"
         }
-    }
-
-    #[async_trait]
-    impl Tool for ApprovableTool {
         fn description(&self) -> &str {
             "may need approval"
         }

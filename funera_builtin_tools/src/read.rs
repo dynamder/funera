@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use async_trait::async_trait;
-use funera_core::plugin::Plugin;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use serde_json::{Value as JsonValue, json};
 
@@ -14,14 +13,12 @@ use crate::hashline;
 /// and a raw mode that omits hashline prefixes.
 pub struct ReadTool;
 
-impl Plugin for ReadTool {
+#[async_trait]
+impl Tool for ReadTool {
     fn name(&self) -> &str {
         "read"
     }
-}
 
-#[async_trait]
-impl Tool for ReadTool {
     fn description(&self) -> &str {
         "Read files from the filesystem. Returns content with LINE#HASH: prefixes on each line. "
     }

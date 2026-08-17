@@ -134,7 +134,7 @@
 //! Use [`ApprovalHandle`] to approve or reject tool calls from a spawned task
 //! while the agent is running — works with `fire()`, `send()`, and `send_stream()`.
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! # use funera_orchestrate::{Agent, AgentRuntime, ApprovalHandle, DeepSeekProvider};
 //! # use std::time::Duration;
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -179,7 +179,6 @@ pub mod agent;
 pub mod dispatcher;
 pub mod error;
 pub mod event;
-pub mod r#loop;
 pub mod response;
 pub mod runtime;
 pub mod send_handle;
@@ -188,14 +187,13 @@ pub mod send_handle;
 pub mod middleware_bundle;
 
 pub use agent::{Agent, AgentBuilder};
-pub use dispatcher::{CallbackPlugin, CallbackRegistry};
+pub use dispatcher::CallbackRegistry;
 pub use error::OrchestrateError;
 pub use event::{AgentEvent, RawAgentEvent};
 #[cfg(feature = "deepseek")]
 pub use funera_core::provider::deepseek::DeepSeekProvider;
 #[cfg(feature = "openai")]
 pub use funera_core::provider::openai::OpenAIProvider;
-pub use r#loop::{AgentLoop, DefaultAgentLoop};
 pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
 #[cfg(all(feature = "tool", feature = "security"))]
@@ -214,8 +212,6 @@ pub use funera_core::event_bus::react_bus::{
     ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse,
 };
 pub use funera_core::event_bus::token_bus::TokenEvent;
-pub use funera_core::loader::{Loader, PluginEntry};
-pub use funera_core::plugin::{Plugin, PluginInstance, PluginPhase, PluginRegistry};
 
 /// Middleware 相关的类型和 trait。
 ///
@@ -233,5 +229,4 @@ pub use funera_core::plugin::{Plugin, PluginInstance, PluginPhase, PluginRegistr
 pub mod middleware {
     pub use crate::middleware_bundle::MiddlewareBundle;
     pub use funera_core::middleware::*;
-    pub use funera_core::plugin::Plugin;
 }

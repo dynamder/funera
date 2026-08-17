@@ -19,7 +19,7 @@ use crate::event_bus::react_bus::{
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 #[cfg(feature = "tool")]
 use crate::event_bus::tool_bus::ToolBus;
-use crate::middleware::{EventSenderFn, MiddlewareEvent, MiddlewareProcessor};
+use crate::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent};
 use crate::provider::ChatProvider;
 
 #[cfg(feature = "skill")]
@@ -145,7 +145,7 @@ impl<P: ChatProvider> ReActLoop<P> {
 
     pub fn run<E: MiddlewareEvent>(
         mut self,
-        middleware: Option<Arc<dyn MiddlewareProcessor<E>>>,
+        middleware: Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
         event_sender: Option<EventSenderFn<E>>,
     ) -> ReActLoopHandle {
         let token = CancellationToken::new();
@@ -272,7 +272,7 @@ fn emit_event<E: MiddlewareEvent>(sender: &Option<EventSenderFn<E>>, event: E) {
 
 fn filter_and_store<E: MiddlewareEvent>(
     events: Vec<E>,
-    middleware: &Option<Arc<dyn MiddlewareProcessor<E>>>,
+    middleware: &Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
     event_sender: &Option<EventSenderFn<E>>,
     session_tx: &Option<mpsc::UnboundedSender<SessionCmd>>,
 ) {
@@ -490,8 +490,6 @@ mod tests {
 
     use crate::event_bus::env_state_bus::TurnHighWayEvent;
     use crate::event_bus::react_bus::ReactBus;
-    #[cfg(feature = "tool")]
-    use crate::plugin::Plugin;
     use crate::test_helpers;
 
     use super::*;
@@ -734,13 +732,6 @@ mod tests {
 
     #[cfg(feature = "tool")]
     struct MockProvider;
-
-    #[cfg(feature = "tool")]
-    impl Plugin for MockProvider {
-        fn name(&self) -> &str {
-            "mock"
-        }
-    }
 
     #[cfg(feature = "tool")]
     impl ChatProvider for MockProvider {

@@ -18,9 +18,8 @@ use crate::security::policy::ToolPolicy;
 #[cfg(feature = "sandbox")]
 use crate::security::sandbox::SandboxPolicy;
 
-use crate::env::FuneraEnvWatcher;
+use crate::env::{FuneraEnv, FuneraEnvWatcher};
 use crate::event_bus::env_state_bus::EnvStateEvent;
-use crate::loader::{Loader, PluginEntry, ReconcileReport};
 
 // ═══════════════════════════════════════════════════════════════
 // Config structs — bundle params to keep fn arg count ≤ 7
@@ -65,12 +64,6 @@ pub struct ReActConfig {
 // ═══════════════════════════════════════════════════════════════
 
 pub enum EnvCmd {
-    // ── Plugin set reconciliation ─────────────────────────────
-    ReconcilePlugins {
-        entries: Vec<PluginEntry>,
-        respond: oneshot::Sender<ReconcileReport>,
-    },
-
     // ── Mutation (fire-and-forget) ────────────────────────────
     SetModel(String),
     SetClient(async_openai::Client<OpenAIConfig>),
@@ -146,8 +139,7 @@ pub enum EnvCmd {
 /// When all [`EnvCmd`] senders are dropped, the actor and its
 /// ToolExecutor exit cleanly.
 pub fn spawn_env_actor(
-    mut loader: Loader,
-    initial_plugins: Vec<PluginEntry>,
+    env: FuneraEnv,
     env_watcher: FuneraEnvWatcher,
     max_iterations: usize,
     channel_buffer: usize,
@@ -157,7 +149,7 @@ pub fn spawn_env_actor(
     let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<EnvCmd>();
     let (state_tx, _) = broadcast::channel::<EnvStateEvent>(32);
 
-    let env = loader.registry().env().clone();
+    let mut env = env;
 
     // ── Spawn ToolExecutor internally ─────────────────────────
     #[cfg(feature = "tool")]
@@ -191,9 +183,6 @@ pub fn spawn_env_actor(
     let _ = &security;
 
     tokio::spawn(async move {
-        // ── Load the initial plugin set before serving commands ──
-        let _initial_report = loader.reconcile(&initial_plugins).await;
-
         // ── Broadcast initial state ─────────────────────────────
         #[cfg(feature = "tool")]
         if let Ok(guard) = env.tool_registry.try_read() {
@@ -211,12 +200,6 @@ pub fn spawn_env_actor(
         // ── Command loop ───────────────────────────────────────
         while let Some(cmd) = cmd_rx.recv().await {
             match cmd {
-                // ── Plugin reconciliation ────────────────────
-                EnvCmd::ReconcilePlugins { entries, respond } => {
-                    let report = loader.reconcile(&entries).await;
-                    let _ = respond.send(report);
-                }
-
                 // ── Mutation ──────────────────────────────────
                 EnvCmd::SetModel(model) => {
                     env.set_model(&model);
@@ -327,6 +310,12 @@ pub fn spawn_env_actor(
                 }
             }
         }
+
+        // ── Teardown ────────────────────────────────────────────
+        // All EnvCmd senders are gone: the runtime is being dropped. Run every
+        // registered disposer in reverse (LIFO) order so no effect (tool
+        // registration, listener, connection) outlives the env.
+        env.dispose();
     });
 
     cmd_tx

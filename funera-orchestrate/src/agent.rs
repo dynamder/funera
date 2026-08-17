@@ -6,7 +6,8 @@ use funera_core::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use funera_core::chat::session::FuneraSession;
 use funera_core::event_bus::env_state_bus::{EnvStateBus, EnvStateEvent};
 use funera_core::middleware::EventSenderFn;
-use funera_core::middleware::MiddlewareProcessor;
+#[cfg(feature = "middleware")]
+use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
 
@@ -62,7 +63,7 @@ impl AgentBuilder {
     }
 
     /// Fired for each text token streamed from the LLM.
-    pub fn on_token<F>(self, f: F) -> Self
+    pub fn on_token<F>(mut self, f: F) -> Self
     where
         F: Fn(String) + Send + Sync + 'static,
     {
@@ -75,7 +76,7 @@ impl AgentBuilder {
     }
 
     /// Fired when a tool call is detected (before execution).
-    pub fn on_tool_call<F>(self, f: F) -> Self
+    pub fn on_tool_call<F>(mut self, f: F) -> Self
     where
         F: Fn(String, serde_json::Value) + Send + Sync + 'static,
     {
@@ -88,7 +89,7 @@ impl AgentBuilder {
     }
 
     /// Fired when a tool execution completes.
-    pub fn on_tool_result<F>(self, f: F) -> Self
+    pub fn on_tool_result<F>(mut self, f: F) -> Self
     where
         F: Fn(String, Result<String, String>) + Send + Sync + 'static,
     {
@@ -101,7 +102,7 @@ impl AgentBuilder {
     }
 
     /// Fired at the start of each ReAct turn.
-    pub fn on_turn_start<F>(self, f: F) -> Self
+    pub fn on_turn_start<F>(mut self, f: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
@@ -114,7 +115,7 @@ impl AgentBuilder {
     }
 
     /// Fired at the end of each ReAct turn.
-    pub fn on_turn_end<F>(self, f: F) -> Self
+    pub fn on_turn_end<F>(mut self, f: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
@@ -127,7 +128,7 @@ impl AgentBuilder {
     }
 
     /// Fired for every [`AgentEvent`] (catch-all).
-    pub fn on_event<F>(self, f: F) -> Self
+    pub fn on_event<F>(mut self, f: F) -> Self
     where
         F: Fn(AgentEvent) + Send + Sync + 'static,
     {
@@ -294,10 +295,8 @@ impl Agent {
 
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
-        let result = runtime
-            .agent_loop()
-            .run(
-                &session,
+        let result = session
+            .react_loop::<P, AgentEvent>(
                 init_msg,
                 config,
                 env_state_tx.clone(),
@@ -375,11 +374,10 @@ impl Agent {
 
         // Spawn react_loop as background task
         let mw = middleware_opt(runtime);
-        let loop_impl = runtime.agent_loop();
         let env_tx = env_state_tx.clone();
         let handle = tokio::spawn(async move {
-            loop_impl
-                .run(&session, init_msg, config, env_tx, mw, Some(event_sender))
+            session
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
                 .await
         });
 
@@ -453,10 +451,9 @@ impl Agent {
 
         let env_tx = env_state_tx.clone();
         let mw = middleware_opt(&runtime);
-        let loop_impl = runtime.agent_loop();
         let handle = tokio::spawn(async move {
-            loop_impl
-                .run(&session, init_msg, config, env_tx, mw, Some(event_sender))
+            session
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
                 .await
         });
 
@@ -532,10 +529,9 @@ impl Agent {
 
         let env_tx = env_state_tx.clone();
         let mw = middleware_opt(&runtime);
-        let loop_impl = runtime.agent_loop();
         let handle = tokio::spawn(async move {
-            loop_impl
-                .run(&session, init_msg, config, env_tx, mw, Some(event_sender))
+            session
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
                 .await
         });
 
@@ -564,18 +560,25 @@ fn build_event_sender(
     })
 }
 
-/// Return a type-erased middleware processor backed by the runtime's chain.
+/// Return the middleware chain from runtime, or None.
 #[cfg(feature = "middleware")]
 fn middleware_opt<P: ChatProvider, S>(
     runtime: &AgentRuntime<P, S>,
-) -> Option<Arc<dyn MiddlewareProcessor<AgentEvent>>> {
+) -> Option<Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>> {
     Some(runtime.middleware_chain())
 }
 
 #[cfg(not(feature = "middleware"))]
 fn middleware_opt<P: ChatProvider, S>(
     _runtime: &AgentRuntime<P, S>,
-) -> Option<Arc<dyn MiddlewareProcessor<AgentEvent>>> {
+) -> Option<
+    Arc<
+        funera_core::middleware::MiddlewareChain<
+            AgentEvent,
+            funera_core::middleware::ErrorsEnabled,
+        >,
+    >,
+> {
     None
 }
 

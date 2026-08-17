@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use async_trait::async_trait;
-use funera_core::plugin::Plugin;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use serde_json::{Value as JsonValue, json};
 
@@ -11,14 +10,12 @@ use serde_json::{Value as JsonValue, json};
 /// Requires `filePath` and `content` parameters.
 pub struct WriteTool;
 
-impl Plugin for WriteTool {
+#[async_trait]
+impl Tool for WriteTool {
     fn name(&self) -> &str {
         "write"
     }
-}
 
-#[async_trait]
-impl Tool for WriteTool {
     fn description(&self) -> &str {
         "Write content to a file. Creates parent directories if needed."
     }

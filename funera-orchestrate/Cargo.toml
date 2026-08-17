@@ -70,20 +70,7 @@ required-features = ["security", "funera-builtin-tools"]
 name = "custom_tool"
 
 [[example]]
-name = "loader_declarative"
-
-[[example]]
-name = "service_broker"
-
-[[example]]
-name = "replace_core_tool"
-required-features = ["funera-builtin-tools"]
-
-[[example]]
-name = "replace_react_loop"
-
-[[example]]
-name = "replace_loop"
+name = "reversible_effects"
 
 [[example]]
 name = "minimal"

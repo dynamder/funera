@@ -1,10 +1,8 @@
 use std::marker::PhantomData;
 #[cfg(feature = "skill")]
 use std::path::PathBuf;
+#[cfg(any(feature = "middleware", feature = "security", feature = "tool"))]
 use std::sync::Arc;
-
-#[cfg(feature = "middleware")]
-use parking_lot::RwLock as StdRwLock;
 
 use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc};
@@ -21,7 +19,6 @@ use funera_core::env_actor::{EnvCmd, ReActConfig, spawn_env_actor};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "tool")]
 use funera_core::event_bus::tool_bus::ToolBus;
-use funera_core::loader::{Loader, PluginEntry, ReconcileReport};
 use funera_core::provider::ChatProvider;
 #[cfg(feature = "deepseek")]
 use funera_core::provider::deepseek::DeepSeekProvider;
@@ -50,7 +47,6 @@ use crate::middleware_bundle::MiddlewareBundle;
 use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
 
 use crate::error::OrchestrateError;
-use crate::r#loop::{AgentLoop, DefaultAgentLoop};
 
 /// Builds an [`AgentRuntime`].
 ///
@@ -72,7 +68,7 @@ pub struct AgentRuntimeBuilder {
     max_iterations: usize,
     channel_buffer: usize,
     #[cfg(feature = "tool")]
-    tools: Vec<Box<dyn Tool>>,
+    tools: Vec<Arc<dyn Tool>>,
     #[cfg(feature = "skill")]
     skills: Vec<Skill>,
     #[cfg(feature = "skill")]
@@ -91,7 +87,6 @@ pub struct AgentRuntimeBuilder {
     approval_timeout: Option<std::time::Duration>,
     #[cfg(feature = "middleware")]
     middleware_bundle: Option<MiddlewareBundle<AgentEvent>>,
-    loop_impl: Option<Arc<dyn AgentLoop>>,
 }
 
 impl Default for AgentRuntimeBuilder {
@@ -129,7 +124,6 @@ impl AgentRuntimeBuilder {
             approval_timeout: None,
             #[cfg(feature = "middleware")]
             middleware_bundle: None,
-            loop_impl: None,
         }
     }
 
@@ -174,12 +168,6 @@ impl AgentRuntimeBuilder {
     /// Internal channel buffer size (default 32).
     pub fn channel_buffer(mut self, n: usize) -> Self {
         self.channel_buffer = n;
-        self
-    }
-
-    /// Replace the built-in ReAct loop with a custom [`AgentLoop`].
-    pub fn with_loop(mut self, agent_loop: Arc<dyn AgentLoop>) -> Self {
-        self.loop_impl = Some(agent_loop);
         self
     }
 
@@ -242,13 +230,13 @@ impl AgentRuntimeBuilder {
     /// Register a tool by its type (requires `Tool + Default`).
     #[cfg(feature = "tool")]
     pub fn with_tool<T: Tool + Default + 'static>(mut self) -> Self {
-        self.tools.push(Box::new(T::default()));
+        self.tools.push(Arc::new(T::default()));
         self
     }
 
     /// Register a pre-constructed tool.
     #[cfg(feature = "tool")]
-    pub fn with_tool_instance(mut self, tool: Box<dyn Tool>) -> Self {
+    pub fn with_tool_instance(mut self, tool: Arc<dyn Tool>) -> Self {
         self.tools.push(tool);
         self
     }
@@ -305,18 +293,18 @@ impl AgentRuntimeBuilder {
     #[cfg(feature = "funera-builtin-tools")]
     pub fn with_builtin_tools(mut self) -> Self {
         use funera_builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
-        self.tools.push(Box::new(ReadTool));
-        self.tools.push(Box::new(WriteTool));
-        self.tools.push(Box::new(EditTool));
+        self.tools.push(Arc::new(ReadTool));
+        self.tools.push(Arc::new(WriteTool));
+        self.tools.push(Arc::new(EditTool));
         #[cfg(feature = "sandbox")]
         if let Some(ref policy) = self.sandbox_policy {
             self.tools
-                .push(Box::new(ShellTool::with_sandbox(policy.clone())));
+                .push(Arc::new(ShellTool::with_sandbox(policy.clone())));
         } else {
-            self.tools.push(Box::new(ShellTool::new()));
+            self.tools.push(Arc::new(ShellTool::new()));
         }
         #[cfg(not(feature = "sandbox"))]
-        self.tools.push(Box::new(ShellTool::new()));
+        self.tools.push(Arc::new(ShellTool::new()));
         self
     }
 
@@ -395,7 +383,10 @@ impl AgentRuntimeBuilder {
                 None => ToolRegistry::new(),
             };
             #[cfg(not(feature = "security"))]
-            let reg = ToolRegistry::new();
+            let mut reg = ToolRegistry::new();
+            for t in self.tools {
+                reg.add_tool(t);
+            }
 
             #[cfg(feature = "security")]
             reg.set_audit_bus(audit_bus.clone());
@@ -431,40 +422,27 @@ impl AgentRuntimeBuilder {
         };
 
         #[cfg(feature = "skill")]
-        let skill_registry = SkillRegistry::new();
-
-        let (env, env_watcher) = FuneraEnv::new(client, &model);
-
-        // Initial plugin set. Tools and skills are mounted through the loader
-        // so they share one lifecycle path with runtime-reconciled plugins.
-        let mut initial_plugins: Vec<PluginEntry> = Vec::new();
+        let mut skill_registry = SkillRegistry::new();
 
         #[cfg(feature = "skill")]
         {
-            use funera_core::plugin::SkillPlugin;
-            use std::collections::HashSet;
-
-            let mut active_names: HashSet<String> =
-                self.skill_names_to_activate.iter().cloned().collect();
-            let mut skills_to_load: Vec<Skill> = Vec::new();
-
             if self.load_default_skills {
-                for skill in Skill::from_default_path() {
-                    active_names.insert(skill.name.clone());
-                    skills_to_load.push(skill);
+                let default_skills = Skill::from_default_path();
+                for skill in default_skills {
+                    let name = skill.name.clone();
+                    skill_registry.add(skill);
+                    self.skill_names_to_activate.push(name);
                 }
             }
-            skills_to_load.extend(self.skills);
-
-            for skill in skills_to_load {
-                let skill_name = skill.name.clone();
-                let active = active_names.contains(&skill_name);
-                initial_plugins.push(PluginEntry::new(
-                    format!("skill:{skill_name}"),
-                    Arc::new(SkillPlugin::new(skill).active(active)),
-                ));
+            for skill in self.skills {
+                skill_registry.add(skill);
+            }
+            for name in &self.skill_names_to_activate {
+                skill_registry.activate(name);
             }
         }
+
+        let (env, env_watcher) = FuneraEnv::new(client, &model);
 
         #[cfg(feature = "sandbox")]
         let env = if let Some(ref sp) = self.sandbox_policy {
@@ -478,16 +456,6 @@ impl AgentRuntimeBuilder {
         #[cfg(feature = "skill")]
         let env = env.with_skill_registry(skill_registry);
 
-        #[cfg(feature = "tool")]
-        for (idx, tool) in self.tools.into_iter().enumerate() {
-            use funera_core::plugin::ToolPlugin;
-            let tool_name = tool.name().to_string();
-            initial_plugins.push(PluginEntry::new(
-                format!("tool:{tool_name}:{idx}"),
-                Arc::new(ToolPlugin::new(Arc::from(tool))),
-            ));
-        }
-
         // Build middleware chain
         #[cfg(feature = "middleware")]
         let middleware_chain = if let Some(bundle) = self.middleware_bundle.take() {
@@ -498,7 +466,7 @@ impl AgentRuntimeBuilder {
                     tracing::warn!("[middleware:{name}] inspector error: {err}");
                 }
             });
-            Arc::new(StdRwLock::new(chain))
+            Arc::new(chain)
         } else {
             let (chain, error_rx) = MiddlewareChain::<AgentEvent>::new().activate_error_channel();
             tokio::spawn(async move {
@@ -507,7 +475,7 @@ impl AgentRuntimeBuilder {
                     tracing::warn!("[middleware:{name}] inspector error: {err}");
                 }
             });
-            Arc::new(StdRwLock::new(chain))
+            Arc::new(chain)
         };
 
         // Create tool bus for ToolExecutor
@@ -551,32 +519,16 @@ impl AgentRuntimeBuilder {
             }
         };
 
-        // Spawn env actor — owns Loader (and therefore FuneraEnv), watcher,
-        // ToolExecutor, all config.
-        let loader = Loader::new(env);
-        let env_cmd_tx = spawn_env_actor(
-            loader,
-            initial_plugins,
-            env_watcher,
-            max_iters,
-            chan_buf,
-            tool_cfg,
-            sec_cfg,
-        );
+        // Spawn env actor — owns FuneraEnv, watcher, ToolExecutor, all config
+        let env_cmd_tx = spawn_env_actor(env, env_watcher, max_iters, chan_buf, tool_cfg, sec_cfg);
 
         let session_tx = spawn_session_actor();
-
-        let loop_impl: Arc<dyn AgentLoop> = self
-            .loop_impl
-            .take()
-            .unwrap_or_else(|| Arc::new(DefaultAgentLoop::<P>::default()));
 
         Ok(AgentRuntime::<P> {
             env_cmd_tx,
             session_tx,
             #[cfg(feature = "middleware")]
             middleware_chain,
-            loop_impl,
             _state: PhantomData,
             _phantom: PhantomData,
         })
@@ -628,8 +580,7 @@ pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     pub(crate) env_cmd_tx: mpsc::UnboundedSender<EnvCmd>,
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
     #[cfg(feature = "middleware")]
-    pub(crate) middleware_chain: Arc<StdRwLock<MiddlewareChain<AgentEvent, ErrorsEnabled>>>,
-    pub(crate) loop_impl: Arc<dyn AgentLoop>,
+    pub(crate) middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
     _state: PhantomData<S>,
     _phantom: PhantomData<fn() -> P>,
 }
@@ -667,19 +618,6 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         let _ = self.env_cmd_tx.send(EnvCmd::SubscribeAudit { respond });
         rx.await
             .unwrap_or_else(|_| broadcast::channel::<AuditEvent>(1).1)
-    }
-
-    /// Reconcile the runtime's plugin set against the given declarative entries.
-    ///
-    /// Returns a [`ReconcileReport`] describing what was loaded, unloaded,
-    /// reloaded, failed, or skipped. This is the dynamic counterpart of the
-    /// builder's static configuration.
-    pub async fn reconcile_plugins(&self, entries: Vec<PluginEntry>) -> ReconcileReport {
-        let (respond, rx) = tokio::sync::oneshot::channel();
-        let _ = self
-            .env_cmd_tx
-            .send(EnvCmd::ReconcilePlugins { entries, respond });
-        rx.await.unwrap_or_default()
     }
 
     /// Query the current LLM model name from the env actor.
@@ -722,8 +660,8 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
 
     /// Register a new tool at runtime.
     #[cfg(feature = "tool")]
-    pub fn add_tool(&self, tool: Box<dyn Tool>) {
-        let _ = self.env_cmd_tx.send(EnvCmd::AddTool(Arc::from(tool)));
+    pub fn add_tool(&self, tool: Arc<dyn Tool>) {
+        let _ = self.env_cmd_tx.send(EnvCmd::AddTool(tool));
     }
 
     /// Remove a tool by name at runtime.
@@ -791,18 +729,10 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
 
     // ── End env mutation methods ──────────────────────────────
 
-    /// Access the lock-protected middleware chain for event filtering.
-    ///
-    /// The returned lock can also be used to mount [`MiddlewarePlugin`]s at
-    /// runtime; the ReAct loop reads through this lock on every event.
+    /// Access the middleware chain for event filtering.
     #[cfg(feature = "middleware")]
-    pub fn middleware_chain(&self) -> Arc<StdRwLock<MiddlewareChain<AgentEvent, ErrorsEnabled>>> {
+    pub fn middleware_chain(&self) -> Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>> {
         self.middleware_chain.clone()
-    }
-
-    /// Access the agent loop implementation.
-    pub fn agent_loop(&self) -> Arc<dyn AgentLoop> {
-        self.loop_impl.clone()
     }
 
     /// Approve or reject a pending tool call that is awaiting user approval.
@@ -850,7 +780,6 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
             session_tx: self.session_tx,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
-            loop_impl: self.loop_impl,
             _state: PhantomData,
             _phantom: PhantomData,
         }
@@ -873,7 +802,6 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
             session_tx: self.session_tx,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
-            loop_impl: self.loop_impl,
             _state: PhantomData,
             _phantom: PhantomData,
         }
@@ -899,20 +827,16 @@ mod tests {
     #[cfg(feature = "tool")]
     mod tool_tests {
         use super::*;
-        use funera_core::plugin::Plugin;
         use funera_core::re_act::tool::ToolCallError;
 
         #[derive(Default)]
         struct MockTool;
 
-        impl Plugin for MockTool {
+        #[async_trait::async_trait]
+        impl Tool for MockTool {
             fn name(&self) -> &str {
                 "mock_tool"
             }
-        }
-
-        #[async_trait::async_trait]
-        impl Tool for MockTool {
             fn description(&self) -> &str {
                 "A mock tool for testing"
             }
@@ -932,7 +856,7 @@ mod tests {
 
         #[test]
         fn builder_with_tool_instance() {
-            let b = AgentRuntimeBuilder::new().with_tool_instance(Box::new(MockTool));
+            let b = AgentRuntimeBuilder::new().with_tool_instance(Arc::new(MockTool));
             assert_eq!(b.tools.len(), 1);
         }
 
@@ -957,28 +881,6 @@ mod tests {
                 .unwrap();
             let names = rt.tool_names().await;
             assert!(names.is_empty());
-        }
-
-        #[tokio::test]
-        async fn reconcile_plugins_adds_tool_dynamically() {
-            use funera_core::plugin::ToolPlugin;
-            use std::sync::Arc;
-
-            let rt = AgentRuntimeBuilder::new()
-                .api_key("sk-test")
-                .model("x")
-                .build()
-                .unwrap();
-
-            let report = rt
-                .reconcile_plugins(vec![PluginEntry::new(
-                    "tool:mock",
-                    Arc::new(ToolPlugin::new(Arc::new(MockTool))),
-                )])
-                .await;
-            assert_eq!(report.loaded, vec!["tool:mock".to_string()]);
-            let names = rt.tool_names().await;
-            assert!(names.contains(&"mock_tool".to_string()));
         }
     }
 

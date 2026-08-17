@@ -34,18 +34,17 @@
 //! ```rust,no_run
 //! # use funera_core::middleware::{MiddlewareChain, InspectorMiddleware, MutatorMiddleware,
 //! #     InspectorError, MutatorAction, ErrorsDisabled};
-//! # use funera_core::plugin::Plugin;
 //! // 1. 定义 Inspector
 //! struct Logger;
-//! impl Plugin for Logger { fn name(&self) -> &str { "log" } }
 //! impl InspectorMiddleware<String> for Logger {
+//!     fn name(&self) -> &str { "log" }
 //!     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
 //! }
 //!
 //! // 2. 定义 Mutator
 //! struct Censor;
-//! impl Plugin for Censor { fn name(&self) -> &str { "censor" } }
 //! impl MutatorMiddleware<String> for Censor {
+//!     fn name(&self) -> &str { "censor" }
 //!     fn process(&self, s: String) -> MutatorAction<String> { MutatorAction::Pass }
 //! }
 //!
@@ -65,10 +64,9 @@
 //!
 //! ```rust,no_run
 //! # use funera_core::middleware::{MiddlewareChain, ErrorsEnabled, InspectorMiddleware, InspectorError};
-//! # use funera_core::plugin::Plugin;
 //! # struct Insp;
-//! # impl Plugin for Insp { fn name(&self) -> &str { "i" } }
 //! # impl InspectorMiddleware<String> for Insp {
+//! #     fn name(&self) -> &str { "i" }
 //! #     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
 //! # }
 //! let chain = MiddlewareChain::<String>::new()
@@ -85,7 +83,6 @@ use serde_json::Value as JsonValue;
 use tokio::sync::mpsc;
 
 use crate::chat::message::{MsgVariant, Role};
-use crate::plugin::Plugin;
 
 // ═══════════════════════════════════════════════════════════════
 // Inspector — 只读观察，后台并行，不等待
@@ -106,17 +103,19 @@ pub type InspectorError = Box<dyn std::error::Error + Send + Sync + 'static>;
 ///
 /// ```rust,no_run
 /// # use funera_core::middleware::{InspectorMiddleware, InspectorError};
-/// # use funera_core::plugin::Plugin;
 /// struct TokenLogger;
-/// impl Plugin for TokenLogger { fn name(&self) -> &str { "token_logger" } }
 /// impl InspectorMiddleware<String> for TokenLogger {
+///     fn name(&self) -> &str { "token_logger" }
 ///     fn inspect(&self, event: &String) -> Result<(), InspectorError> {
 ///         eprintln!("[inspector] event: {event}");
 ///         Ok(())
 ///     }
 /// }
 /// ```
-pub trait InspectorMiddleware<Evt>: Plugin {
+pub trait InspectorMiddleware<Evt>: Send + Sync {
+    /// 返回此 inspector 的唯一标识名称。
+    fn name(&self) -> &str;
+
     /// 检查事件（只读），返回 `Ok(())` 或错误（通过 error channel 报告）。
     ///
     /// Inspect 的返回值**不会**影响事件流——即使返回 `Err`，事件也会继续传递。
@@ -146,10 +145,9 @@ pub enum MutatorAction<Evt> {
 ///
 /// ```rust,no_run
 /// # use funera_core::middleware::{MutatorMiddleware, MutatorAction};
-/// # use funera_core::plugin::Plugin;
 /// struct Censor;
-/// impl Plugin for Censor { fn name(&self) -> &str { "censor" } }
 /// impl MutatorMiddleware<String> for Censor {
+///     fn name(&self) -> &str { "censor" }
 ///     fn process(&self, event: String) -> MutatorAction<String> {
 ///         if event.contains("bad") {
 ///             MutatorAction::Modify(event.replace("bad", "***"))
@@ -159,7 +157,10 @@ pub enum MutatorAction<Evt> {
 ///     }
 /// }
 /// ```
-pub trait MutatorMiddleware<Evt>: Plugin {
+pub trait MutatorMiddleware<Evt>: Send + Sync {
+    /// 返回此 mutator 的唯一标识名称。
+    fn name(&self) -> &str;
+
     /// 处理事件。支持三种决策：
     /// - [`MutatorAction::Pass`]：放行，事件不变
     /// - [`MutatorAction::Modify`]：替换事件
@@ -263,25 +264,6 @@ pub enum MiddlewareLayer<Evt> {
     Mutator(Vec<Arc<dyn MutatorMiddleware<Evt>>>),
 }
 
-impl<Evt> Clone for MiddlewareLayer<Evt> {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Inspector(inspectors) => Self::Inspector(inspectors.clone()),
-            Self::Mutator(mutators) => Self::Mutator(mutators.clone()),
-        }
-    }
-}
-
-impl<Evt> MiddlewareLayer<Evt> {
-    /// Whether the layer has no middleware.
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Self::Inspector(inspectors) => inspectors.is_empty(),
-            Self::Mutator(mutators) => mutators.is_empty(),
-        }
-    }
-}
-
 // ── Typestate markers ─────────────────────────────────────────
 
 /// 错误通道**尚未**启用的 typestate 标记。
@@ -313,10 +295,9 @@ pub struct ErrorsEnabled;
 ///
 /// ```rust,no_run
 /// # use funera_core::middleware::{MiddlewareChain, ErrorsEnabled, InspectorMiddleware, InspectorError};
-/// # use funera_core::plugin::Plugin;
 /// # struct Insp;
-/// # impl Plugin for Insp { fn name(&self) -> &str { "i" } }
 /// # impl InspectorMiddleware<String> for Insp {
+/// #     fn name(&self) -> &str { "i" }
 /// #     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
 /// # }
 /// // 默认状态：ErrorsDisabled
@@ -358,10 +339,9 @@ impl<Evt: Clone + Send + 'static> MiddlewareChain<Evt, ErrorsDisabled> {
     ///
     /// ```rust,no_run
     /// # use funera_core::middleware::{MiddlewareChain, InspectorMiddleware, InspectorError};
-    /// # use funera_core::plugin::Plugin;
     /// # struct Insp;
-    /// # impl Plugin for Insp { fn name(&self) -> &str { "i" } }
     /// # impl InspectorMiddleware<String> for Insp {
+    /// #     fn name(&self) -> &str { "i" }
     /// #     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
     /// # }
     /// let chain = MiddlewareChain::<String>::new()
@@ -411,13 +391,12 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
     ///
     /// ```rust,no_run
     /// # use funera_core::middleware::{MiddlewareChain, InspectorMiddleware, InspectorError};
-    /// # use funera_core::plugin::Plugin;
-    /// # struct A; impl Plugin for A { fn name(&self) -> &str { "A" } }
-    /// # impl InspectorMiddleware<String> for A {
+    /// # struct A; impl InspectorMiddleware<String> for A {
+    /// #     fn name(&self) -> &str { "A" }
     /// #     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
     /// # }
-    /// # struct B; impl Plugin for B { fn name(&self) -> &str { "B" } }
-    /// # impl InspectorMiddleware<String> for B {
+    /// # struct B; impl InspectorMiddleware<String> for B {
+    /// #     fn name(&self) -> &str { "B" }
     /// #     fn inspect(&self, _: &String) -> Result<(), InspectorError> { Ok(()) }
     /// # }
     /// let chain = MiddlewareChain::<String>::new()
@@ -460,13 +439,12 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
     ///
     /// ```rust,no_run
     /// # use funera_core::middleware::{MiddlewareChain, MutatorMiddleware, MutatorAction};
-    /// # use funera_core::plugin::Plugin;
-    /// # struct Censor; impl Plugin for Censor { fn name(&self) -> &str { "censor" } }
-    /// # impl MutatorMiddleware<String> for Censor {
+    /// # struct Censor; impl MutatorMiddleware<String> for Censor {
+    /// #     fn name(&self) -> &str { "censor" }
     /// #     fn process(&self, s: String) -> MutatorAction<String> { MutatorAction::Pass }
     /// # }
-    /// # struct Blocker; impl Plugin for Blocker { fn name(&self) -> &str { "blocker" } }
-    /// # impl MutatorMiddleware<String> for Blocker {
+    /// # struct Blocker; impl MutatorMiddleware<String> for Blocker {
+    /// #     fn name(&self) -> &str { "blocker" }
     /// #     fn process(&self, s: String) -> MutatorAction<String> { MutatorAction::Pass }
     /// # }
     /// let chain = MiddlewareChain::<String>::new()
@@ -500,29 +478,6 @@ impl<Evt: Clone + Send + 'static, S> MiddlewareChain<Evt, S> {
     /// 返回 middleware 层的数量。
     pub fn len(&self) -> usize {
         self.layers.len()
-    }
-
-    /// Append a pre-built middleware layer.
-    pub fn add_layer(&mut self, layer: MiddlewareLayer<Evt>) {
-        if !layer.is_empty() {
-            self.layers.push(layer);
-        }
-    }
-
-    /// Remove every inspector/mutator with the given plugin name, dropping
-    /// layers that become empty.
-    pub fn remove_plugin(&mut self, name: &str) {
-        for layer in &mut self.layers {
-            match layer {
-                MiddlewareLayer::Inspector(inspectors) => {
-                    inspectors.retain(|inspector| inspector.name() != name)
-                }
-                MiddlewareLayer::Mutator(mutators) => {
-                    mutators.retain(|mutator| mutator.name() != name)
-                }
-            }
-        }
-        self.layers.retain(|layer| !layer.is_empty());
     }
 
     /// 按注册顺序逐层执行。
@@ -634,34 +589,6 @@ impl std::fmt::Display for MiddlewareBlocked {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// MiddlewareProcessor — type-erased middleware chain access
-// ═══════════════════════════════════════════════════════════════
-
-/// Type-erased access to a middleware chain.
-///
-/// The ReAct loop consumes this trait object instead of a concrete
-/// [`MiddlewareChain`], so a runtime may back the chain by a lock and mutate it
-/// dynamically while a turn is in flight.
-pub trait MiddlewareProcessor<Evt>: Send + Sync {
-    /// Run the event through the middleware chain.
-    fn process(&self, event: Evt) -> Result<Evt, MiddlewareBlocked>;
-}
-
-impl<Evt: Clone + Send + 'static> MiddlewareProcessor<Evt> for MiddlewareChain<Evt, ErrorsEnabled> {
-    fn process(&self, event: Evt) -> Result<Evt, MiddlewareBlocked> {
-        MiddlewareChain::process(self, event)
-    }
-}
-
-impl<Evt: Clone + Send + 'static> MiddlewareProcessor<Evt>
-    for parking_lot::RwLock<MiddlewareChain<Evt, ErrorsEnabled>>
-{
-    fn process(&self, event: Evt) -> Result<Evt, MiddlewareBlocked> {
-        self.read().process(event)
-    }
-}
-
-// ═══════════════════════════════════════════════════════════════
 // MiddlewareEvent — ReAct loop 每轮产出的可过滤事件
 // ═══════════════════════════════════════════════════════════════
 
@@ -714,13 +641,10 @@ mod tests {
 
     struct NoopInspector;
 
-    impl Plugin for NoopInspector {
+    impl InspectorMiddleware<String> for NoopInspector {
         fn name(&self) -> &str {
             "noop"
         }
-    }
-
-    impl InspectorMiddleware<String> for NoopInspector {
         fn inspect(&self, _event: &String) -> Result<(), InspectorError> {
             Ok(())
         }
@@ -728,13 +652,10 @@ mod tests {
 
     struct UpperMutator;
 
-    impl Plugin for UpperMutator {
+    impl MutatorMiddleware<String> for UpperMutator {
         fn name(&self) -> &str {
             "upper"
         }
-    }
-
-    impl MutatorMiddleware<String> for UpperMutator {
         fn process(&self, event: String) -> MutatorAction<String> {
             MutatorAction::Modify(event.to_uppercase())
         }
@@ -742,13 +663,10 @@ mod tests {
 
     struct BlockMutator;
 
-    impl Plugin for BlockMutator {
+    impl MutatorMiddleware<String> for BlockMutator {
         fn name(&self) -> &str {
             "blocker"
         }
-    }
-
-    impl MutatorMiddleware<String> for BlockMutator {
         fn process(&self, _event: String) -> MutatorAction<String> {
             MutatorAction::Block {
                 reason: "blocked".into(),
@@ -758,13 +676,10 @@ mod tests {
 
     struct PassMutator;
 
-    impl Plugin for PassMutator {
+    impl MutatorMiddleware<String> for PassMutator {
         fn name(&self) -> &str {
             "pass"
         }
-    }
-
-    impl MutatorMiddleware<String> for PassMutator {
         fn process(&self, _event: String) -> MutatorAction<String> {
             MutatorAction::Pass
         }

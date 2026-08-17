@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use async_trait::async_trait;
-use funera_core::plugin::Plugin;
 use funera_core::re_act::tool::{Tool, ToolCallError};
 use serde::Deserialize;
 use serde_json::{Value as JsonValue, json};
@@ -239,14 +238,12 @@ impl EditTool {
     }
 }
 
-impl Plugin for EditTool {
+#[async_trait]
+impl Tool for EditTool {
     fn name(&self) -> &str {
         "edit"
     }
-}
 
-#[async_trait]
-impl Tool for EditTool {
     fn description(&self) -> &str {
         "Edit files using hashline-anchored operations: replace, append, prepend, replace_text."
     }

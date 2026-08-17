@@ -19,8 +19,6 @@ fn make_runtime(model: &str) -> AgentRuntime<DeepSeekProvider> {
 }
 
 /// Helper: test both that a response is non-empty and
-const HAS_MINIMAL_CONTENT: &str = "";
-
 fn non_empty(resp: &str) -> bool {
     let trimmed = resp.trim();
     !trimmed.is_empty() && trimmed.len() > 5
@@ -76,7 +74,7 @@ async fn fire_respects_max_iterations() {
 
 #[tokio::test]
 async fn send_multi_turn_memory() {
-    let mut runtime = make_runtime("gpt-4o-mini");
+    let runtime = make_runtime("gpt-4o-mini");
     let agent = Agent::builder()
         .system_prompt("You are a helpful assistant.")
         .build();
@@ -104,10 +102,10 @@ async fn send_multi_turn_memory() {
 
 #[tokio::test]
 async fn send_reset_forgets() {
-    let mut runtime = make_runtime("gpt-4o-mini");
+    let runtime = make_runtime("gpt-4o-mini");
     let agent = Agent::builder().system_prompt("You are helpful.").build();
 
-    let (mut runtime, _) = agent
+    let (runtime, _) = agent
         .send("My name is Bob.", runtime)
         .await
         .unwrap()
@@ -162,7 +160,7 @@ async fn switch_runtime_isolation() {
     let rt2 = make_runtime("gpt-4o-mini");
     let agent = Agent::builder().system_prompt("You are helpful.").build();
 
-    let (mut rt1, _) = agent
+    let (rt1, _) = agent
         .send("Remember: the secret word is 'banana'.", rt1)
         .await
         .unwrap()
@@ -170,7 +168,7 @@ async fn switch_runtime_isolation() {
         .unwrap();
 
     // rt2 should NOT know the secret
-    let (mut rt2, resp) = agent
+    let (_rt2, resp) = agent
         .send("What is the secret word?", rt2)
         .await
         .unwrap()

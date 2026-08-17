@@ -361,21 +361,16 @@ fn demo_guarded_registry() {
 fn demo_audit_integration() {
     println!("--- 11. Audit Bus Integration ---");
     use async_trait::async_trait;
-    use funera_core::plugin::Plugin;
     use funera_core::re_act::tool::{Tool, ToolCallError};
     use serde_json::Value as JsonValue;
-    use std::sync::Arc;
 
     struct DummyTool;
 
-    impl Plugin for DummyTool {
+    #[async_trait]
+    impl Tool for DummyTool {
         fn name(&self) -> &str {
             "blocked_tool"
         }
-    }
-
-    #[async_trait]
-    impl Tool for DummyTool {
         fn description(&self) -> &str {
             "a tool that is blocked by policy"
         }
@@ -399,7 +394,7 @@ fn demo_audit_integration() {
 
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Arc::new(DummyTool));
+        registry.add_tool(std::sync::Arc::new(DummyTool));
 
         // Attempt to call the denied tool
         let result = registry.call_tool("blocked_tool", json!({})).await;

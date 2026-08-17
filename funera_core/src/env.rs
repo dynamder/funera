@@ -1,10 +1,7 @@
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_openai::config::OpenAIConfig;
-use parking_lot::{Mutex, RwLock as StdRwLock};
+use parking_lot::Mutex;
 
 #[cfg(feature = "skill")]
 use crate::re_act::skills::{Skill, SkillRegistry};
@@ -18,117 +15,11 @@ use tokio::sync::{
     watch::{self, error::RecvError},
 };
 
-pub mod key;
-
-pub use key::{Generation, ProviderId, ServiceBinding, ServiceKey};
-
 /// A teardown action that undoes one effect.
 ///
 /// Returned by [`FuneraEnv::effect`] bodies and run in reverse registration
 /// order when [`FuneraEnv::dispose`] is called (LIFO recovery).
 pub type Disposer = Box<dyn FnOnce() + Send + 'static>;
-
-/// A callback fired when a service is provided (`true`) or removed (`false`).
-///
-/// Subscribed via [`FuneraEnv::on_service_change`]; `provide` and the disposers
-/// registered by `provide` invoke it on the changed key. This is the reactive
-/// notification primitive that drives dependent-plugin refresh.
-pub type ServiceObserver = Arc<dyn Fn(TypeId, bool) + Send + Sync>;
-
-/// Shared state behind a [`FuneraEnv`]'s capability layer.
-///
-/// `services` is the coeffect context: a typed service table keyed by
-/// [`ServiceKey`] (the primary key for `T` is its [`TypeId`]). The table is
-/// shared between a derived env and its children. Each [`FuneraEnv`] keeps its
-/// own effect accumulator (`disposers`) so a child can be torn down
-/// independently of its parent.
-struct EnvShared {
-    /// One slot per provider per key. Several providers may bind the same key
-    /// concurrently (service multiplexing / HMR replacement); a dependent
-    /// resolves the active provider through the plugin registry.
-    services: StdRwLock<HashMap<ServiceKey, Vec<Arc<ServiceBinding>>>>,
-    observers: Mutex<Vec<ServiceObserver>>,
-    generation: AtomicU64,
-}
-
-impl EnvShared {
-    fn new() -> Self {
-        Self {
-            services: StdRwLock::new(HashMap::new()),
-            observers: Mutex::new(Vec::new()),
-            generation: AtomicU64::new(0),
-        }
-    }
-
-    fn insert(&self, key: ServiceKey, value: Arc<dyn Any + Send + Sync>, provider: ProviderId) {
-        let generation = self.generation.fetch_add(1, Ordering::Relaxed);
-        let binding = Arc::new(ServiceBinding {
-            provider,
-            value,
-            generation,
-        });
-        {
-            let mut services = self.services.write();
-            let bindings = services.entry(key.clone()).or_default();
-            if let Some(existing) = bindings.iter_mut().find(|b| b.provider == provider) {
-                *existing = binding;
-            } else {
-                bindings.push(binding);
-            }
-        }
-        self.notify(key.type_id, true);
-    }
-
-    /// Remove the binding installed by `provider`, returning `true` if a
-    /// binding was actually removed.
-    fn remove(&self, key: &ServiceKey, provider: ProviderId) -> bool {
-        let removed = {
-            let mut services = self.services.write();
-            let mut removed = false;
-            let mut remove_key = false;
-            if let Some(bindings) = services.get_mut(key) {
-                if let Some(pos) = bindings.iter().position(|b| b.provider == provider) {
-                    bindings.swap_remove(pos);
-                    removed = true;
-                }
-                remove_key = bindings.is_empty();
-            }
-            if remove_key {
-                services.remove(key);
-            }
-            removed
-        };
-        if removed {
-            self.notify(key.type_id, false);
-        }
-        removed
-    }
-
-    /// The most recently installed binding for `key`.
-    fn binding(&self, key: &ServiceKey) -> Option<Arc<ServiceBinding>> {
-        self.bindings(key).into_iter().last()
-    }
-
-    /// All bindings currently installed for `key`.
-    fn bindings(&self, key: &ServiceKey) -> Vec<Arc<ServiceBinding>> {
-        self.services
-            .read()
-            .get(key)
-            .map(|bindings| bindings.clone())
-            .unwrap_or_default()
-    }
-
-    fn notify(&self, key: TypeId, present: bool) {
-        let observers = self.observers.lock();
-        for observer in observers.iter() {
-            observer(key, present);
-        }
-    }
-
-    fn subscribe(&self, observer: ServiceObserver) {
-        self.observers.lock().push(observer);
-    }
-}
 
 #[derive(Clone)]
 pub struct FuneraEnv {
@@ -136,8 +27,8 @@ pub struct FuneraEnv {
     pub(crate) tool_registry: Arc<RwLock<ToolRegistry>>,
     #[cfg(feature = "skill")]
     pub(crate) skill_registry: Arc<RwLock<SkillRegistry>>,
-    llm_client: Arc<StdRwLock<async_openai::Client<OpenAIConfig>>>,
-    model: Arc<StdRwLock<String>>,
+    llm_client: async_openai::Client<OpenAIConfig>,
+    model: String,
     #[cfg(feature = "tool")]
     tool_tx: watch::Sender<JsonValue>,
     client_tx: watch::Sender<async_openai::Client<OpenAIConfig>>,
@@ -146,12 +37,9 @@ pub struct FuneraEnv {
     skill_tx: watch::Sender<String>,
     #[cfg(feature = "sandbox")]
     sandbox_policy: SandboxPolicy,
-    /// Shared service table (coeffect context) and observers.
-    shared: Arc<EnvShared>,
-    /// This env's own effect accumulator (LIFO inverse stack).
+    /// Accumulator of registered reversible effects, drained in reverse (LIFO)
+    /// order by [`FuneraEnv::dispose`].
     disposers: Arc<Mutex<Vec<Disposer>>>,
-    /// The plugin instance this env was derived for; `0` for the root env.
-    provider_id: ProviderId,
 }
 
 impl FuneraEnv {
@@ -179,8 +67,8 @@ impl FuneraEnv {
                 tool_registry,
                 #[cfg(feature = "skill")]
                 skill_registry,
-                llm_client: Arc::new(StdRwLock::new(llm_client)),
-                model: Arc::new(StdRwLock::new(model)),
+                llm_client,
+                model,
                 #[cfg(feature = "tool")]
                 tool_tx,
                 client_tx,
@@ -189,9 +77,7 @@ impl FuneraEnv {
                 skill_tx,
                 #[cfg(feature = "sandbox")]
                 sandbox_policy: SandboxPolicy::default(),
-                shared: Arc::new(EnvShared::new()),
                 disposers: Arc::new(Mutex::new(Vec::new())),
-                provider_id: 0,
             },
             FuneraEnvWatcher {
                 #[cfg(feature = "tool")]
@@ -211,7 +97,7 @@ impl FuneraEnv {
         self
     }
 
-    /// The configured sandbox policy.
+    /// The currently configured sandbox policy.
     #[cfg(feature = "sandbox")]
     pub fn sandbox_policy(&self) -> &SandboxPolicy {
         &self.sandbox_policy
@@ -238,21 +124,30 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub async fn add_tool(&self, tool: Arc<dyn Tool>) {
+    pub(crate) async fn add_tool(&mut self, tool: Arc<dyn Tool>) {
         let mut registry = self.tool_registry.write().await;
         registry.add_tool(tool);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
     #[cfg(feature = "tool")]
-    pub async fn remove_tool(&self, name: &str) {
+    pub(crate) async fn remove_tool(&mut self, name: &str) {
         let mut registry = self.tool_registry.write().await;
         registry.remove_tool(name);
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
-    /// Remove a tool only if the currently registered tool is the same `Arc`.
-    pub async fn remove_tool_if_same(&self, name: &str, tool: &Arc<dyn Tool>) -> bool {
+    /// Remove the tool only if the registered entry is the same `Arc` value.
+    ///
+    /// This is the safe inverse of [`add_tool`](Self::add_tool) for a
+    /// [`Disposer`]: a stale teardown cannot delete a replacement tool that
+    /// reuses the same name.
+    ///
+    /// Exercised by the reversible-effects tests; kept on the env so callers
+    /// inside the crate can pair registrations with their exact inverse.
+    #[cfg(feature = "tool")]
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) async fn remove_tool_if_same(&mut self, name: &str, tool: &Arc<dyn Tool>) -> bool {
         let mut registry = self.tool_registry.write().await;
         let removed = registry.remove_tool_if_same(name, tool);
         if removed {
@@ -262,43 +157,38 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub async fn set_tool_availability(&self, _name: &str, _available: bool) {
+    pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
         let registry = self.tool_registry.read().await;
         let _ = self.tool_tx.send(registry.available_tools_json());
     }
 
-    pub(crate) fn set_client(&self, client: async_openai::Client<OpenAIConfig>) {
-        *self.llm_client.write() = client.clone();
+    pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
+        self.llm_client = client.clone();
         let _ = self.client_tx.send(client);
     }
 
-    pub(crate) fn set_model(&self, model: impl Into<String>) {
+    pub(crate) fn set_model(&mut self, model: impl Into<String>) {
         let model = model.into();
-        *self.model.write() = model.clone();
+        self.model = model.clone();
         let _ = self.model_tx.send(model);
     }
 
-    /// The current LLM client (read snapshot).
-    pub(crate) fn current_client(&self) -> async_openai::Client<OpenAIConfig> {
-        self.llm_client.read().clone()
-    }
-
     #[cfg(feature = "skill")]
-    pub async fn add_skill(&self, skill: Skill) {
+    pub(crate) async fn add_skill(&mut self, skill: Skill) {
         let mut registry = self.skill_registry.write().await;
         registry.add(skill);
         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
     }
 
     #[cfg(feature = "skill")]
-    pub async fn remove_skill(&self, name: &str) {
+    pub(crate) async fn remove_skill(&mut self, name: &str) {
         let mut registry = self.skill_registry.write().await;
         registry.remove(name);
         let _ = self.skill_tx.send(registry.get_active_skills_prompt());
     }
 
     #[cfg(feature = "skill")]
-    pub async fn activate_skill(&self, name: &str) -> bool {
+    pub(crate) async fn activate_skill(&mut self, name: &str) -> bool {
         let mut registry = self.skill_registry.write().await;
         let ok = registry.activate(name);
         if ok {
@@ -308,7 +198,7 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub async fn deactivate_skill(&self, name: &str) -> bool {
+    pub(crate) async fn deactivate_skill(&mut self, name: &str) -> bool {
         let mut registry = self.skill_registry.write().await;
         let ok = registry.deactivate(name);
         if ok {
@@ -323,12 +213,49 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "skill")]
-    pub(crate) fn set_skill_prompt(&self, prompt: String) {
+    pub(crate) fn set_skill_prompt(&mut self, prompt: String) {
         let _ = self.skill_tx.send(prompt);
     }
 
-    pub(crate) fn model(&self) -> String {
-        self.model.read().clone()
+    pub(crate) fn model(&self) -> &str {
+        &self.model
+    }
+
+    // ── Reversible effects (LIFO teardown) ─────────────────────
+
+    /// Register a reversible effect.
+    ///
+    /// `body` runs now (setup) and returns a [`Disposer`] that undoes it. The
+    /// disposer is pushed onto the env's accumulator and run in reverse (LIFO)
+    /// order by [`dispose`](Self::dispose) when the env is torn down, so later
+    /// registrations — which may depend on earlier ones — are undone first.
+    ///
+    /// ```rust,ignore
+    /// env.effect(|| {
+    ///     let resource = acquire();             // setup: the effect
+    ///     Box::new(move || release(resource))   // teardown: its inverse
+    /// });
+    /// ```
+    pub fn effect(&self, body: impl FnOnce() -> Disposer) {
+        let undo = body();
+        self.disposers.lock().push(undo);
+    }
+
+    /// Run every registered disposer in reverse (LIFO) order.
+    ///
+    /// This undoes each effect in the reverse of the order it was registered,
+    /// preventing memory / service leaks from registrations that were never
+    /// explicitly reverted. Disposal is idempotent (the accumulator is drained)
+    /// and panic-isolated: a panicking disposer is caught and logged while the
+    /// remaining disposers still run.
+    pub fn dispose(&self) {
+        let disposers = std::mem::take(&mut *self.disposers.lock());
+        for undo in disposers.into_iter().rev() {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(undo));
+            if result.is_err() {
+                tracing::warn!("a disposer panicked during FuneraEnv::dispose; continuing");
+            }
+        }
     }
 }
 
@@ -402,243 +329,16 @@ impl FuneraEnvWatcher {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// Capability layer — reversible effects + typed services
-// ═══════════════════════════════════════════════════════════════
-
-impl FuneraEnv {
-    /// Derive a child env that shares this env's service table but owns a fresh
-    /// effect accumulator.
-    ///
-    /// A plugin instance runs its `apply` against a derived env, so unloading
-    /// that instance ([`dispose`](Self::dispose)) reverts only the effects it
-    /// registered, while the services it provided remain visible to siblings.
-    pub fn derive(&self) -> FuneraEnv {
-        self.derive_with_provider(self.provider_id)
-    }
-
-    /// Derive a child env for the plugin instance with the given provider id.
-    ///
-    /// Services provided through this child env are attributed to `provider_id`
-    /// so the plugin registry can resolve dependencies against active
-    /// providers rather than against the raw service table.
-    pub(crate) fn derive_with_provider(&self, provider_id: ProviderId) -> FuneraEnv {
-        let mut child = self.clone();
-        child.provider_id = provider_id;
-        child.disposers = Arc::new(Mutex::new(Vec::new()));
-        child
-    }
-
-    /// The provider id this env attributes `provide` calls to.
-    pub fn provider_id(&self) -> ProviderId {
-        self.provider_id
-    }
-
-    /// Subscribe to service provision/removal events.
-    ///
-    /// The observer is called with `(TypeId, true)` when a service is provided
-    /// and `(TypeId, false)` when it is removed.
-    pub fn on_service_change(&self, observer: ServiceObserver) {
-        self.shared.subscribe(observer);
-    }
-
-    /// Register a reversible effect.
-    ///
-    /// `body` runs now (setup) and returns a [`Disposer`] that undoes it. The
-    /// disposer is pushed onto the env's accumulator and run in reverse (LIFO)
-    /// order by [`dispose`](Self::dispose) when the env is torn down.
-    ///
-    /// ```rust,ignore
-    /// env.effect(|| {
-    ///     let resource = acquire();       // setup: the effect
-    ///     Box::new(move || release(resource))  // teardown: its inverse
-    /// });
-    /// ```
-    pub fn effect(&self, body: impl FnOnce() -> Disposer) {
-        let undo = body();
-        self.disposers.lock().push(undo);
-    }
-
-    /// Provide a typed service to this env.
-    ///
-    /// The service is stored under the primary [`ServiceKey`] for `T` (the
-    /// unnamed key) and automatically removed on [`dispose`](Self::dispose).
-    /// `provide` is itself an effect: its inverse is "remove the service",
-    /// registered in this env's own accumulator.
-    ///
-    /// ```rust,ignore
-    /// #[derive(Clone)]
-    /// struct Config { url: String }
-    /// env.provide(Config { url: "db://…".into() });
-    /// let cfg: std::sync::Arc<Config> = env.get::<Config>().unwrap();
-    /// ```
-    pub fn provide<T: Send + Sync + 'static>(&self, value: T) {
-        self.provide_keyed(ServiceKey::primary::<T>(), value);
-    }
-
-    /// Provide a named typed service.
-    ///
-    /// Named keys permit multiple services of the same Rust type to coexist.
-    /// Use [`get_named`](Self::get_named) to resolve them.
-    pub fn provide_named<T: Send + Sync + 'static>(&self, name: impl Into<Arc<str>>, value: T) {
-        self.provide_keyed(ServiceKey::named::<T>(name), value);
-    }
-
-    fn provide_keyed<T: Send + Sync + 'static>(&self, key: ServiceKey, value: T) {
-        let shared = Arc::clone(&self.shared);
-        let provider = self.provider_id;
-        self.effect(move || {
-            shared.insert(key.clone(), Arc::new(value), provider);
-            let teardown_shared = Arc::clone(&shared);
-            Box::new(move || {
-                teardown_shared.remove(&key, provider);
-            })
-        });
-    }
-
-    /// Resolve a typed service previously provided to this env (or a parent).
-    pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
-        self.get_keyed(&ServiceKey::primary::<T>())
-    }
-
-    /// Resolve a named typed service previously provided via
-    /// [`provide_named`](Self::provide_named).
-    pub fn get_named<T: Send + Sync + 'static>(&self, name: &str) -> Option<Arc<T>> {
-        self.get_keyed(&ServiceKey::named::<T>(name.to_string()))
-    }
-
-    fn get_keyed<T: Send + Sync + 'static>(&self, key: &ServiceKey) -> Option<Arc<T>> {
-        self.shared
-            .binding(key)
-            .and_then(|binding| binding.value.clone().downcast::<T>().ok())
-    }
-
-    /// Resolve the raw binding for a service key.
-    pub fn binding(&self, key: &ServiceKey) -> Option<Arc<ServiceBinding>> {
-        self.shared.binding(key)
-    }
-
-    /// Resolve the raw binding for a primary service key by [`TypeId`].
-    pub fn binding_by_typeid(&self, type_id: TypeId) -> Option<Arc<ServiceBinding>> {
-        self.shared.binding(&ServiceKey {
-            type_id,
-            name: None,
-        })
-    }
-
-    /// All raw bindings for a primary service key by [`TypeId`].
-    pub fn bindings_by_typeid(&self, type_id: TypeId) -> Vec<Arc<ServiceBinding>> {
-        self.shared.bindings(&ServiceKey {
-            type_id,
-            name: None,
-        })
-    }
-
-    /// Whether a service of type `T` is currently provided.
-    pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
-        self.contains_typeid(TypeId::of::<T>())
-    }
-
-    /// Whether a named service of type `T` is currently provided.
-    pub fn contains_named<T: Send + Sync + 'static>(&self, name: &str) -> bool {
-        self.shared
-            .services
-            .read()
-            .contains_key(&ServiceKey::named::<T>(name.to_string()))
-    }
-
-    /// Whether a service with the given [`TypeId`] is currently provided.
-    ///
-    /// The non-generic counterpart of [`contains`](Self::contains), used by the
-    /// plugin registry to check `inject` requirements (which are [`TypeId`]s).
-    pub fn contains_typeid(&self, key: TypeId) -> bool {
-        self.shared
-            .binding(&ServiceKey {
-                type_id: key,
-                name: None,
-            })
-            .is_some()
-    }
-
-    /// Number of services currently provided.
-    pub fn service_count(&self) -> usize {
-        self.shared.services.read().len()
-    }
-
-    /// Run every registered disposer in reverse (LIFO) order.
-    ///
-    /// This tears the env's capability layer down: each effect is undone in the
-    /// reverse of the order it was registered. Only this env's own effects are
-    /// reverted; services provided by sibling envs are untouched.
-    ///
-    /// The disposal is idempotent and panic-isolated: a panicking disposer is
-    /// caught and logged, and the remaining disposers still run.
-    pub fn dispose(&self) {
-        let disposers = std::mem::take(&mut *self.disposers.lock());
-        for undo in disposers.into_iter().rev() {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| undo()));
-            if result.is_err() {
-                tracing::warn!("a disposer panicked during FuneraEnv::dispose; continuing");
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn test_env() -> (FuneraEnv, FuneraEnvWatcher) {
         FuneraEnv::new(async_openai::Client::new(), "test-model")
     }
 
-    #[test]
-    fn provide_get_roundtrip() {
-        let (env, _watcher) = test_env();
-        #[derive(Debug, PartialEq)]
-        struct Config(u32);
-
-        env.provide(Config(42));
-
-        assert!(env.contains::<Config>());
-        assert_eq!(env.service_count(), 1);
-        assert_eq!(env.get::<Config>().unwrap().0, 42);
-    }
-
-    #[test]
-    fn provide_named_get_roundtrip() {
-        let (env, _watcher) = test_env();
-        #[derive(Debug, PartialEq)]
-        struct Config(u32);
-
-        env.provide_named("a", Config(1));
-        env.provide_named("b", Config(2));
-        env.provide(Config(3));
-
-        assert_eq!(env.service_count(), 3);
-        assert_eq!(env.get_named::<Config>("a").unwrap().0, 1);
-        assert_eq!(env.get_named::<Config>("b").unwrap().0, 2);
-        assert_eq!(env.get::<Config>().unwrap().0, 3);
-        assert!(env.contains_named::<Config>("a"));
-        assert!(!env.contains_named::<Config>("missing"));
-    }
-
-    #[test]
-    fn get_missing_returns_none() {
-        let (env, _watcher) = test_env();
-        assert!(env.get::<String>().is_none());
-    }
-
-    #[test]
-    fn provide_removed_on_dispose() {
-        let (env, _watcher) = test_env();
-        env.provide(String::from("hello"));
-        assert!(env.contains::<String>());
-
-        env.dispose();
-        assert!(!env.contains::<String>());
-        assert_eq!(env.service_count(), 0);
-    }
+    // ── reversible effects (LIFO teardown) ─────────────────────
 
     #[test]
     fn effect_runs_in_lifo_order() {
@@ -657,14 +357,36 @@ mod tests {
     #[test]
     fn dispose_idempotent() {
         let (env, _watcher) = test_env();
-        env.effect(|| Box::new(|| {}));
+        let ran = Arc::new(AtomicUsize::new(0));
+        let r = Arc::clone(&ran);
+        env.effect(|| {
+            Box::new(move || {
+                r.fetch_add(1, Ordering::Relaxed);
+            })
+        });
         env.dispose();
         // Second dispose is a no-op: the accumulator was drained.
         env.dispose();
-        assert_eq!(env.service_count(), 0);
+        assert_eq!(ran.load(Ordering::Relaxed), 1);
     }
 
-    // ── model / client hot-reload (pre-existing methods) ──────
+    #[test]
+    fn dispose_isolates_panicking_disposer() {
+        let (env, _watcher) = test_env();
+        let log: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let l1 = Arc::clone(&log);
+        env.effect(|| Box::new(move || l1.lock().push("first")));
+        env.effect(|| Box::new(move || panic!("boom")));
+        let l3 = Arc::clone(&log);
+        env.effect(|| Box::new(move || l3.lock().push("third")));
+
+        // Must not propagate the panic; remaining disposers still run (LIFO).
+        env.dispose();
+        assert_eq!(*log.lock(), vec!["third", "first"]);
+    }
+
+    // ── model / client hot-reload ──────────────────────────────
 
     #[test]
     fn set_model_updates_model_and_watcher() {
@@ -699,7 +421,7 @@ mod tests {
     async fn model_changed_blocks_then_resolves() {
         let (env, mut watcher) = test_env();
 
-        // Blocks while no change is pending (kills a "return Ok(())" mutation).
+        // Blocks while no change is pending.
         let early = tokio::time::timeout(
             std::time::Duration::from_millis(50),
             watcher.model_changed(),
@@ -765,18 +487,15 @@ mod tests {
     #[cfg(feature = "tool")]
     mod tool_tests {
         use super::*;
-        use crate::plugin::Plugin;
         use crate::re_act::tool::{Tool, ToolCallError, ToolRegistry};
         use serde_json::json;
 
         struct MockTool;
-        impl Plugin for MockTool {
+        #[async_trait::async_trait]
+        impl Tool for MockTool {
             fn name(&self) -> &str {
                 "mock"
             }
-        }
-        #[async_trait::async_trait]
-        impl Tool for MockTool {
             fn description(&self) -> &str {
                 "mock tool"
             }
@@ -867,6 +586,98 @@ mod tests {
             assert!(result.is_ok(), "tool_changed should resolve after add_tool");
             handle.await.unwrap();
         }
+
+        #[tokio::test]
+        async fn env_remove_tool_if_same_removes_only_matching_arc() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let original: Arc<dyn Tool> = Arc::new(MockTool);
+            env.add_tool(Arc::clone(&original)).await;
+            // A replacement reuses the same name: the registered Arc is now the
+            // second tool.
+            env.add_tool(Arc::new(MockTool)).await;
+
+            // A different Arc must not remove anything.
+            let other: Arc<dyn Tool> = Arc::new(MockTool);
+            assert!(!env.remove_tool_if_same("mock", &other).await);
+            assert!(env.tool_registry.read().await.tool_exists("mock"));
+
+            // The stale (original) Arc must not remove the replacement either.
+            assert!(!env.remove_tool_if_same("mock", &original).await);
+            assert!(env.tool_registry.read().await.tool_exists("mock"));
+
+            // Removing the currently registered Arc succeeds and notifies.
+            let current = env
+                .tool_registry
+                .read()
+                .await
+                .get_tool("mock")
+                .unwrap()
+                .tool
+                .clone();
+            assert!(env.remove_tool_if_same("mock", &current).await);
+            assert!(!env.tool_registry.read().await.tool_exists("mock"));
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.is_empty())
+            );
+        }
+
+        #[tokio::test]
+        async fn disposer_can_revert_tool_registration() {
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let tool: Arc<dyn Tool> = Arc::new(MockTool);
+            env.add_tool(Arc::clone(&tool)).await;
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.len() == 1)
+            );
+
+            // Register the inverse of the registration as a disposer, so
+            // dispose() removes exactly this tool — the leak-safe pattern.
+            let registry = env.tool_registry.clone();
+            env.effect(move || {
+                let registry = Arc::clone(&registry);
+                let tool = Arc::clone(&tool);
+                Box::new(move || {
+                    // Best-effort, non-blocking undo over the async registry.
+                    if let Ok(mut guard) = registry.try_write() {
+                        guard.remove_tool_if_same("mock", &tool);
+                    }
+                })
+            });
+
+            env.dispose();
+            assert!(!env.tool_registry.read().await.tool_exists("mock"));
+        }
+
+        #[tokio::test]
+        async fn stale_disposer_does_not_remove_replacement_tool() {
+            let (mut env, _watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let original: Arc<dyn Tool> = Arc::new(MockTool);
+            env.add_tool(Arc::clone(&original)).await;
+
+            let registry = env.tool_registry.clone();
+            env.effect(move || {
+                let registry = Arc::clone(&registry);
+                let original = Arc::clone(&original);
+                Box::new(move || {
+                    if let Ok(mut guard) = registry.try_write() {
+                        guard.remove_tool_if_same("mock", &original);
+                    }
+                })
+            });
+
+            // A replacement tool reuses the same name before disposal.
+            env.add_tool(Arc::new(MockTool)).await;
+
+            // The stale disposer must NOT remove the replacement.
+            env.dispose();
+            assert!(env.tool_registry.read().await.tool_exists("mock"));
+        }
     }
 
     #[cfg(feature = "skill")]
@@ -921,7 +732,7 @@ mod tests {
 
         #[test]
         fn set_skill_prompt_and_has_changed() {
-            let (env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
+            let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             assert!(!watcher.has_skill_changed());
             env.set_skill_prompt("hello".into());
             assert!(watcher.has_skill_changed());

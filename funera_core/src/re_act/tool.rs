@@ -8,8 +8,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use thiserror::Error;
 
-use crate::plugin::Plugin;
-
 /// The type of a tool, as communicated to the LLM.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ToolType {
@@ -29,7 +27,10 @@ impl Display for ToolType {
 /// the tool's [`schema`](Tool::schema) to the LLM and invoke
 /// [`execute`](Tool::execute) when the LLM requests it.
 #[async_trait]
-pub trait Tool: Plugin {
+pub trait Tool: Send + Sync {
+    /// Unique name for this tool (e.g. `"read"`, `"shell"`).
+    fn name(&self) -> &str;
+
     /// Human-readable description sent to the LLM.
     fn description(&self) -> &str;
 
