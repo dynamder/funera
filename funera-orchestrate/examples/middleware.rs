@@ -63,6 +63,7 @@ impl InspectorMiddleware<AgentEvent> for EventLogger {
             } => {
                 eprintln!("[log] approval required: {tool_name} — {reason}")
             }
+            AgentEvent::Cancelled => eprintln!("[log] call cancelled"),
         }
         Ok(())
     }

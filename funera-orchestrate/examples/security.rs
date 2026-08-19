@@ -101,6 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // `approve_tool_call` because both go through the shared EnvActor.
     let resp = agent
         .fire("List all .rs files in the current directory", &runtime)
+        .await?
         .await?;
     println!("Agent: {}", resp.content);
 

@@ -10,13 +10,13 @@ use funera_core::middleware::EventSenderFn;
 use funera_core::middleware::{ErrorsEnabled, MiddlewareChain};
 use funera_core::provider::ChatProvider;
 use funera_core::re_act::ReActLoopConfig;
+use tokio_util::sync::CancellationToken;
 
 use crate::dispatcher::{CallbackDispatcher, CallbackRegistry};
 use crate::error::OrchestrateError;
 use crate::event::{AgentEvent, RawAgentEvent};
-use crate::response::{ChatResponse, ToolCallInfo};
 use crate::runtime::{AgentRuntime, Idle};
-use crate::send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
+use crate::send_handle::{FireHandle, FireStreamHandle, SendHandle, SendStreamHandle};
 
 // ---------------------------------------------------------------------------
 // AgentBuilder
@@ -238,13 +238,17 @@ impl Agent {
 
     /// One-shot query. Creates a temporary session, runs a single ReAct loop,
     /// and discards the session.
+    ///
+    /// Returns a [`FireHandle`]: `await` it for the final [`ChatResponse`],
+    /// call `cancel()` to interrupt, or simply drop it — dropping cancels all
+    /// background work spawned for the call.
     pub async fn fire<P: ChatProvider, S>(
         &self,
         msg: impl Into<String>,
         runtime: &AgentRuntime<P, S>,
-    ) -> Result<ChatResponse, OrchestrateError> {
+    ) -> Result<FireHandle, OrchestrateError> {
         let text = msg.into();
-        let mut event_rx = self.subscribe_events();
+        let event_rx = self.subscribe_events();
 
         let (env_state_bus, turn_highway_handle) = EnvStateBus::new();
         let env_state_tx = env_state_bus.env_state_tx.clone();
@@ -256,10 +260,9 @@ impl Agent {
             self.event_tx.clone(),
             self.raw_event_tx.clone(),
         );
-
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        // Temporary actor for one-shot — dropped after react_loop completes
+        // Temporary actor for one-shot — dropped after react_loop completes.
         let session_tx = funera_core::chat::session::spawn_session_actor();
         let session = FuneraSession::new(session_tx);
         if let Some(ref sys) = self.system_prompt {
@@ -271,7 +274,6 @@ impl Agent {
                 }),
             ));
         }
-
         let init_msg = FuneraMessage::new(
             Role::User,
             MsgVariant::Text(TextMessage {
@@ -293,21 +295,25 @@ impl Agent {
         {
             config = config.with_tool_bus(react.tool_bus);
         }
+        let cancel = CancellationToken::new();
+        config = config.with_cancel(cancel.clone());
 
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
-        let result = session
-            .react_loop::<P, AgentEvent>(
-                init_msg,
-                config,
-                env_state_tx.clone(),
-                middleware_opt(runtime),
-                Some(event_sender),
-            )
-            .await;
+        let mw = middleware_opt(runtime);
+        let env_tx = env_state_tx.clone();
+        let handle = tokio::spawn(async move {
+            session
+                .react_loop::<P, AgentEvent>(init_msg, config, env_tx, mw, Some(event_sender))
+                .await
+        });
 
-        let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
-        aggregate_response(&mut event_rx, result).await
+        Ok(FireHandle {
+            handle: Some(handle),
+            cancel,
+            event_rx: Some(event_rx),
+            env_state_tx,
+        })
     }
 
     /// Streaming variant of [`fire`](Self::fire).
@@ -372,6 +378,8 @@ impl Agent {
         {
             config = config.with_tool_bus(react.tool_bus);
         }
+        let cancel = CancellationToken::new();
+        config = config.with_cancel(cancel.clone());
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
         // Spawn react_loop as background task
@@ -384,10 +392,11 @@ impl Agent {
         });
 
         Ok(FireStreamHandle {
-            handle,
-            event_rx,
-            stream_rx,
+            handle: Some(handle),
+            event_rx: Some(event_rx),
+            stream_rx: Some(stream_rx),
             env_state_tx,
+            cancel,
         })
     }
 
@@ -417,7 +426,7 @@ impl Agent {
         );
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        let session = FuneraSession::new(runtime.session_tx());
+        let session = FuneraSession::with_id(runtime.session_id(), runtime.session_tx());
         if let Some(ref sys) = self.system_prompt {
             let msgs = session.session_context().await;
             if msgs.is_empty() {
@@ -450,6 +459,8 @@ impl Agent {
         {
             config = config.with_tool_bus(react.tool_bus);
         }
+        let cancel = CancellationToken::new();
+        config = config.with_cancel(cancel.clone());
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
         let env_tx = env_state_tx.clone();
@@ -461,10 +472,11 @@ impl Agent {
         });
 
         Ok(SendHandle {
-            runtime: runtime.into_acquired(),
-            handle,
-            event_rx,
+            runtime: Some(runtime.into_acquired()),
+            handle: Some(handle),
+            event_rx: Some(event_rx),
             env_state_tx,
+            cancel,
         })
     }
 
@@ -496,7 +508,7 @@ impl Agent {
         );
         let _ = env_state_tx.send(EnvStateEvent::SessionStart);
 
-        let session = FuneraSession::new(runtime.session_tx());
+        let session = FuneraSession::with_id(runtime.session_id(), runtime.session_tx());
         if let Some(ref sys) = self.system_prompt {
             let msgs = session.session_context().await;
             if msgs.is_empty() {
@@ -529,6 +541,8 @@ impl Agent {
         {
             config = config.with_tool_bus(react.tool_bus);
         }
+        let cancel = CancellationToken::new();
+        config = config.with_cancel(cancel.clone());
         let event_sender = build_event_sender(self.callbacks.clone(), self.event_tx.clone());
 
         let env_tx = env_state_tx.clone();
@@ -540,11 +554,12 @@ impl Agent {
         });
 
         Ok(SendStreamHandle {
-            runtime: runtime.into_acquired(),
-            handle,
-            event_rx,
-            stream_rx,
+            runtime: Some(runtime.into_acquired()),
+            handle: Some(handle),
+            event_rx: Some(event_rx),
+            stream_rx: Some(stream_rx),
             env_state_tx,
+            cancel,
         })
     }
 }
@@ -600,64 +615,6 @@ async fn relay_broadcast_to_mpsc(
             break;
         }
     }
-}
-
-/// Aggregate middleware-filtered events from the event stream into a ChatResponse.
-async fn aggregate_response(
-    event_rx: &mut broadcast::Receiver<AgentEvent>,
-    react_result: Result<(), anyhow::Error>,
-) -> Result<ChatResponse, OrchestrateError> {
-    react_result.map_err(OrchestrateError::Session)?;
-
-    let mut content = String::new();
-    let mut tool_calls = Vec::new();
-    let mut iterations = 0usize;
-    let mut finish_reason: Option<String> = None;
-
-    // Track pending tool call requests to match with results
-    let mut pending_requests: Vec<(Arc<str>, String, serde_json::Value)> = Vec::new();
-
-    loop {
-        match event_rx.recv().await {
-            Ok(AgentEvent::Text(t)) => {
-                content = t;
-            }
-            Ok(AgentEvent::ToolCallRequest {
-                call_id,
-                name,
-                args,
-                ..
-            }) => {
-                pending_requests.push((call_id, name, args));
-            }
-            Ok(AgentEvent::ToolCallResult {
-                call_id,
-                name: _,
-                result,
-            }) => {
-                if let Some(pos) = pending_requests
-                    .iter()
-                    .position(|(id, _, _)| *id == call_id)
-                {
-                    let (_, name, args) = pending_requests.remove(pos);
-                    tool_calls.push(ToolCallInfo { name, args, result });
-                }
-            }
-            Ok(AgentEvent::TurnStart) => iterations += 1,
-            Ok(AgentEvent::TurnEnd { finish_reason: fr }) => finish_reason = fr,
-            Ok(AgentEvent::Done) => break,
-            Err(broadcast::error::RecvError::Closed) => break,
-            Err(broadcast::error::RecvError::Lagged(_)) => continue,
-            _ => {}
-        }
-    }
-
-    Ok(ChatResponse {
-        content,
-        tool_calls,
-        iterations,
-        finish_reason,
-    })
 }
 
 #[cfg(test)]

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc};
+use uuid::Uuid;
 
 #[cfg(test)]
 use funera_core::chat::session::FuneraSession;
@@ -19,9 +20,9 @@ use funera_core::env_actor::{EnvCmd, ReActConfig, spawn_env_actor};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 #[cfg(feature = "tool")]
 use funera_core::event_bus::tool_bus::ToolBus;
-use funera_core::provider::ChatProvider;
 #[cfg(feature = "deepseek")]
 use funera_core::provider::deepseek::DeepSeekProvider;
+use funera_core::provider::{ChatProvider, ReasoningLevel};
 #[cfg(feature = "skill")]
 use funera_core::re_act::skills::{Skill, SkillRegistry};
 #[cfg(feature = "tool")]
@@ -65,8 +66,10 @@ pub struct AgentRuntimeBuilder {
     base_url: Option<String>,
     client: Option<async_openai::Client<OpenAIConfig>>,
     model: Option<String>,
+    reasoning_level: Option<ReasoningLevel>,
     max_iterations: usize,
     channel_buffer: usize,
+    max_concurrent_tools: usize,
     #[cfg(feature = "tool")]
     tools: Vec<Arc<dyn Tool>>,
     #[cfg(feature = "skill")]
@@ -102,8 +105,10 @@ impl AgentRuntimeBuilder {
             base_url: None,
             client: None,
             model: None,
+            reasoning_level: None,
             max_iterations: 10,
             channel_buffer: 32,
+            max_concurrent_tools: 4,
             #[cfg(feature = "tool")]
             tools: Vec::new(),
             #[cfg(feature = "skill")]
@@ -153,6 +158,12 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    /// Initial reasoning level (default [`ReasoningLevel::Medium`]).
+    pub fn reasoning_level(mut self, level: ReasoningLevel) -> Self {
+        self.reasoning_level = Some(level);
+        self
+    }
+
     /// Directly provide an OpenAI client (overrides api_key + base_url).
     pub fn client(mut self, client: async_openai::Client<OpenAIConfig>) -> Self {
         self.client = Some(client);
@@ -168,6 +179,16 @@ impl AgentRuntimeBuilder {
     /// Internal channel buffer size (default 32).
     pub fn channel_buffer(mut self, n: usize) -> Self {
         self.channel_buffer = n;
+        self
+    }
+
+    /// Maximum number of tools that may execute concurrently (default 4).
+    ///
+    /// The `ToolExecutor` runs this many workers over the shared tool bus, so
+    /// multiple tool calls in one LLM turn execute in parallel. Results are
+    /// matched back by `call_id`, so execution order does not matter.
+    pub fn max_concurrent_tools(mut self, n: usize) -> Self {
+        self.max_concurrent_tools = n;
         self
     }
 
@@ -451,6 +472,11 @@ impl AgentRuntimeBuilder {
             env
         };
 
+        let env = match self.reasoning_level {
+            Some(level) => env.with_reasoning_level(level),
+            None => env,
+        };
+
         #[cfg(feature = "tool")]
         let env = env.with_tool_registry(registry);
         #[cfg(feature = "skill")]
@@ -492,7 +518,11 @@ impl AgentRuntimeBuilder {
         let tool_cfg = {
             #[cfg(feature = "tool")]
             {
-                Some(EnvToolConfig { tool_bus, exec_rx })
+                Some(EnvToolConfig {
+                    tool_bus,
+                    exec_rx,
+                    max_concurrent_tools: self.max_concurrent_tools,
+                })
             }
             #[cfg(not(feature = "tool"))]
             {
@@ -523,10 +553,15 @@ impl AgentRuntimeBuilder {
         let env_cmd_tx = spawn_env_actor(env, env_watcher, max_iters, chan_buf, tool_cfg, sec_cfg);
 
         let session_tx = spawn_session_actor();
+        // Stable identity for this runtime's conversation session: `send` /
+        // `send_stream` reuse it across calls, while `fire` uses a fresh
+        // one-shot id per call (fork semantics).
+        let session_id = Uuid::new_v4();
 
         Ok(AgentRuntime::<P> {
             env_cmd_tx,
             session_tx,
+            session_id,
             #[cfg(feature = "middleware")]
             middleware_chain,
             _state: PhantomData,
@@ -579,6 +614,7 @@ pub struct Acquired;
 pub struct AgentRuntime<P: ChatProvider, S = Idle> {
     pub(crate) env_cmd_tx: mpsc::UnboundedSender<EnvCmd>,
     pub(crate) session_tx: mpsc::UnboundedSender<SessionCmd>,
+    session_id: Uuid,
     #[cfg(feature = "middleware")]
     pub(crate) middleware_chain: Arc<MiddlewareChain<AgentEvent, ErrorsEnabled>>,
     _state: PhantomData<S>,
@@ -601,6 +637,15 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
     /// Access the session control channel.
     pub fn session_tx(&self) -> mpsc::UnboundedSender<SessionCmd> {
         self.session_tx.clone()
+    }
+
+    /// The stable identifier of this runtime's conversation session.
+    ///
+    /// `send` / `send_stream` keep this id across calls so every turn of a
+    /// conversation shares one identity; `fire` / `fire_stream` use a fresh
+    /// one-shot id per call (fork semantics).
+    pub fn session_id(&self) -> Uuid {
+        self.session_id
     }
 
     /// Subscribe to runtime-level environment state events.
@@ -651,6 +696,22 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
     /// the next iteration) and broadcasts [`EnvStateEvent::LlmChanged`].
     pub fn set_model(&self, model: impl Into<String>) {
         let _ = self.env_cmd_tx.send(EnvCmd::SetModel(model.into()));
+    }
+
+    /// Change the reasoning level at runtime.
+    ///
+    /// Pushes to the internal watch channel (picked up by the ReAct loop on
+    /// the next iteration) and broadcasts
+    /// [`EnvStateEvent::ReasoningLevelChanged`].
+    pub fn set_reasoning_level(&self, level: ReasoningLevel) {
+        let _ = self.env_cmd_tx.send(EnvCmd::SetReasoningLevel(level));
+    }
+
+    /// Query the current reasoning level from the env actor.
+    pub async fn reasoning_level(&self) -> ReasoningLevel {
+        let (respond, rx) = tokio::sync::oneshot::channel();
+        let _ = self.env_cmd_tx.send(EnvCmd::GetReasoningLevel { respond });
+        rx.await.unwrap_or_default()
     }
 
     /// Change the LLM client at runtime (endpoint, key, etc.).
@@ -778,6 +839,7 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
         AgentRuntime::<P, Acquired> {
             env_cmd_tx: self.env_cmd_tx,
             session_tx: self.session_tx,
+            session_id: self.session_id,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
             _state: PhantomData,
@@ -800,6 +862,7 @@ impl<P: ChatProvider> AgentRuntime<P, Acquired> {
         AgentRuntime::<P, Idle> {
             env_cmd_tx: self.env_cmd_tx,
             session_tx: self.session_tx,
+            session_id: self.session_id,
             #[cfg(feature = "middleware")]
             middleware_chain: self.middleware_chain,
             _state: PhantomData,
@@ -945,9 +1008,23 @@ mod tests {
     }
 
     #[test]
+    fn builder_max_concurrent_tools_default_and_set() {
+        assert_eq!(AgentRuntimeBuilder::new().max_concurrent_tools, 4);
+        let b = AgentRuntimeBuilder::new().max_concurrent_tools(8);
+        assert_eq!(b.max_concurrent_tools, 8);
+    }
+
+    #[test]
     fn builder_set_model() {
         let b = AgentRuntimeBuilder::new().model("test-model");
         assert_eq!(b.model, Some("test-model".into()));
+    }
+
+    #[test]
+    fn builder_reasoning_level() {
+        assert!(AgentRuntimeBuilder::new().reasoning_level.is_none());
+        let b = AgentRuntimeBuilder::new().reasoning_level(ReasoningLevel::Max);
+        assert_eq!(b.reasoning_level, Some(ReasoningLevel::Max));
     }
 
     #[test]
@@ -1037,6 +1114,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn session_id_stable_across_wrappers() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        let id = rt.session_id();
+        // Every send-style wrapper over the same runtime shares its session id.
+        let s1 = FuneraSession::with_id(rt.session_id(), rt.session_tx());
+        let s2 = FuneraSession::with_id(rt.session_id(), rt.session_tx());
+        assert_eq!(s1.id(), id);
+        assert_eq!(s2.id(), id);
+        assert_eq!(rt.session_id(), id);
+    }
+
+    #[tokio::test]
     async fn session_context_works_immediately() {
         let rt = AgentRuntimeBuilder::new()
             .api_key("sk-test")
@@ -1085,6 +1178,28 @@ mod tests {
             got,
             Ok(Ok(EnvStateEvent::LlmChanged(m))) if m == "new-model"
         ));
+    }
+
+    #[tokio::test]
+    async fn reasoning_level_hot_reloads() {
+        let rt = AgentRuntimeBuilder::new()
+            .api_key("sk-test")
+            .model("x")
+            .build()
+            .unwrap();
+        // Default is Medium.
+        assert_eq!(rt.reasoning_level().await, ReasoningLevel::Medium);
+
+        let mut rx = rt.subscribe_env_state().await;
+        rt.set_reasoning_level(ReasoningLevel::High);
+        let got = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await;
+        assert!(matches!(
+            got,
+            Ok(Ok(EnvStateEvent::ReasoningLevelChanged(
+                ReasoningLevel::High
+            )))
+        ));
+        assert_eq!(rt.reasoning_level().await, ReasoningLevel::High);
     }
 
     // ── sandbox integration tests ───────────────────────────────────
