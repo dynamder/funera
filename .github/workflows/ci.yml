@@ -112,7 +112,10 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
-      - run: cargo llvm-cov --workspace --all-features --lcov --output-path lcov.info
+      # `--all-features` would enable `real-llm` and run the live-LLM
+      # integration tests, which need an API key; use the same feature set as
+      # the test jobs instead.
+      - run: cargo llvm-cov --workspace --features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools --lcov --output-path lcov.info
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -131,8 +134,15 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-mutants
+      # The PR checkout does not carry the `origin/main` ref, so materialize
+      # the diff against the base branch explicitly before handing it to
+      # cargo-mutants.
+      - name: Generate in-diff
+        run: |
+          git fetch origin main
+          git diff origin/main...HEAD > /tmp/mutants.diff
       - name: Run mutants on diff
-        run: timeout 900 cargo mutants --in-diff origin/main...HEAD --baseline skip -j 2 -- --lib
+        run: timeout 900 cargo mutants --in-diff /tmp/mutants.diff --baseline skip -j 2 -- --lib
 
   test-cross:
     runs-on: ${{ matrix.os }}
