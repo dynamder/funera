@@ -1,3 +1,4 @@
+#[cfg(feature = "tool")]
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
@@ -138,6 +139,7 @@ pub enum EnvCmd {
 ///
 /// When all [`EnvCmd`] senders are dropped, the actor and its
 /// ToolExecutor exit cleanly.
+#[cfg_attr(not(feature = "tool"), allow(unused_variables))]
 pub fn spawn_env_actor(
     env: FuneraEnv,
     env_watcher: FuneraEnvWatcher,

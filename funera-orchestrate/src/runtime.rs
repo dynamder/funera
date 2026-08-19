@@ -11,7 +11,7 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::session::FuneraSession;
 use funera_core::chat::session::{SessionCmd, spawn_session_actor};
 use funera_core::env::FuneraEnv;
-#[cfg(any(feature = "sandbox", feature = "security"))]
+#[cfg(feature = "security")]
 use funera_core::env_actor::EnvSecurityConfig;
 #[cfg(feature = "tool")]
 use funera_core::env_actor::EnvToolConfig;
@@ -28,7 +28,7 @@ use funera_core::re_act::skills::{Skill, SkillRegistry};
 use funera_core::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "security")]
 use funera_core::security::audit::{AuditBus, AuditEvent};
-#[cfg(all(feature = "sandbox", feature = "security"))]
+#[cfg(all(feature = "tool", feature = "sandbox", feature = "security"))]
 use funera_core::security::path_guard::PathGuard;
 #[cfg(feature = "security")]
 use funera_core::security::policy::ToolPolicy;

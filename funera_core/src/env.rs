@@ -9,11 +9,11 @@ use crate::re_act::skills::{Skill, SkillRegistry};
 use crate::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "sandbox")]
 use crate::security::sandbox::SandboxPolicy;
+#[cfg(feature = "tool")]
 use serde_json::Value as JsonValue;
-use tokio::sync::{
-    RwLock,
-    watch::{self, error::RecvError},
-};
+#[cfg(any(feature = "tool", feature = "skill"))]
+use tokio::sync::RwLock;
+use tokio::sync::watch::{self, error::RecvError};
 
 /// A teardown action that undoes one effect.
 ///

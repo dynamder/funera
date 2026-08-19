@@ -25,7 +25,7 @@ tracing = "0.1"
 
 [features]
 default = ["deepseek", "tool"]
-funera-builtin-tools = ["dep:funera-builtin-tools", "funera-core/tool"]
+funera-builtin-tools = ["dep:funera-builtin-tools", "funera-core/tool", "tool"]
 sandbox = ["funera-core/sandbox", "funera-builtin-tools?/sandbox"]
 security = ["funera-core/security"]
 deepseek = ["funera-core/deepseek"]

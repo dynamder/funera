@@ -13,9 +13,9 @@ use crate::chat::message::{FuneraMessage, MsgVariant, Role, TextMessage};
 use crate::chat::session::SessionCmd;
 use crate::env::FuneraEnvWatcher;
 use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
-use crate::event_bus::react_bus::{
-    ReactBus, ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse,
-};
+use crate::event_bus::react_bus::{ReactBus, ReactEvent};
+#[cfg(feature = "tool")]
+use crate::event_bus::react_bus::{ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
 use crate::event_bus::token_bus::{TokenBus, TokenEvent};
 #[cfg(feature = "tool")]
 use crate::event_bus::tool_bus::ToolBus;
@@ -225,6 +225,10 @@ impl<P: ChatProvider> ReActLoop<P> {
                 )
                 .await?;
 
+                // `tool_results` is only consumed when the `tool` feature is on.
+                #[cfg(not(feature = "tool"))]
+                let _ = tool_results;
+
                 #[cfg(feature = "tool")]
                 {
                     let mut result_events: Vec<E> = Vec::new();
@@ -258,6 +262,7 @@ impl<P: ChatProvider> ReActLoop<P> {
     }
 }
 
+#[cfg_attr(not(feature = "tool"), allow(dead_code))]
 struct ToolExecResult {
     call_id: String,
     name: String,
