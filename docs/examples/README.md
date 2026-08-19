@@ -17,4 +17,4 @@ LLM examples require an API key:
 
 - `minimal`, `multi_turn`, `streaming`, `custom_tool`, `middleware`, `skills`,
   `builtin_tools`, `session_reset`, `raw_events`, `multi_runtime`, `sandbox`,
-  `security`, `streaming_with_tools`
+  `security`, `streaming_with_tools`, `cancel`

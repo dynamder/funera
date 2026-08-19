@@ -35,3 +35,20 @@ env is torn down:
 This guarantees that anything registered against the env — tools, listeners, connections — is
 reverted on teardown, preventing memory and service leaks. See
 [Reversible Effects](concepts/effects.md) for the pattern.
+
+## Cancellation
+
+Every agent call returns a cancellable handle — `FireHandle` (one-shot `fire`),
+`FireStreamHandle`, `SendHandle`, `SendStreamHandle`. `cancel()` — or simply
+dropping the handle — cancels the call's `CancellationToken`. The `ReActLoop`
+exits cooperatively at its next blocking point (stream consumption, the initial
+provider request, in-flight tool execution) and:
+
+- stops receiving output immediately;
+- abandons in-flight tool executions (the shared `ToolExecutor` workers survive);
+- emits `AgentEvent::Cancelled` through the middleware chain and to event
+  subscribers — **never** into session history — so middleware holding external
+  services can clean up.
+
+Awaiting a cancelled handle yields `OrchestrateError::Cancelled`; `recv()` on a
+streaming handle returns `None` once cancelled.
