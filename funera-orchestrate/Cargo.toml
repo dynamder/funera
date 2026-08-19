@@ -2,9 +2,12 @@
 name = "funera-orchestrate"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Easy-to-use orchestration layer for funera-core — build LLM agents with a simple builder API"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/funera-orchestrate"
 
 [dependencies]
 funera-core = { path = "../funera_core", version = "0.2.6" }
@@ -22,7 +25,7 @@ tracing = "0.1"
 
 [features]
 default = ["deepseek", "tool"]
-funera-builtin-tools = ["dep:funera-builtin-tools", "funera-core/tool"]
+funera-builtin-tools = ["dep:funera-builtin-tools", "funera-core/tool", "tool"]
 sandbox = ["funera-core/sandbox", "funera-builtin-tools?/sandbox"]
 security = ["funera-core/security"]
 deepseek = ["funera-core/deepseek"]
@@ -65,6 +68,9 @@ required-features = ["security", "funera-builtin-tools"]
 
 [[example]]
 name = "custom_tool"
+
+[[example]]
+name = "reversible_effects"
 
 [[example]]
 name = "minimal"

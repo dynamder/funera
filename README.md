@@ -1,13 +1,54 @@
 # Funera
 
-An LLM agent framework for Rust. Build AI agents with tools, skills, middleware, and pluggable
-LLM backends — all with multi-layered security and a flexible pipeline.
+> A security-oriented Rust LLM agent framework — ReAct loop, tools, skills, middleware, and
+> pluggable LLM backends, with reversible effects that make teardown leak-free by construction.
 
 WARNING: This crate is still under development, the documentation may be incomplete or wrong. And the API may change.
 WARNING: The security features are still under development and testing, and cannot be trusted to be secure.
 
+[![CI](https://github.com/dynamder/funera/actions/workflows/ci.yml/badge.svg)](https://github.com/dynamder/funera/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/funera.svg)](https://crates.io/crates/funera)
+[![docs.rs](https://docs.rs/funera/badge.svg)](https://docs.rs/funera)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://github.com/dynamder/funera/blob/main/CONTRIBUTING.md#minimum-supported-rust-version-msrv)
 [![Rust](https://img.shields.io/badge/edition-2024-orange)](https://rust-lang.org)
+
+## Why Funera?
+
+- **Simple core, broad extensibility** — `ChatProvider`, `Tool`, `Skill`, and middleware are
+  plain Rust traits; the runtime is a thin channel wrapper around an `EnvActor` that owns all
+  state.
+- **Reversible effects** — `FuneraEnv::effect` pairs every registration with its inverse; a
+  single `dispose()` runs all inverses in reverse (LIFO) order, so memory and services never
+  leak. The `EnvActor` disposes automatically when the runtime is dropped.
+- **Runtime hot-reload** — model, client, tools, and skills can change mid-conversation; the
+  ReAct loop picks changes up on the next iteration.
+- **Actor-based architecture** — all mutable state lives in background tasks; `AgentRuntime` is
+  a thin channel wrapper.
+- **Security-oriented** — tool policies, path guards, audit logging, secure key storage, and a
+  kernel-backed sandbox on supported platforms.
+
+## Quick Start
+
+```rust
+use funera::{Agent, AgentRuntime, DeepSeekProvider};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = AgentRuntime::<DeepSeekProvider>::builder()
+        .api_key(std::env::var("DEEPSEEK_API_KEY")?)
+        .model("deepseek-v4-flash")
+        .build()?;
+
+    let agent = Agent::builder()
+        .system_prompt("You are a helpful assistant.")
+        .build();
+
+    let resp = agent.fire("Hello!", &runtime).await?;
+    println!("{}", resp.content);
+    Ok(())
+}
+```
 
 ## Architecture
 
@@ -132,12 +173,69 @@ sequenceDiagram
 
 - **ReAct loop** — iterative tool-calling agent execution with configurable max iterations and runtime hot-reloading
 - **Actor-based architecture** — all mutable state lives in background tasks (EnvActor, SessionActor, ToolExecutor); `AgentRuntime` is a thin channel-wrapper
+- **Reversible effects** — `FuneraEnv::effect` / `dispose` run registered teardown actions in LIFO order (idempotent, panic-isolated), so registrations never leak
 - **Pluggable providers** — OpenAI and DeepSeek backends with streaming support
 - **Tool system** — define custom tools by implementing the `Tool` trait; built-in file I/O and shell
 - **Skill system** — load prompt templates from YAML-frontmatter Markdown files
 - **Middleware pipeline** — intercept agent events with inspectors (read-only, parallel) and mutators (pass/modify/block, sequential)
 - **Security layer** — tool/shell policies, path allowlisting, audit logging, secure API key storage
 - **Type-state session** — compile-time enforcement of session ownership (`Idle` / `Acquired`)
+
+## Examples
+
+| Example | Description |
+|---|---|
+| `minimal` | One-shot `Agent::fire` |
+| `multi_turn` | Persistent multi-turn conversation |
+| `streaming` / `streaming_with_tools` | Token streaming with/without tools |
+| `custom_tool` | Define and register a custom tool |
+| `middleware` | Inspector/Mutator middleware pipeline |
+| `reversible_effects` | LIFO teardown of registered effects (no LLM) |
+| `tool_policy` / `security` / `sandbox` | Security policies, audit, and sandboxing |
+
+## Reversible effects
+
+Funera guarantees leak-free teardown with a single generic primitive:
+
+```rust,no_run
+use funera_core::env::FuneraEnv;
+
+# fn example(env: &FuneraEnv) {
+env.effect(|| {
+    let resource = acquire();              // setup: the effect
+    Box::new(move || release(resource))    // teardown: its inverse
+});
+# }
+# fn acquire() -> String { String::new() }
+# fn release(_: String) {}
+```
+
+- `effect(body)` runs `body` now and pushes the returned disposer onto the env's accumulator.
+- `dispose()` runs every disposer in **reverse registration order** (LIFO), so later effects —
+  which may depend on earlier ones — are undone first.
+- Disposal is **idempotent** (the accumulator is drained) and **panic-isolated** (a panicking
+  disposer is caught and logged; the rest still run).
+- `EnvActor` calls `dispose()` automatically once the runtime is dropped, so anything registered
+  against the env is reverted — no memory or service leaks.
+- For tool registrations, the safe inverse is `remove_tool_if_same`: it removes a tool only if
+  the registered entry is the *same* `Arc`, so a stale teardown never deletes a replacement
+  tool that reuses the same name.
+
+Run the demo:
+
+```bash
+cargo run -p funera-orchestrate --example reversible_effects
+```
+
+### Limitations
+
+- `FuneraEnv::dispose` runs sync disposers in LIFO order with panic isolation. A sync disposer
+  cannot be safely timed out by the runtime; keep disposers short and non-blocking. Async
+  teardown can be scheduled from the disposer onto a tokio runtime and awaited by the caller if
+  needed.
+- `security`-featured tool execution runs outside the registry lock via a cloned guarded
+  registry; the clone shares approval and react-bus state, while policy/path configuration is
+  snapshotted at call time.
 
 ## Installation
 
@@ -241,7 +339,7 @@ let runtime = AgentRuntime::<DeepSeekProvider>::builder()
 runtime.set_model("deepseek-r1");
 
 // Dynamically add a tool
-runtime.add_tool(Box::new(MyTool));
+runtime.add_tool(std::sync::Arc::new(MyTool));
 
 // Subscribe to env state changes
 let mut env_rx = runtime.subscribe_env_state().await;
@@ -285,7 +383,7 @@ impl Tool for Calculator {
 let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .api_key(std::env::var("DEEPSEEK_API_KEY")?)
     .model("deepseek-v4-flash")
-    .with_tool_instance(Box::new(Calculator))
+    .with_tool_instance(std::sync::Arc::new(Calculator))
     .build()?;
 ```
 
@@ -325,7 +423,7 @@ funera/
 ├── funera_core/          Core agent engine
 │   └── src/
 │       ├── chat/         Message types, session actor
-│       ├── env.rs        Runtime environment + watch hot-reload
+│       ├── env.rs        Runtime environment, watch hot-reload, reversible effects
 │       ├── env_actor.rs  EnvActor — single source of truth for all env state
 │       ├── event_bus/    Token, React, EnvState, Tool buses
 │       ├── middleware.rs  Event interception pipeline
@@ -339,7 +437,7 @@ funera/
 │   │   ├── event.rs      AgentEvent enum
 │   │   ├── dispatcher.rs  Callback dispatch
 │   │   └── send_handle.rs Ownership handles
-│   └── examples/         Example programs
+│   └── examples/         Example programs (incl. reversible_effects)
 ├── funera_builtin_tools/  Default tool implementations
 │   └── src/
 │       ├── read.rs       ReadTool (file/dir, hashline output)
@@ -347,6 +445,14 @@ funera/
 │       ├── edit.rs       EditTool (hashline-anchored editing)
 │       └── shell.rs      ShellTool (cross-platform, timeout)
 ```
+
+## Contributing
+
+Contributions are welcome! Please read:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — build, test, and pull-request workflow
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
+- [SECURITY.md](SECURITY.md) — reporting security vulnerabilities
 
 ## License
 

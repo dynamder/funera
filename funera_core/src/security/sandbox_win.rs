@@ -1272,12 +1272,12 @@ mod tests {
 
         // apply should not crash
         assert!(
-            apply_write_acls(sid, &[tmpdir.clone()]).is_ok(),
+            apply_write_acls(sid, std::slice::from_ref(&tmpdir)).is_ok(),
             "apply ACE"
         );
 
         // remove should not crash
-        remove_write_acls(sid, &[tmpdir.clone()]);
+        remove_write_acls(sid, std::slice::from_ref(&tmpdir));
 
         cleanup_temp_dir(&tmpdir);
         unsafe { FreeSid(sid) };
@@ -1291,7 +1291,7 @@ mod tests {
         let sid = create_sandbox_sid().expect("create sid");
 
         assert!(
-            apply_write_acls(sid, &[tmpdir.clone()]).is_ok(),
+            apply_write_acls(sid, std::slice::from_ref(&tmpdir)).is_ok(),
             "apply ACE"
         );
 
@@ -1304,7 +1304,7 @@ mod tests {
         let tmpdir = unique_temp_dir();
         let sid = create_sandbox_sid().expect("create sid");
         assert!(
-            apply_write_acls(sid, &[tmpdir.clone()]).is_ok(),
+            apply_write_acls(sid, std::slice::from_ref(&tmpdir)).is_ok(),
             "missing protected subdirs should not cause errors"
         );
         cleanup_temp_dir(&tmpdir);

@@ -16,6 +16,7 @@ use crate::security::policy::ToolPolicy;
 /// Callback signature for tool approval requests.
 pub type ApprovalCallback = Arc<dyn Fn(&str, &str, &str, &[PathBuf]) + Send + Sync>;
 
+#[derive(Clone)]
 pub struct GuardedToolRegistry {
     inner: RawToolRegistry,
     policy: ToolPolicy,
@@ -26,7 +27,7 @@ pub struct GuardedToolRegistry {
     pending_approvals: std::sync::Arc<std::sync::Mutex<HashMap<String, oneshot::Sender<bool>>>>,
     approval_timeout: Option<std::time::Duration>,
     approval_callback: Option<ApprovalCallback>,
-    react_bus: std::sync::Mutex<Option<ReactBus>>,
+    react_bus: std::sync::Arc<std::sync::Mutex<Option<ReactBus>>>,
 }
 
 impl GuardedToolRegistry {
@@ -41,7 +42,7 @@ impl GuardedToolRegistry {
             pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             approval_timeout: None,
             approval_callback: None,
-            react_bus: std::sync::Mutex::new(None),
+            react_bus: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -56,7 +57,7 @@ impl GuardedToolRegistry {
             pending_approvals: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             approval_timeout: None,
             approval_callback: None,
-            react_bus: std::sync::Mutex::new(None),
+            react_bus: std::sync::Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -130,7 +131,7 @@ impl GuardedToolRegistry {
         }
     }
 
-    pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
+    pub fn add_tool(&mut self, tool: Arc<dyn Tool>) {
         self.inner.add_tool(tool);
     }
 
@@ -138,8 +139,17 @@ impl GuardedToolRegistry {
         self.inner.get_tool(name)
     }
 
+    /// Clone the tool's `Arc` if it exists and is available.
+    pub fn get_tool_arc(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.inner.get_tool_arc(name)
+    }
+
     pub fn remove_tool(&mut self, name: &str) {
         self.inner.remove_tool(name);
+    }
+
+    pub fn remove_tool_if_same(&mut self, name: &str, tool: &Arc<dyn Tool>) -> bool {
+        self.inner.remove_tool_if_same(name, tool)
     }
 
     pub fn tool_exists(&self, name: &str) -> bool {
@@ -379,10 +389,42 @@ mod tests {
     #[tokio::test]
     async fn allowed_tool_works() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
         let result = registry.call_tool("ok_tool", json!({})).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "done");
+    }
+
+    #[tokio::test]
+    async fn get_tool_arc_returns_available_tool_or_none() {
+        let mut registry = GuardedToolRegistry::new();
+        assert!(registry.get_tool_arc("ok_tool").is_none());
+
+        registry.add_tool(Arc::new(OkTool));
+        let tool = registry.get_tool_arc("ok_tool");
+        assert!(
+            tool.is_some(),
+            "registered tool must be clonable via get_tool_arc"
+        );
+        assert_eq!(tool.unwrap().name(), "ok_tool");
+
+        assert!(registry.get_tool_arc("missing").is_none());
+    }
+
+    #[tokio::test]
+    async fn remove_tool_if_same_only_removes_matching_arc() {
+        let mut registry = GuardedToolRegistry::new();
+        let original: Arc<dyn Tool> = Arc::new(OkTool);
+        registry.add_tool(Arc::clone(&original));
+
+        // A different Arc (e.g. a replacement with the same name) is kept.
+        let other: Arc<dyn Tool> = Arc::new(OkTool);
+        assert!(!registry.remove_tool_if_same("ok_tool", &other));
+        assert!(registry.tool_exists("ok_tool"));
+
+        // Removing the registered Arc succeeds.
+        assert!(registry.remove_tool_if_same("ok_tool", &original));
+        assert!(!registry.tool_exists("ok_tool"));
     }
 
     #[tokio::test]
@@ -390,7 +432,7 @@ mod tests {
         let mut policy = ToolPolicy::default();
         policy.denied_tools.insert("danger".into());
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
         let result = registry.call_tool("danger", json!({})).await;
         assert!(result.is_err());
     }
@@ -401,7 +443,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new();
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
 
@@ -440,7 +482,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("evil", json!({})).await.err();
         let event = rx.try_recv();
@@ -472,7 +514,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
 
@@ -510,7 +552,7 @@ mod tests {
         let mut rx = bus.subscribe();
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(OkTool));
+        registry.add_tool(Arc::new(OkTool));
 
         registry.call_tool("ok_tool", json!({})).await.unwrap();
 
@@ -546,7 +588,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_rejected_outside_sandbox() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         let result = registry
@@ -561,7 +603,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_rejected_no_callback() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         // Use a path that canonicalizes; "src" exists in the project root
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
@@ -581,7 +623,7 @@ mod tests {
         let invoked = std::sync::Arc::new(std::sync::Mutex::new(false));
         let inv = invoked.clone();
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         registry.set_approval_callback(std::sync::Arc::new(move |_id, name, _reason, _paths| {
@@ -602,7 +644,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_approval_timeout() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         #[cfg(feature = "sandbox")]
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         registry.set_approval_timeout(Some(std::time::Duration::from_millis(1)));
@@ -620,7 +662,7 @@ mod tests {
     #[tokio::test]
     async fn boundary_auto_approved_within_pathguard() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_path_guard(PathGuard::new(["."]));
         let result = registry
             .call_tool("approvable", json!({"filePath": "Cargo.toml"}))
@@ -641,7 +683,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_no_pathguard_no_sandbox_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         let result = registry
             .call_tool("approvable", json!({"command": "echo hello"}))
             .await;
@@ -656,7 +698,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_with_pathguard_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_path_guard(PathGuard::new(["."]));
         let result = registry
             .call_tool("approvable", json!({"command": "echo hello"}))
@@ -674,7 +716,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_with_sandbox_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         let result = registry
             .call_tool("approvable", json!({"command": "echo hello"}))
@@ -691,7 +733,7 @@ mod tests {
     #[tokio::test]
     async fn shell_cmd_sandbox_plus_pathguard_not_rejected() {
         let mut registry = GuardedToolRegistry::new();
-        registry.add_tool(Box::new(ApprovableTool));
+        registry.add_tool(Arc::new(ApprovableTool));
         registry.set_sandbox_paths(vec![], vec!["src".into()]);
         registry.set_path_guard(PathGuard::new(["."]));
         let result = registry

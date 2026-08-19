@@ -2,9 +2,12 @@
 name = "funera-builtin-tools"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "Default tool implementations for funera — Read, Write, Edit, Shell"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/funera-builtin-tools"
 readme = "../README.md"
 
 [dependencies]

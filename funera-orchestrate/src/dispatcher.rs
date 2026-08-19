@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
-#[cfg(feature = "security")]
+#[cfg(all(feature = "tool", feature = "security"))]
 use funera_core::event_bus::react_bus::ReactEvent;
 
 use crate::event::{AgentEvent, RawAgentEvent};

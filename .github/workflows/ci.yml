@@ -21,12 +21,36 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check --all
 
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace
+
   doc:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc --no-deps --all-features
+
+  mdbook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: 'latest'
+      - run: mdbook build
+
+  doc-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --doc --workspace --all-features
 
   clippy:
     runs-on: ubuntu-latest
@@ -38,6 +62,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -p ${{ matrix.crate }} --all-features -- -D warnings
+
+  # funera is heavily feature-gated and its features are not independent
+  # (security requires tool, sandbox requires security, regex requires
+  # security, orchestrate features forward into core). cargo-hack resolves
+  # every combination, applies feature propagation, and dedups equivalent
+  # feature sets, so this checks that *every distinct combination* compiles
+  # warning-free — not just the curated matrix below.
+  feature-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: Check every feature combination compiles
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo hack check -p funera-core --feature-powerset --skip test-utils
+          cargo hack check -p funera-orchestrate --feature-powerset --skip real-llm
+          cargo hack check -p funera --feature-powerset
+          cargo hack check -p funera-builtin-tools --feature-powerset
 
   semver:
     runs-on: ubuntu-latest
@@ -76,6 +124,53 @@ jobs:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --lib ${{ matrix.features.flags }} -p funera-orchestrate
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      # `--all-features` would enable `real-llm` and run the live-LLM
+      # integration tests, which need an API key; use the same feature set as
+      # the test jobs instead.
+      - run: cargo llvm-cov --workspace --features deepseek,tool,security,sandbox,middleware,skill,funera-builtin-tools --lcov --output-path lcov.info
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lcov.info
+          fail_ci_if_error: false
+
+  mutants:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+      # The PR checkout does not carry the `origin/main` ref, so materialize
+      # the diff against the base branch explicitly before handing it to
+      # cargo-mutants. `--workspace` is required: without it cargo-mutants only
+      # considers the current package (the root `funera` re-export crate) and
+      # silently finds no mutants. `--all-features` ensures mutants in
+      # cfg-gated code (security/sandbox/builtin-tools) are actually compiled
+      # and tested.
+      - name: Generate in-diff
+        run: |
+          git fetch origin main
+          git diff origin/main...HEAD > /tmp/mutants.diff
+      - name: Run mutants on diff
+        run: timeout 900 cargo mutants --workspace --all-features --in-diff /tmp/mutants.diff --baseline skip -j 2 -- --lib
 
   test-cross:
     runs-on: ${{ matrix.os }}

@@ -140,13 +140,13 @@ impl MutatorMiddleware<AgentEvent> for BlockTool {
     }
 
     fn process(&self, event: AgentEvent) -> MutatorAction<AgentEvent> {
-        if let AgentEvent::ToolCallRequest { name, .. } = &event {
-            if self.tool_name.eq_ignore_ascii_case(name) {
-                eprintln!("[block_tool] blocked tool call: {name}");
-                return MutatorAction::Block {
-                    reason: format!("tool '{}' is blocked", name),
-                };
-            }
+        if let AgentEvent::ToolCallRequest { name, .. } = &event
+            && self.tool_name.eq_ignore_ascii_case(name)
+        {
+            eprintln!("[block_tool] blocked tool call: {name}");
+            return MutatorAction::Block {
+                reason: format!("tool '{}' is blocked", name),
+            };
         }
         MutatorAction::Pass
     }

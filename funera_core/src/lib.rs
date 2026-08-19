@@ -9,7 +9,7 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`mod@chat`] | Message types and session actor for conversation history |
-//! | [`mod@env`] | Shared runtime environment with watch-based hot-reload (FuneraEnv, FuneraEnvWatcher) |
+//! | [`mod@env`] | Runtime environment: watch-based hot-reload (`FuneraEnv`, `FuneraEnvWatcher`) plus reversible effects (`effect` / `dispose`, LIFO teardown) |
 //! | [`mod@env_actor`] | EnvActor — single source of truth owning all env state, mutations, and ToolExecutor |
 //! | [`mod@event_bus`] | Event buses for streaming tokens, ReAct cycle events, session lifecycle, and tool commands |
 //! | [`mod@provider`] | Provider abstraction over LLM backends (OpenAI, DeepSeek) |

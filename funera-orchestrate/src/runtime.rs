@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 #[cfg(feature = "skill")]
 use std::path::PathBuf;
-#[cfg(any(feature = "middleware", feature = "security"))]
+#[cfg(any(feature = "middleware", feature = "security", feature = "tool"))]
 use std::sync::Arc;
 
 use async_openai::config::OpenAIConfig;
@@ -11,7 +11,7 @@ use tokio::sync::{broadcast, mpsc};
 use funera_core::chat::session::FuneraSession;
 use funera_core::chat::session::{SessionCmd, spawn_session_actor};
 use funera_core::env::FuneraEnv;
-#[cfg(any(feature = "sandbox", feature = "security"))]
+#[cfg(feature = "security")]
 use funera_core::env_actor::EnvSecurityConfig;
 #[cfg(feature = "tool")]
 use funera_core::env_actor::EnvToolConfig;
@@ -28,7 +28,7 @@ use funera_core::re_act::skills::{Skill, SkillRegistry};
 use funera_core::re_act::tool::{Tool, ToolRegistry};
 #[cfg(feature = "security")]
 use funera_core::security::audit::{AuditBus, AuditEvent};
-#[cfg(all(feature = "sandbox", feature = "security"))]
+#[cfg(all(feature = "tool", feature = "sandbox", feature = "security"))]
 use funera_core::security::path_guard::PathGuard;
 #[cfg(feature = "security")]
 use funera_core::security::policy::ToolPolicy;
@@ -68,7 +68,7 @@ pub struct AgentRuntimeBuilder {
     max_iterations: usize,
     channel_buffer: usize,
     #[cfg(feature = "tool")]
-    tools: Vec<Box<dyn Tool>>,
+    tools: Vec<Arc<dyn Tool>>,
     #[cfg(feature = "skill")]
     skills: Vec<Skill>,
     #[cfg(feature = "skill")]
@@ -230,13 +230,13 @@ impl AgentRuntimeBuilder {
     /// Register a tool by its type (requires `Tool + Default`).
     #[cfg(feature = "tool")]
     pub fn with_tool<T: Tool + Default + 'static>(mut self) -> Self {
-        self.tools.push(Box::new(T::default()));
+        self.tools.push(Arc::new(T::default()));
         self
     }
 
     /// Register a pre-constructed tool.
     #[cfg(feature = "tool")]
-    pub fn with_tool_instance(mut self, tool: Box<dyn Tool>) -> Self {
+    pub fn with_tool_instance(mut self, tool: Arc<dyn Tool>) -> Self {
         self.tools.push(tool);
         self
     }
@@ -293,18 +293,18 @@ impl AgentRuntimeBuilder {
     #[cfg(feature = "funera-builtin-tools")]
     pub fn with_builtin_tools(mut self) -> Self {
         use funera_builtin_tools::{EditTool, ReadTool, ShellTool, WriteTool};
-        self.tools.push(Box::new(ReadTool));
-        self.tools.push(Box::new(WriteTool));
-        self.tools.push(Box::new(EditTool));
+        self.tools.push(Arc::new(ReadTool));
+        self.tools.push(Arc::new(WriteTool));
+        self.tools.push(Arc::new(EditTool));
         #[cfg(feature = "sandbox")]
         if let Some(ref policy) = self.sandbox_policy {
             self.tools
-                .push(Box::new(ShellTool::with_sandbox(policy.clone())));
+                .push(Arc::new(ShellTool::with_sandbox(policy.clone())));
         } else {
-            self.tools.push(Box::new(ShellTool::new()));
+            self.tools.push(Arc::new(ShellTool::new()));
         }
         #[cfg(not(feature = "sandbox"))]
-        self.tools.push(Box::new(ShellTool::new()));
+        self.tools.push(Arc::new(ShellTool::new()));
         self
     }
 
@@ -660,7 +660,7 @@ impl<P: ChatProvider, S> AgentRuntime<P, S> {
 
     /// Register a new tool at runtime.
     #[cfg(feature = "tool")]
-    pub fn add_tool(&self, tool: Box<dyn Tool>) {
+    pub fn add_tool(&self, tool: Arc<dyn Tool>) {
         let _ = self.env_cmd_tx.send(EnvCmd::AddTool(tool));
     }
 
@@ -856,8 +856,18 @@ mod tests {
 
         #[test]
         fn builder_with_tool_instance() {
-            let b = AgentRuntimeBuilder::new().with_tool_instance(Box::new(MockTool));
+            let b = AgentRuntimeBuilder::new().with_tool_instance(Arc::new(MockTool));
             assert_eq!(b.tools.len(), 1);
+        }
+
+        #[cfg(feature = "funera-builtin-tools")]
+        #[test]
+        fn builder_with_builtin_tools_registers_defaults() {
+            let b = AgentRuntimeBuilder::new().with_builtin_tools();
+            assert_eq!(b.tools.len(), 4);
+            for name in ["read", "write", "edit", "shell"] {
+                assert!(b.tools.iter().any(|t| t.name() == name), "missing {name}");
+            }
         }
 
         #[tokio::test]

@@ -1,3 +1,6 @@
+#[cfg(feature = "tool")]
+use std::sync::Arc;
+
 use async_openai::config::OpenAIConfig;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
@@ -66,7 +69,7 @@ pub enum EnvCmd {
     SetModel(String),
     SetClient(async_openai::Client<OpenAIConfig>),
     #[cfg(feature = "tool")]
-    AddTool(Box<dyn Tool>),
+    AddTool(Arc<dyn Tool>),
     #[cfg(feature = "tool")]
     RemoveTool(String),
     #[cfg(feature = "tool")]
@@ -136,6 +139,7 @@ pub enum EnvCmd {
 ///
 /// When all [`EnvCmd`] senders are dropped, the actor and its
 /// ToolExecutor exit cleanly.
+#[cfg_attr(not(feature = "tool"), allow(unused_variables))]
 pub fn spawn_env_actor(
     env: FuneraEnv,
     env_watcher: FuneraEnvWatcher,
@@ -308,6 +312,12 @@ pub fn spawn_env_actor(
                 }
             }
         }
+
+        // ── Teardown ────────────────────────────────────────────
+        // All EnvCmd senders are gone: the runtime is being dropped. Run every
+        // registered disposer in reverse (LIFO) order so no effect (tool
+        // registration, listener, connection) outlives the env.
+        env.dispose();
     });
 
     cmd_tx

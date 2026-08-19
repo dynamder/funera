@@ -1,0 +1,50 @@
+# Changelog
+
+All notable changes to funera are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+
+- `FuneraEnv::effect` / `dispose` — reversible effects with LIFO teardown: every
+  registration can be paired with its inverse, and disposal runs all inverses in
+  reverse registration order (idempotent and panic-isolated). `EnvActor` calls
+  `dispose()` automatically when the runtime is dropped, so registrations never
+  leak memory or services.
+- `remove_tool_if_same` on the tool registries and `FuneraEnv` — the safe
+  inverse of `add_tool` for a disposer (removes a tool only if the registered
+  entry is the same `Arc`, so a stale teardown cannot delete a replacement that
+  reuses the same name).
+- `funera-orchestrate/examples/reversible_effects.rs` — a no-LLM walkthrough of
+  LIFO teardown and leak-safe registration.
+- Open-source project infrastructure: CI and audit workflows, issue/PR
+  templates, `CODEOWNERS`, code of conduct, contributing guide, security
+  policy, changelog, mdBook documentation skeleton, `deny.toml` / `release.toml`
+  tooling config, and MSRV 1.88 declaration.
+
+### Changed
+
+- Tools are stored and executed behind `Arc<dyn Tool>`; without the `security`
+  feature the executor runs a tool outside the registry lock, and with it the
+  guarded registry is cloned so policy/audit run against a snapshot. Slow tools
+  no longer block dynamic add/remove/availability changes.
+- Made `nono` an optional dependency, enabled only by the `sandbox` feature
+  (it was previously pulled in unconditionally on non-Windows targets).
+- `AgentRuntime::with_tool_instance` / `add_tool` now take `Arc<dyn Tool>`
+  instead of `Box<dyn Tool>`.
+
+### Removed
+
+- The unified `Plugin` abstraction and its machinery: `PluginRegistry`,
+  `PluginInstance`, typestate lifecycle, `Loader` with declarative config and
+  hot module replacement, `ServiceBroker`, `MiddlewareProcessor` type erasure,
+  and `AgentLoop` as a plugin subtrait. The core is back to plain extensible
+  traits (`Tool`, `ChatProvider`, `InspectorMiddleware`, `MutatorMiddleware`)
+  with the actor-based runtime as the single mutation owner.
+
+## [0.2.6] - 2026-07-25
+
+Anchor release; see the GitHub release notes for this version.

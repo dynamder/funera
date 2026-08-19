@@ -96,7 +96,6 @@ pub fn check_boundary(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     fn guard_with_root(root: &str) -> PathGuard {
         PathGuard::new([root])

@@ -281,6 +281,7 @@ impl Agent {
         );
 
         let react = runtime.get_react_config().await;
+        #[cfg_attr(not(feature = "tool"), allow(unused_mut))]
         let mut config = ReActLoopConfig::new(
             react.channel_buffer,
             react.max_iterations,
@@ -359,6 +360,7 @@ impl Agent {
             }),
         );
         let react = runtime.get_react_config().await;
+        #[cfg_attr(not(feature = "tool"), allow(unused_mut))]
         let mut config = ReActLoopConfig::new(
             react.channel_buffer,
             react.max_iterations,
@@ -436,6 +438,7 @@ impl Agent {
             }),
         );
         let react = runtime.get_react_config().await;
+        #[cfg_attr(not(feature = "tool"), allow(unused_mut))]
         let mut config = ReActLoopConfig::new(
             react.channel_buffer,
             react.max_iterations,
@@ -514,6 +517,7 @@ impl Agent {
             }),
         );
         let react = runtime.get_react_config().await;
+        #[cfg_attr(not(feature = "tool"), allow(unused_mut))]
         let mut config = ReActLoopConfig::new(
             react.channel_buffer,
             react.max_iterations,

@@ -394,7 +394,7 @@ fn demo_audit_integration() {
 
         let mut registry = GuardedToolRegistry::new_from_policy(policy);
         registry.set_audit_bus(bus);
-        registry.add_tool(Box::new(DummyTool));
+        registry.add_tool(std::sync::Arc::new(DummyTool));
 
         // Attempt to call the denied tool
         let result = registry.call_tool("blocked_tool", json!({})).await;

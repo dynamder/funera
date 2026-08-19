@@ -1,6 +1,6 @@
 #![cfg(feature = "tool")]
 
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -83,13 +83,14 @@ pub enum ToolCallError {
 }
 
 /// An entry in the tool registry, pairing a tool with its availability status.
+#[derive(Clone)]
 pub struct ToolRegistryEntry {
-    pub tool: Box<dyn Tool>,
+    pub tool: Arc<dyn Tool>,
     pub available: bool,
 }
 impl ToolRegistryEntry {
     /// Create a new registry entry with explicit availability.
-    pub fn new(tool: Box<dyn Tool>, available: bool) -> Self {
+    pub fn new(tool: Arc<dyn Tool>, available: bool) -> Self {
         Self { tool, available }
     }
 
@@ -99,12 +100,12 @@ impl ToolRegistryEntry {
     }
 
     /// Create a new registry entry with the tool available.
-    pub fn new_available(tool: Box<dyn Tool>) -> Self {
+    pub fn new_available(tool: Arc<dyn Tool>) -> Self {
         Self::new(tool, true)
     }
 
     /// Create a new registry entry with the tool unavailable.
-    pub fn new_unavailable(tool: Box<dyn Tool>) -> Self {
+    pub fn new_unavailable(tool: Arc<dyn Tool>) -> Self {
         Self::new(tool, false)
     }
 }
@@ -115,6 +116,7 @@ impl ToolRegistryEntry {
 /// [`GuardedToolRegistry`](crate::security::registry::GuardedToolRegistry)
 /// instead, which wraps this registry with policy checks and audit logging.
 #[doc(hidden)]
+#[derive(Clone)]
 pub struct RawToolRegistry {
     tools: HashMap<String, ToolRegistryEntry>,
 }
@@ -132,7 +134,7 @@ impl RawToolRegistry {
         }
     }
 
-    pub fn add_tool(&mut self, tool: Box<dyn Tool>) {
+    pub fn add_tool(&mut self, tool: Arc<dyn Tool>) {
         self.tools.insert(
             tool.name().to_string(),
             ToolRegistryEntry::new_available(tool),
@@ -141,8 +143,30 @@ impl RawToolRegistry {
     pub fn get_tool(&self, name: &str) -> Option<&ToolRegistryEntry> {
         self.tools.get(name)
     }
+
+    /// Clone the tool's `Arc` if it exists and is available.
+    ///
+    /// Used by the executor to run a tool outside the registry lock.
+    pub fn get_tool_arc(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.get_tool(name)
+            .filter(|entry| entry.is_available())
+            .map(|entry| entry.tool.clone())
+    }
     pub fn remove_tool(&mut self, name: &str) {
         self.tools.remove(name);
+    }
+
+    /// Remove the tool only if the registered entry is the same `Arc` value.
+    /// This prevents a stale disposer from deleting a replacement tool that
+    /// reuses the same name (e.g. HMR replacement).
+    pub fn remove_tool_if_same(&mut self, name: &str, tool: &Arc<dyn Tool>) -> bool {
+        match self.tools.get(name) {
+            Some(entry) if Arc::ptr_eq(&entry.tool, tool) => {
+                self.tools.remove(name);
+                true
+            }
+            _ => false,
+        }
     }
     pub fn tool_exists(&self, name: &str) -> bool {
         self.tools.contains_key(name)
@@ -194,6 +218,7 @@ pub use RawToolRegistry as ToolRegistry;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn rejected_error_display() {
@@ -214,5 +239,54 @@ mod tests {
         let msg = format!("{e}");
         assert!(msg.contains("shell"), "msg: {msg}");
         assert!(msg.contains("approval"), "msg: {msg}");
+    }
+
+    struct MockTool;
+    #[async_trait]
+    impl Tool for MockTool {
+        fn name(&self) -> &str {
+            "mock"
+        }
+        fn description(&self) -> &str {
+            "mock tool"
+        }
+        fn schema(&self) -> JsonValue {
+            json!({"type": "function", "function": {"name": "mock"}})
+        }
+        async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+            Ok("done".into())
+        }
+    }
+
+    #[test]
+    fn get_tool_arc_returns_available_tool_or_none() {
+        let mut reg = RawToolRegistry::new();
+        assert!(reg.get_tool_arc("mock").is_none());
+
+        reg.add_tool(Arc::new(MockTool));
+        let tool = reg.get_tool_arc("mock");
+        assert!(
+            tool.is_some(),
+            "registered tool must be clonable via get_tool_arc"
+        );
+        assert_eq!(tool.unwrap().name(), "mock");
+
+        assert!(reg.get_tool_arc("missing").is_none());
+    }
+
+    #[test]
+    fn remove_tool_if_same_only_removes_matching_arc() {
+        let mut reg = RawToolRegistry::new();
+        let original: Arc<dyn Tool> = Arc::new(MockTool);
+        reg.add_tool(Arc::clone(&original));
+
+        // A different Arc (e.g. a replacement with the same name) is kept.
+        let other: Arc<dyn Tool> = Arc::new(MockTool);
+        assert!(!reg.remove_tool_if_same("mock", &other));
+        assert!(reg.tool_exists("mock"));
+
+        // Removing the registered Arc succeeds.
+        assert!(reg.remove_tool_if_same("mock", &original));
+        assert!(!reg.tool_exists("mock"));
     }
 }
