@@ -180,7 +180,11 @@ impl GuardedToolRegistry {
             if let Some(workdir) = args.get("workdir").and_then(|v| v.as_str()) {
                 self.policy.check_workdir(workdir)?;
             }
-            self.policy.check_shell_command(name, &args)?;
+            // Shell scrutiny is opt-in via `Tool::is_shell_tool` — never by name.
+            if let Some(entry) = self.inner.get_tool(name) {
+                self.policy
+                    .check_shell_command(entry.tool.as_ref(), &args)?;
+            }
             #[cfg(feature = "sandbox")]
             self.audit_sandbox(name);
             Ok(())
@@ -742,6 +746,55 @@ mod tests {
         assert!(
             result.is_ok(),
             "shell-like command with sandbox+path_guard must not be rejected; got: {result:?}"
+        );
+    }
+
+    /// A tool that opts in via `is_shell_tool` gets shell policy applied
+    /// even when its name is unrelated to "shell".
+    #[tokio::test]
+    async fn opted_in_shell_tool_gets_shell_policy() {
+        use crate::security::policy::ShellPolicy;
+
+        struct MyShell;
+        #[async_trait]
+        impl Tool for MyShell {
+            fn name(&self) -> &str {
+                "my-shell"
+            }
+            fn description(&self) -> &str {
+                "runs shell commands"
+            }
+            fn schema(&self) -> serde_json::Value {
+                serde_json::json!({})
+            }
+            async fn execute(&self, _args: serde_json::Value) -> Result<String, ToolCallError> {
+                Ok("done".into())
+            }
+            fn is_shell_tool(&self) -> bool {
+                true
+            }
+        }
+
+        let policy = ToolPolicy {
+            shell_policy: Some(ShellPolicy::with_allowed(vec!["ls".into()])),
+            ..Default::default()
+        };
+        let mut registry = GuardedToolRegistry::new_from_policy(policy);
+        registry.add_tool(Arc::new(MyShell));
+
+        // Allowed command passes through the full guarded path.
+        let ok = registry
+            .call_tool("my-shell", json!({"command": "ls -la"}))
+            .await;
+        assert!(ok.is_ok(), "allowed command should pass: {ok:?}");
+
+        // A dangerous command is rejected by shell policy.
+        let bad = registry
+            .call_tool("my-shell", json!({"command": "rm -rf /"}))
+            .await;
+        assert!(
+            bad.is_err(),
+            "dangerous command should be rejected: {bad:?}"
         );
     }
 }

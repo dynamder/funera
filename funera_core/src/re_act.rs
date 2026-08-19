@@ -16,11 +16,13 @@ use crate::event_bus::env_state_bus::{EnvStateEvent, TurnHighWayHandle};
 use crate::event_bus::react_bus::{ReactBus, ReactEvent};
 #[cfg(feature = "tool")]
 use crate::event_bus::react_bus::{ToolCallErrorInfo, ToolCallRequest, ToolCallResponse};
-use crate::event_bus::token_bus::{TokenBus, TokenEvent};
+use crate::event_bus::token_bus::{TokenBus, TokenEvent, TokenUsage};
 #[cfg(feature = "tool")]
 use crate::event_bus::tool_bus::ToolBus;
 use crate::middleware::{ErrorsEnabled, EventSenderFn, MiddlewareChain, MiddlewareEvent};
 use crate::provider::ChatProvider;
+#[cfg(test)]
+use crate::provider::ReasoningLevel;
 
 #[cfg(feature = "skill")]
 pub mod skills;
@@ -49,6 +51,10 @@ pub struct ReActLoopConfig {
     pub turn_highway_handle: TurnHighWayHandle,
     /// Optional sender to the session actor — enables message history persistence.
     pub session_tx: Option<mpsc::UnboundedSender<SessionCmd>>,
+    /// Per-call cancellation token; when fired the loop stops receiving
+    /// output, abandons in-flight tool executions, and notifies middleware
+    /// via [`MiddlewareEvent::cancelled`](crate::middleware::MiddlewareEvent::cancelled).
+    pub cancel: CancellationToken,
 }
 
 impl ReActLoopConfig {
@@ -71,7 +77,14 @@ impl ReActLoopConfig {
             env_state_tx,
             turn_highway_handle,
             session_tx: None,
+            cancel: CancellationToken::new(),
         }
+    }
+
+    /// Bind this loop to a per-call cancellation token.
+    pub fn with_cancel(mut self, cancel: CancellationToken) -> Self {
+        self.cancel = cancel;
+        self
     }
 
     #[cfg(feature = "tool")]
@@ -92,6 +105,7 @@ pub struct ReActLoop<P: ChatProvider> {
     #[allow(dead_code)]
     env_state_tx: broadcast::Sender<EnvStateEvent>,
     turn_highway_handle: TurnHighWayHandle,
+    cancel: CancellationToken,
     _phantom: PhantomData<P>,
 }
 
@@ -114,6 +128,7 @@ impl<P: ChatProvider> ReActLoop<P> {
             },
             env_state_tx,
             turn_highway_handle,
+            cancel: CancellationToken::new(),
             _phantom: PhantomData,
         }
     }
@@ -133,6 +148,7 @@ impl<P: ChatProvider> ReActLoop<P> {
             tool_bus: config.tool_bus,
             env_state_tx: config.env_state_tx,
             turn_highway_handle: config.turn_highway_handle,
+            cancel: config.cancel,
             _phantom: PhantomData,
         }
     }
@@ -148,7 +164,7 @@ impl<P: ChatProvider> ReActLoop<P> {
         middleware: Option<Arc<MiddlewareChain<E, ErrorsEnabled>>>,
         event_sender: Option<EventSenderFn<E>>,
     ) -> ReActLoopHandle {
-        let token = CancellationToken::new();
+        let token = self.cancel.clone();
         let token_clone = token.clone();
 
         let task = tokio::spawn(async move {
@@ -156,12 +172,22 @@ impl<P: ChatProvider> ReActLoop<P> {
             let mut env_watcher = self.env_watcher;
 
             while iteration < self.max_iteration {
+                if token.is_cancelled() {
+                    filter_and_store(
+                        vec![E::cancelled()],
+                        &middleware,
+                        &event_sender,
+                        &self.session_tx,
+                    );
+                    break;
+                }
                 let client = env_watcher.watch_client();
                 #[cfg(feature = "tool")]
                 let tools_json = env_watcher.watch_tool();
                 #[cfg(not(feature = "tool"))]
                 let tools_json = JsonValue::Array(Vec::new());
                 let model = env_watcher.watch_model();
+                let reasoning_level = env_watcher.watch_reasoning_level();
                 #[cfg(feature = "skill")]
                 let skill_content = env_watcher.watch_skill();
                 #[cfg(not(feature = "skill"))]
@@ -175,18 +201,53 @@ impl<P: ChatProvider> ReActLoop<P> {
 
                 let (token_tx, react_bus) = self.turn_highway_handle.prepare_turn().await;
 
-                let request_json =
-                    P::build_request_json(&model, &history_json, &skill_content, &tools_json);
+                let request_json = P::build_request_json(
+                    &model,
+                    &history_json,
+                    &skill_content,
+                    &tools_json,
+                    reasoning_level,
+                );
 
                 react_bus.send(ReactEvent::TurnStart).ok();
 
                 emit_event(&event_sender, E::turn_start());
 
-                let stream = P::create_stream(&client, request_json).await?;
+                // Cancellation can arrive while the initial provider request
+                // is in flight: don't wait for it — exit cooperatively
+                // (`biased` so cancellation wins over a fast response).
+                let stream = tokio::select! {
+                    biased;
+                    _ = token.cancelled() => {
+                        filter_and_store(
+                            vec![E::cancelled()],
+                            &middleware,
+                            &event_sender,
+                            &self.session_tx,
+                        );
+                        break;
+                    }
+                    s = P::create_stream(&client, request_json) => s?,
+                };
 
                 let mut token_bus = TokenBus::<P::Chunk>::with_sender(token_tx, stream);
-                let (assistant_content, reasoning_content, tool_call_accums, turn_finish_reason) =
-                    process_token_stream(&mut token_bus, &react_bus).await?;
+                let (
+                    assistant_content,
+                    reasoning_content,
+                    tool_call_accums,
+                    turn_finish_reason,
+                    turn_usage,
+                ) = process_token_stream(&mut token_bus, &react_bus, &token).await?;
+
+                if token.is_cancelled() {
+                    filter_and_store(
+                        vec![E::cancelled()],
+                        &middleware,
+                        &event_sender,
+                        &self.session_tx,
+                    );
+                    break;
+                }
 
                 let finish_reason_str = turn_finish_reason.as_ref().map(|r| format!("{:?}", r));
 
@@ -222,8 +283,19 @@ impl<P: ChatProvider> ReActLoop<P> {
                     &react_bus,
                     #[cfg(feature = "tool")]
                     &self.tool_bus,
+                    &token,
                 )
                 .await?;
+
+                if token.is_cancelled() {
+                    filter_and_store(
+                        vec![E::cancelled()],
+                        &middleware,
+                        &event_sender,
+                        &self.session_tx,
+                    );
+                    break;
+                }
 
                 // `tool_results` is only consumed when the `tool` feature is on.
                 #[cfg(not(feature = "tool"))]
@@ -242,7 +314,7 @@ impl<P: ChatProvider> ReActLoop<P> {
                     filter_and_store(result_events, &middleware, &event_sender, &self.session_tx);
                 }
 
-                emit_event(&event_sender, E::turn_end(finish_reason_str));
+                emit_event(&event_sender, E::turn_end(finish_reason_str, turn_usage));
                 react_bus.send(ReactEvent::TurnEnd).ok();
 
                 if !should_continue {
@@ -306,19 +378,32 @@ fn filter_and_store<E: MiddlewareEvent>(
 async fn process_token_stream<C: crate::provider::StreamChunkExt>(
     token_bus: &mut TokenBus<C>,
     react_bus: &ReactBus,
+    cancel: &CancellationToken,
 ) -> Result<(
     String,
     String,
     HashMap<usize, ToolCallAccumulator>,
     Option<FinishReason>,
+    Option<TokenUsage>,
 )> {
     let mut assistant_content = String::new();
     let mut reasoning_content = String::new();
     let mut tool_call_accums: HashMap<usize, ToolCallAccumulator> = HashMap::new();
     let mut turn_finish_reason: Option<FinishReason> = None;
+    let mut turn_usage: Option<TokenUsage> = None;
 
-    while let Some(result) = token_bus.recv().await {
-        let events = result?;
+    loop {
+        // Cancel → stop receiving output immediately. `biased` makes
+        // cancellation win over a simultaneously-ready stream chunk.
+        let events = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => break,
+            r = token_bus.recv() => match r {
+                None => break,
+                Some(Err(e)) => return Err(e.into()),
+                Some(Ok(evs)) => evs,
+            },
+        };
         for event in events {
             match event {
                 TokenEvent::Text(t) => {
@@ -363,6 +448,9 @@ async fn process_token_stream<C: crate::provider::StreamChunkExt>(
                 TokenEvent::Finish(reason) => {
                     turn_finish_reason = Some(reason);
                 }
+                TokenEvent::Usage(usage) => {
+                    turn_usage = Some(usage);
+                }
             }
         }
     }
@@ -372,6 +460,7 @@ async fn process_token_stream<C: crate::provider::StreamChunkExt>(
         reasoning_content,
         tool_call_accums,
         turn_finish_reason,
+        turn_usage,
     ))
 }
 
@@ -381,6 +470,7 @@ async fn handle_turn_finish(
     tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
     react_bus: &ReactBus,
     tool_bus: &ToolBus,
+    cancel: &CancellationToken,
 ) -> Result<(bool, Vec<ToolExecResult>)> {
     match finish_reason {
         None | Some(FinishReason::Stop) => Ok((false, Vec::new())),
@@ -411,6 +501,7 @@ async fn handle_turn_finish(
                         acc.name.clone(),
                         args,
                         Some(react_bus.clone()),
+                        cancel.clone(),
                     )
                 }))
                 .await;
@@ -461,6 +552,7 @@ async fn handle_turn_finish(
     finish_reason: Option<&FinishReason>,
     tool_call_accums: &HashMap<usize, ToolCallAccumulator>,
     _react_bus: &ReactBus,
+    _cancel: &CancellationToken,
 ) -> Result<(bool, Vec<ToolExecResult>)> {
     match finish_reason {
         Some(FinishReason::ToolCalls) | Some(FinishReason::Length)
@@ -521,11 +613,14 @@ mod tests {
         fn turn_start() -> Self {
             TestEvent("turn_start".into())
         }
-        fn turn_end(_finish_reason: Option<String>) -> Self {
+        fn turn_end(_finish_reason: Option<String>, _usage: Option<TokenUsage>) -> Self {
             TestEvent("turn_end".into())
         }
         fn done() -> Self {
             TestEvent("done".into())
+        }
+        fn cancelled() -> Self {
+            TestEvent("cancelled".into())
         }
         fn into_session_message(self) -> Option<(Role, MsgVariant)> {
             Some((
@@ -547,9 +642,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason, _usage) =
+            process_token_stream(&mut token_bus, &react_bus, &CancellationToken::new())
+                .await
+                .unwrap();
         assert_eq!(content, "");
         assert_eq!(reasoning, "");
         assert!(accums.is_empty());
@@ -563,9 +659,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason, _usage) =
+            process_token_stream(&mut token_bus, &react_bus, &CancellationToken::new())
+                .await
+                .unwrap();
         assert_eq!(content, "Hello World");
         assert_eq!(reasoning, "");
         assert!(accums.is_empty());
@@ -579,9 +676,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason, _usage) =
+            process_token_stream(&mut token_bus, &react_bus, &CancellationToken::new())
+                .await
+                .unwrap();
         assert_eq!(content, "");
         assert_eq!(reasoning, "");
         assert_eq!(accums.len(), 1);
@@ -595,8 +693,29 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let result = process_token_stream(&mut token_bus, &react_bus).await;
+        let result =
+            process_token_stream(&mut token_bus, &react_bus, &CancellationToken::new()).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn process_stream_cancelled_stops_immediately() {
+        let (tx, _) = tokio::sync::broadcast::channel(50);
+        let stream = test_helpers::mock_text_stream(vec!["Hello", "World"]);
+        let mut token_bus = TokenBus::with_sender(tx, stream);
+        let react_bus = ReactBus::new();
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+
+        let (content, reasoning, accums, reason, usage) =
+            process_token_stream(&mut token_bus, &react_bus, &cancel)
+                .await
+                .unwrap();
+        assert_eq!(content, "");
+        assert_eq!(reasoning, "");
+        assert!(accums.is_empty());
+        assert!(reason.is_none());
+        assert!(usage.is_none());
     }
 
     #[tokio::test]
@@ -611,9 +730,10 @@ mod tests {
         let mut token_bus = TokenBus::with_sender(tx, stream);
         let react_bus = ReactBus::new();
 
-        let (content, reasoning, accums, reason) = process_token_stream(&mut token_bus, &react_bus)
-            .await
-            .unwrap();
+        let (content, reasoning, accums, reason, _usage) =
+            process_token_stream(&mut token_bus, &react_bus, &CancellationToken::new())
+                .await
+                .unwrap();
         assert_eq!(content, "Thinking...");
         assert_eq!(reasoning, "");
         assert_eq!(accums.len(), 1);
@@ -633,6 +753,7 @@ mod tests {
             &HashMap::new(),
             &react_bus,
             &tool_bus,
+            &CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -647,10 +768,15 @@ mod tests {
         let react_bus = ReactBus::new();
         let (tool_bus, _rx) = crate::event_bus::tool_bus::ToolBus::new();
 
-        let (should_continue, results) =
-            handle_turn_finish(None, &HashMap::new(), &react_bus, &tool_bus)
-                .await
-                .unwrap();
+        let (should_continue, results) = handle_turn_finish(
+            None,
+            &HashMap::new(),
+            &react_bus,
+            &tool_bus,
+            &CancellationToken::new(),
+        )
+        .await
+        .unwrap();
 
         assert!(!should_continue);
         assert!(results.is_empty());
@@ -667,6 +793,7 @@ mod tests {
             &HashMap::new(),
             &react_bus,
             &tool_bus,
+            &CancellationToken::new(),
         )
         .await
         .unwrap();
@@ -747,6 +874,7 @@ mod tests {
             messages: &[JsonValue],
             _skill_content: &str,
             _tools_json: &JsonValue,
+            _reasoning_level: ReasoningLevel,
         ) -> JsonValue {
             serde_json::json!({
                 "model": "mock",
@@ -820,5 +948,61 @@ mod tests {
         assert!(result.is_ok(), "loop task should complete successfully");
         let inner = result.unwrap();
         assert!(inner.is_ok(), "loop should return Ok(())");
+    }
+
+    #[cfg(feature = "tool")]
+    #[tokio::test]
+    async fn react_loop_cancelled_notifies_middleware() {
+        let (env_state_tx, _env_state_rx) = tokio::sync::broadcast::channel(20);
+        let (tool_bus, _exec_rx) = crate::event_bus::tool_bus::ToolBus::new();
+
+        // Per-call token, cancelled before the loop starts.
+        let cancel = CancellationToken::new();
+        cancel.cancel();
+
+        // Highway stub (mirrors the completing test).
+        let (loop_tx, mut rx_from_loop) = tokio::sync::mpsc::channel(5);
+        let (tx_to_loop, loop_rx) = tokio::sync::mpsc::channel(5);
+        tokio::spawn(async move {
+            let _req = rx_from_loop.recv().await;
+            let (token_tx, _) = tokio::sync::broadcast::channel(50);
+            let react_bus = ReactBus::new();
+            let _ = tx_to_loop
+                .send(TurnHighWayEvent::TurnPrepareResponse {
+                    token_tx,
+                    react_bus,
+                })
+                .await;
+        });
+        let handle = TurnHighWayHandle {
+            turn_high_way_tx: loop_tx,
+            turn_high_way_rx: loop_rx,
+        };
+
+        let (_env, env_watcher) =
+            crate::env::FuneraEnv::new(async_openai::Client::new(), "mock-model");
+
+        let config = ReActLoopConfig::new(32, 5, env_watcher, env_state_tx, handle)
+            .with_tool_bus(tool_bus)
+            .with_cancel(cancel);
+
+        // Capture the events the loop emits (middleware/event-sender channel).
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+        let sender: EventSenderFn<TestEvent> = Box::new(move |e| {
+            let _ = event_tx.send(e);
+        });
+
+        let loop_handle =
+            ReActLoop::<MockProvider>::from_config(config).run::<TestEvent>(None, Some(sender));
+        let result = loop_handle.task.await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_ok());
+
+        // Cancellation must be delivered as an event to the middleware layer.
+        let got = event_rx.try_recv();
+        assert!(
+            matches!(&got, Ok(TestEvent(s)) if s.as_str() == "cancelled"),
+            "got {got:?}"
+        );
     }
 }

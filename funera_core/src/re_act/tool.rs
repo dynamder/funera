@@ -26,6 +26,21 @@ impl Display for ToolType {
 /// Implement this trait to define custom tools. The framework will expose
 /// the tool's [`schema`](Tool::schema) to the LLM and invoke
 /// [`execute`](Tool::execute) when the LLM requests it.
+///
+/// ## Tools are CLI-like and self-contained
+///
+/// A tool behaves like a single command-line program: it receives JSON
+/// arguments and returns a string result. It must **not** depend on another
+/// tool's *registration* — no access to the tool registry, no assumption
+/// that a peer tool is (or ever was) registered, and no cross-tool
+/// bookkeeping. Invoking external programs as subprocesses (the way the
+/// built-in `shell` tool runs `git`, `cargo`, …) is fine — that is exactly
+/// what makes a tool CLI-like. Composing *agent* capabilities happens at the
+/// LLM level through multiple tool calls, not inside a tool.
+///
+/// Optional markers refine how the framework treats a tool: returning `true`
+/// from [`is_shell_tool`](Tool::is_shell_tool) opts the tool into shell
+/// command policy scrutiny regardless of its registered name.
 #[async_trait]
 pub trait Tool: Send + Sync {
     /// Unique name for this tool (e.g. `"read"`, `"shell"`).
@@ -48,6 +63,16 @@ pub trait Tool: Send + Sync {
     ///
     /// This is sent to the LLM so it can generate well-formed invocations.
     fn schema(&self) -> JsonValue;
+
+    /// Whether this tool executes shell commands (e.g. `shell`, `bash`, `cmd`).
+    ///
+    /// Defaults to `false`. Override to `true` for tools whose
+    /// [`execute`](Tool::execute) runs shell commands, so the security
+    /// layer's `ShellPolicy` scrutiny applies — based on this explicit
+    /// opt-in, not on the tool's registered name.
+    fn is_shell_tool(&self) -> bool {
+        false
+    }
 }
 
 /// Errors that can occur during tool execution.

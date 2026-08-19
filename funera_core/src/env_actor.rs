@@ -21,6 +21,7 @@ use crate::security::sandbox::SandboxPolicy;
 
 use crate::env::{FuneraEnv, FuneraEnvWatcher};
 use crate::event_bus::env_state_bus::EnvStateEvent;
+use crate::provider::ReasoningLevel;
 
 // ═══════════════════════════════════════════════════════════════
 // Config structs — bundle params to keep fn arg count ≤ 7
@@ -36,6 +37,10 @@ pub struct EnvToolConfig {
     pub tool_bus: ToolBus,
     #[cfg(feature = "tool")]
     pub exec_rx: mpsc::Receiver<crate::event_bus::tool_bus::ToolExecCommand>,
+    /// How many concurrent tool workers to spawn (multiple tool calls in one
+    /// turn execute in parallel).
+    #[cfg(feature = "tool")]
+    pub max_concurrent_tools: usize,
 }
 
 /// Bundle of security resources for the EnvActor.
@@ -68,6 +73,7 @@ pub enum EnvCmd {
     // ── Mutation (fire-and-forget) ────────────────────────────
     SetModel(String),
     SetClient(async_openai::Client<OpenAIConfig>),
+    SetReasoningLevel(ReasoningLevel),
     #[cfg(feature = "tool")]
     AddTool(Arc<dyn Tool>),
     #[cfg(feature = "tool")]
@@ -107,6 +113,9 @@ pub enum EnvCmd {
     },
     GetModel {
         respond: oneshot::Sender<String>,
+    },
+    GetReasoningLevel {
+        respond: oneshot::Sender<ReasoningLevel>,
     },
     #[cfg(feature = "tool")]
     GetToolNames {
@@ -159,9 +168,17 @@ pub fn spawn_env_actor(
         if let Some(tc) = tool {
             let reg = env.tool_registry.clone();
             let tb = tc.tool_bus.clone();
-            tokio::spawn(async move {
-                ToolExecutor::new(reg, tc.exec_rx).run().await;
-            });
+            // Fan the single tool-bus receiver out to `max_concurrent_tools`
+            // workers: receive is serialized (brief lock), execution runs in
+            // parallel across workers, and results are matched back by call_id.
+            let shared_rx = Arc::new(tokio::sync::Mutex::new(tc.exec_rx));
+            for _ in 0..tc.max_concurrent_tools.max(1) {
+                let reg = Arc::clone(&reg);
+                let rx = Arc::clone(&shared_rx);
+                tokio::spawn(async move {
+                    ToolExecutor::with_shared_receiver(reg, rx).run().await;
+                });
+            }
             Some(tb)
         } else {
             None
@@ -209,6 +226,10 @@ pub fn spawn_env_actor(
                 }
                 EnvCmd::SetClient(client) => {
                     env.set_client(client);
+                }
+                EnvCmd::SetReasoningLevel(level) => {
+                    env.set_reasoning_level(level);
+                    let _ = state_tx.send(EnvStateEvent::ReasoningLevelChanged(level));
                 }
                 #[cfg(feature = "tool")]
                 EnvCmd::AddTool(tool) => {
@@ -279,6 +300,9 @@ pub fn spawn_env_actor(
                 }
                 EnvCmd::GetModel { respond } => {
                     let _ = respond.send(env.model().to_string());
+                }
+                EnvCmd::GetReasoningLevel { respond } => {
+                    let _ = respond.send(env.reasoning_level());
                 }
                 #[cfg(feature = "tool")]
                 EnvCmd::GetToolNames { respond } => {

@@ -5,10 +5,11 @@ use async_openai::{
     types::{chat::CreateChatCompletionStreamResponse, stream::StreamResponse},
 };
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::future::Future;
 
-use crate::event_bus::token_bus::TokenEvent;
+use crate::event_bus::token_bus::{TokenEvent, TokenUsage};
 
 #[cfg(feature = "deepseek")]
 pub mod deepseek;
@@ -24,6 +25,29 @@ pub trait StreamChunkExt: DeserializeOwned + Send + 'static {
     fn extract_events(&self) -> Vec<TokenEvent>;
 }
 
+/// Provider-neutral reasoning intensity for the agent's LLM calls.
+///
+/// The framework-level enum is model-agnostic; each provider interprets it
+/// as it sees fit (levels mirror the official DeepSeek harness):
+///
+/// | Level | DeepSeek | OpenAI |
+/// |-------|----------|--------|
+/// | `Off` | `thinking: {"type":"disabled"}` | `reasoning_effort` omitted |
+/// | `Minimal`/`Low`/`Medium`/`XHigh` | `thinking` enabled, deployment default intensity | `reasoning_effort: minimal/low/medium/high` (`XHigh` → `high`) |
+/// | `High` | `thinking` enabled + `reasoning_effort: "high"` | `reasoning_effort: "high"` |
+/// | `Max` | `thinking` enabled + `reasoning_effort: "max"` | `reasoning_effort: "high"` (clamped) |
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ReasoningLevel {
+    Off,
+    Minimal,
+    Low,
+    #[default]
+    Medium,
+    High,
+    XHigh,
+    Max,
+}
+
 /// Abstraction over an LLM backend.
 ///
 /// Implementations handle provider-specific request construction and stream
@@ -37,12 +61,14 @@ pub trait ChatProvider: Send + Sync + 'static {
     /// Build the JSON request body sent to the LLM API.
     ///
     /// Merges conversation messages, active skill content (as a system
-    /// message), and tool definitions into the provider's expected format.
+    /// message), tool definitions, and the current reasoning level into the
+    /// provider's expected format.
     fn build_request_json(
         model: &str,
         messages: &[JsonValue],
         skill_content: &str,
         tools_json: &JsonValue,
+        reasoning_level: ReasoningLevel,
     ) -> JsonValue;
 
     /// Create a streaming completion request.
@@ -60,6 +86,9 @@ pub trait ChatProvider: Send + Sync + 'static {
 impl StreamChunkExt for CreateChatCompletionStreamResponse {
     fn extract_events(&self) -> Vec<TokenEvent> {
         let mut events = Vec::new();
+        if let Some(usage) = &self.usage {
+            events.push(TokenEvent::Usage(TokenUsage::from_openai(usage)));
+        }
         for choice in &self.choices {
             if let Some(finish_reason) = choice.finish_reason {
                 events.push(TokenEvent::Finish(finish_reason));
@@ -129,6 +158,11 @@ pub fn build_standard_request_json(
         ]
         .into_iter()
         .collect(),
+    );
+    // Ask the provider to include per-request token usage on the final chunk.
+    req.as_object_mut().unwrap().insert(
+        "stream_options".into(),
+        serde_json::json!({ "include_usage": true }),
     );
     if let Some(arr) = tools_json.as_array()
         && !arr.is_empty()

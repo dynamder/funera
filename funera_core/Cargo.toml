@@ -55,3 +55,6 @@ test-utils = []
 middleware = []
 tool = []
 skill = []
+# Enables serde Serialize/Deserialize on the chat message types
+# (FuneraMessage, MsgVariant, Role, TextMessage, ToolRequestMessage, ToolResponseMessage).
+serde = []
