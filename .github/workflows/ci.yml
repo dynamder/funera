@@ -138,13 +138,15 @@ jobs:
       # the diff against the base branch explicitly before handing it to
       # cargo-mutants. `--workspace` is required: without it cargo-mutants only
       # considers the current package (the root `funera` re-export crate) and
-      # silently finds no mutants.
+      # silently finds no mutants. `--all-features` ensures mutants in
+      # cfg-gated code (security/sandbox/builtin-tools) are actually compiled
+      # and tested.
       - name: Generate in-diff
         run: |
           git fetch origin main
           git diff origin/main...HEAD > /tmp/mutants.diff
       - name: Run mutants on diff
-        run: timeout 900 cargo mutants --workspace --in-diff /tmp/mutants.diff --baseline skip -j 2 -- --lib
+        run: timeout 900 cargo mutants --workspace --all-features --in-diff /tmp/mutants.diff --baseline skip -j 2 -- --lib
 
   test-cross:
     runs-on: ${{ matrix.os }}
