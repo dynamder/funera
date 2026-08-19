@@ -95,4 +95,16 @@ mod tests {
             assert!(tool["function"]["parameters"].is_object());
         }
     }
+
+    #[cfg(feature = "sandbox")]
+    #[test]
+    fn register_all_tools_with_sandbox_adds_four_tools() {
+        let mut registry = ToolRegistry::new();
+        register_all_tools_with_sandbox(&mut registry, SandboxPolicy::disabled());
+        assert_eq!(registry.tool_count(), 4);
+        assert!(registry.tool_exists("read"));
+        assert!(registry.tool_exists("write"));
+        assert!(registry.tool_exists("edit"));
+        assert!(registry.tool_exists("shell"));
+    }
 }

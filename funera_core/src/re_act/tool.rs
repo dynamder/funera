@@ -218,6 +218,7 @@ pub use RawToolRegistry as ToolRegistry;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn rejected_error_display() {
@@ -238,5 +239,54 @@ mod tests {
         let msg = format!("{e}");
         assert!(msg.contains("shell"), "msg: {msg}");
         assert!(msg.contains("approval"), "msg: {msg}");
+    }
+
+    struct MockTool;
+    #[async_trait]
+    impl Tool for MockTool {
+        fn name(&self) -> &str {
+            "mock"
+        }
+        fn description(&self) -> &str {
+            "mock tool"
+        }
+        fn schema(&self) -> JsonValue {
+            json!({"type": "function", "function": {"name": "mock"}})
+        }
+        async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+            Ok("done".into())
+        }
+    }
+
+    #[test]
+    fn get_tool_arc_returns_available_tool_or_none() {
+        let mut reg = RawToolRegistry::new();
+        assert!(reg.get_tool_arc("mock").is_none());
+
+        reg.add_tool(Arc::new(MockTool));
+        let tool = reg.get_tool_arc("mock");
+        assert!(
+            tool.is_some(),
+            "registered tool must be clonable via get_tool_arc"
+        );
+        assert_eq!(tool.unwrap().name(), "mock");
+
+        assert!(reg.get_tool_arc("missing").is_none());
+    }
+
+    #[test]
+    fn remove_tool_if_same_only_removes_matching_arc() {
+        let mut reg = RawToolRegistry::new();
+        let original: Arc<dyn Tool> = Arc::new(MockTool);
+        reg.add_tool(Arc::clone(&original));
+
+        // A different Arc (e.g. a replacement with the same name) is kept.
+        let other: Arc<dyn Tool> = Arc::new(MockTool);
+        assert!(!reg.remove_tool_if_same("mock", &other));
+        assert!(reg.tool_exists("mock"));
+
+        // Removing the registered Arc succeeds.
+        assert!(reg.remove_tool_if_same("mock", &original));
+        assert!(!reg.tool_exists("mock"));
     }
 }

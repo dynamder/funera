@@ -860,6 +860,16 @@ mod tests {
             assert_eq!(b.tools.len(), 1);
         }
 
+        #[cfg(feature = "funera-builtin-tools")]
+        #[test]
+        fn builder_with_builtin_tools_registers_defaults() {
+            let b = AgentRuntimeBuilder::new().with_builtin_tools();
+            assert_eq!(b.tools.len(), 4);
+            for name in ["read", "write", "edit", "shell"] {
+                assert!(b.tools.iter().any(|t| t.name() == name), "missing {name}");
+            }
+        }
+
         #[tokio::test]
         async fn build_with_tool_adds_to_registry() {
             let rt = AgentRuntimeBuilder::new()

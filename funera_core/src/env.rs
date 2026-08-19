@@ -480,7 +480,17 @@ mod tests {
     #[test]
     fn with_sandbox_policy_roundtrips() {
         let (env, _watcher) = test_env();
-        let env = env.with_sandbox_policy(SandboxPolicy::disabled());
+        // Use a non-default policy so a getter that always returns
+        // `Default::default()` is caught.
+        let policy = SandboxPolicy {
+            enabled: false,
+            read_paths: vec![std::path::PathBuf::from("/trusted")],
+            block_network: true,
+            ..Default::default()
+        };
+        let env = env.with_sandbox_policy(policy.clone());
+        assert_eq!(env.sandbox_policy().read_paths, policy.read_paths);
+        assert!(env.sandbox_policy().block_network);
         assert!(!env.sandbox_policy().enabled);
     }
 

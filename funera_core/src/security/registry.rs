@@ -396,6 +396,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_tool_arc_returns_available_tool_or_none() {
+        let mut registry = GuardedToolRegistry::new();
+        assert!(registry.get_tool_arc("ok_tool").is_none());
+
+        registry.add_tool(Arc::new(OkTool));
+        let tool = registry.get_tool_arc("ok_tool");
+        assert!(
+            tool.is_some(),
+            "registered tool must be clonable via get_tool_arc"
+        );
+        assert_eq!(tool.unwrap().name(), "ok_tool");
+
+        assert!(registry.get_tool_arc("missing").is_none());
+    }
+
+    #[tokio::test]
+    async fn remove_tool_if_same_only_removes_matching_arc() {
+        let mut registry = GuardedToolRegistry::new();
+        let original: Arc<dyn Tool> = Arc::new(OkTool);
+        registry.add_tool(Arc::clone(&original));
+
+        // A different Arc (e.g. a replacement with the same name) is kept.
+        let other: Arc<dyn Tool> = Arc::new(OkTool);
+        assert!(!registry.remove_tool_if_same("ok_tool", &other));
+        assert!(registry.tool_exists("ok_tool"));
+
+        // Removing the registered Arc succeeds.
+        assert!(registry.remove_tool_if_same("ok_tool", &original));
+        assert!(!registry.tool_exists("ok_tool"));
+    }
+
+    #[tokio::test]
     async fn denied_tool_blocked() {
         let mut policy = ToolPolicy::default();
         policy.denied_tools.insert("danger".into());
