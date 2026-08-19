@@ -84,7 +84,9 @@ jobs:
       - name: Open release PR and merge
         if: ${{ !inputs.skip_bump }}
         run: |
-          VERSION="$(cargo pkgid -p funera-core | sed 's/.*#//')"
+          # `cargo pkgid` yields `funera-core@X.Y.Z`; extract the bare version
+          # so tags/branches are named vX.Y.Z (no `vfunera-core@` prefix).
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "funera-core") | .version')"
           BRANCH="release/v${VERSION}"
           git push origin "HEAD:${BRANCH}"
           PR_URL="$(gh pr create --base main --head "${BRANCH}" \
@@ -97,7 +99,7 @@ jobs:
       - name: Push tag
         if: ${{ !inputs.skip_bump }}
         run: |
-          VERSION="$(cargo pkgid -p funera-core | sed 's/.*#//')"
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "funera-core") | .version')"
           git push origin "refs/tags/v${VERSION}"
 
       - name: Publish funera_core
@@ -120,7 +122,7 @@ jobs:
 
       - name: Create GitHub Release
         run: |
-          VERSION=$(cargo pkgid -p funera-core | sed 's/.*#//')
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "funera-core") | .version')"
           git fetch --tags
           gh release create "v$VERSION" --generate-notes
         env:
