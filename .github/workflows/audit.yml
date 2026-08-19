@@ -3,6 +3,7 @@ name: Security Audit
 on:
   schedule:
     - cron: '0 8 * * 1'
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
@@ -15,4 +16,6 @@ jobs:
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      # v2 bundles a current cargo-deny; the old v1 (cargo-deny 0.14.21)
+      # fails to parse newer entries in the rustsec advisory database.
+      - uses: EmbarkStudios/cargo-deny-action@v2
