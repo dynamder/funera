@@ -63,6 +63,30 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -p ${{ matrix.crate }} --all-features -- -D warnings
 
+  # funera is heavily feature-gated and its features are not independent
+  # (security requires tool, sandbox requires security, regex requires
+  # security, orchestrate features forward into core). cargo-hack resolves
+  # every combination, applies feature propagation, and dedups equivalent
+  # feature sets, so this checks that *every distinct combination* compiles
+  # warning-free — not just the curated matrix below.
+  feature-matrix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - name: Check every feature combination compiles
+        env:
+          RUSTFLAGS: -D warnings
+        run: |
+          cargo hack check -p funera-core --feature-powerset --skip test-utils
+          cargo hack check -p funera-orchestrate --feature-powerset --skip real-llm
+          cargo hack check -p funera --feature-powerset
+          cargo hack check -p funera-builtin-tools --feature-powerset
+
   semver:
     runs-on: ubuntu-latest
     continue-on-error: true
