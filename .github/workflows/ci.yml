@@ -136,13 +136,15 @@ jobs:
           tool: cargo-mutants
       # The PR checkout does not carry the `origin/main` ref, so materialize
       # the diff against the base branch explicitly before handing it to
-      # cargo-mutants.
+      # cargo-mutants. `--workspace` is required: without it cargo-mutants only
+      # considers the current package (the root `funera` re-export crate) and
+      # silently finds no mutants.
       - name: Generate in-diff
         run: |
           git fetch origin main
           git diff origin/main...HEAD > /tmp/mutants.diff
       - name: Run mutants on diff
-        run: timeout 900 cargo mutants --in-diff /tmp/mutants.diff --baseline skip -j 2 -- --lib
+        run: timeout 900 cargo mutants --workspace --in-diff /tmp/mutants.diff --baseline skip -j 2 -- --lib
 
   test-cross:
     runs-on: ${{ matrix.os }}
