@@ -69,6 +69,10 @@ impl Tool for ShellTool {
         "Execute shell commands. Use with caution."
     }
 
+    fn is_shell_tool(&self) -> bool {
+        true
+    }
+
     fn schema(&self) -> JsonValue {
         json!({
             "type": "function",
