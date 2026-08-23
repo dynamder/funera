@@ -165,9 +165,11 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
-        let registry = self.tool_registry.read().await;
-        let _ = self.tool_tx.send(registry.available_tools_json());
+    pub(crate) async fn set_tool_availability(&mut self, name: &str, available: bool) {
+        let mut registry = self.tool_registry.write().await;
+        if registry.set_tool_availability(name, available) {
+            let _ = self.tool_tx.send(registry.available_tools_json());
+        }
     }
 
     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
@@ -598,13 +600,52 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn set_tool_availability_rebroadcasts_snapshot() {
+        async fn set_tool_availability_toggles_tool() {
             let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             env.add_tool(Arc::new(MockTool)).await;
             let _ = watcher.watch_tool();
             assert!(!watcher.has_tool_changed());
+
+            // Disabling drops the tool from the snapshot and blocks execution.
             env.set_tool_availability("mock", false).await;
             assert!(watcher.has_tool_changed());
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.is_empty())
+            );
+            assert!(matches!(
+                env.tool_registry
+                    .read()
+                    .await
+                    .call_tool("mock", json!({}))
+                    .await,
+                Err(ToolCallError::ToolUnavailable(_))
+            ));
+
+            // Re-enabling restores the tool in the snapshot and execution.
+            let _ = watcher.watch_tool();
+            env.set_tool_availability("mock", true).await;
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.len() == 1)
+            );
+            assert!(
+                env.tool_registry
+                    .read()
+                    .await
+                    .call_tool("mock", json!({}))
+                    .await
+                    .is_ok()
+            );
+
+            // Unknown tool is a silent no-op: no spurious notification.
+            let _ = watcher.watch_tool();
+            env.set_tool_availability("ghost", false).await;
+            assert!(!watcher.has_tool_changed());
         }
 
         #[test]

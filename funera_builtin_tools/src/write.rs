@@ -97,6 +97,16 @@ mod tests {
         let _ = tokio::fs::remove_dir_all(test_dir(label)).await;
     }
 
+    #[test]
+    fn description_mentions_parent_directories() {
+        let d = WriteTool.description();
+        assert!(d.len() > 20, "description too short: {d}");
+        assert!(
+            d.contains("parent directories"),
+            "description should mention parent dirs: {d}"
+        );
+    }
+
     #[tokio::test]
     async fn write_missing_file_path() {
         let tool = WriteTool;

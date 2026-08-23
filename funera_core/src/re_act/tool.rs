@@ -181,6 +181,21 @@ impl RawToolRegistry {
         self.tools.remove(name);
     }
 
+    /// Set whether a registered tool is available for execution.
+    ///
+    /// Returns `true` if the tool exists and its availability actually
+    /// changed (so callers can skip rebroadcasting when nothing changed),
+    /// `false` for an unknown name or a no-op set.
+    pub fn set_tool_availability(&mut self, name: &str, available: bool) -> bool {
+        match self.tools.get_mut(name) {
+            Some(entry) if entry.available != available => {
+                entry.available = available;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Remove the tool only if the registered entry is the same `Arc` value.
     /// This prevents a stale disposer from deleting a replacement tool that
     /// reuses the same name (e.g. HMR replacement).
@@ -313,5 +328,40 @@ mod tests {
         // Removing the registered Arc succeeds.
         assert!(reg.remove_tool_if_same("mock", &original));
         assert!(!reg.tool_exists("mock"));
+    }
+
+    #[test]
+    fn set_tool_availability_toggles_entry() {
+        let mut reg = RawToolRegistry::new();
+        // Unknown tool: no-op.
+        assert!(!reg.set_tool_availability("mock", false));
+
+        reg.add_tool(Arc::new(MockTool));
+        assert!(reg.set_tool_availability("mock", false));
+        assert!(
+            reg.get_tool("mock").is_some_and(|e| !e.is_available()),
+            "entry must be marked unavailable"
+        );
+        assert!(
+            reg.get_tool_arc("mock").is_none(),
+            "unavailable tool must not be runnable"
+        );
+        assert!(
+            reg.available_tools_json().as_array().is_some_and(|a| a.is_empty()),
+            "unavailable tool must drop out of the snapshot"
+        );
+
+        // Setting the same value again is a no-op.
+        assert!(!reg.set_tool_availability("mock", false));
+
+        assert!(reg.set_tool_availability("mock", true));
+        assert!(
+            reg.get_tool_arc("mock").is_some(),
+            "re-enabled tool must be runnable again"
+        );
+        assert!(
+            reg.available_tools_json().as_array().is_some_and(|a| a.len() == 1),
+            "re-enabled tool must return to the snapshot"
+        );
     }
 }

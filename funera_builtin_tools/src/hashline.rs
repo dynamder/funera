@@ -64,6 +64,14 @@ mod tests {
     }
 
     #[test]
+    fn compute_hash_pins_known_input() {
+        // Pins the exact anchor byte for a known context so the low-byte
+        // mask (`& 0xFF`) cannot silently become a different bitwise op
+        // without breaking the read/edit anchor wire format.
+        assert_eq!(compute_hash("a", "b", "c"), 0x9E);
+    }
+
+    #[test]
     fn hash_different_context_different_result() {
         let h1 = compute_hash("", "line", "");
         let h2 = compute_hash("prev", "line", "next");

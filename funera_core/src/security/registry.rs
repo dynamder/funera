@@ -152,6 +152,10 @@ impl GuardedToolRegistry {
         self.inner.remove_tool_if_same(name, tool)
     }
 
+    pub fn set_tool_availability(&mut self, name: &str, available: bool) -> bool {
+        self.inner.set_tool_availability(name, available)
+    }
+
     pub fn tool_exists(&self, name: &str) -> bool {
         self.inner.tool_exists(name)
     }
@@ -429,6 +433,26 @@ mod tests {
         // Removing the registered Arc succeeds.
         assert!(registry.remove_tool_if_same("ok_tool", &original));
         assert!(!registry.tool_exists("ok_tool"));
+    }
+
+    #[tokio::test]
+    async fn set_tool_availability_delegates_to_inner() {
+        let mut registry = GuardedToolRegistry::new();
+        assert!(!registry.set_tool_availability("ok_tool", false));
+
+        registry.add_tool(Arc::new(OkTool));
+        assert!(registry.set_tool_availability("ok_tool", false));
+        assert!(
+            registry.get_tool_arc("ok_tool").is_none(),
+            "unavailable tool must not be runnable"
+        );
+        let result = registry.call_tool("ok_tool", json!({})).await;
+        assert!(matches!(result, Err(ToolCallError::ToolUnavailable(_))));
+
+        assert!(!registry.set_tool_availability("ok_tool", false));
+        assert!(registry.set_tool_availability("ok_tool", true));
+        let result = registry.call_tool("ok_tool", json!({})).await;
+        assert_eq!(result.unwrap(), "done");
     }
 
     #[tokio::test]

@@ -164,6 +164,13 @@ mod tests {
         }
     }
 
+    #[test]
+    fn description_mentions_hash_anchors() {
+        let d = ReadTool.description();
+        assert!(d.len() > 20, "description too short: {d}");
+        assert!(d.contains("LINE#HASH"), "description should mention anchors: {d}");
+    }
+
     #[tokio::test]
     async fn read_nonexistent_file() {
         let tool = ReadTool;
@@ -228,6 +235,41 @@ mod tests {
         assert!(output.contains("2"));
         assert!(!output.contains("3"));
         cleanup("limit").await;
+    }
+
+    /// `limit: 0` must not truncate: only a positive limit applies.
+    #[tokio::test]
+    async fn read_limit_zero_returns_whole_file() {
+        let path = setup_file("limitzero", "limitzero.txt", "1\n2\n3\n").await;
+        let tool = ReadTool;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy(), "limit": 0}))
+            .await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("1"));
+        assert!(output.contains("3"), "limit=0 must return the whole file: {output}");
+        cleanup("limitzero").await;
+    }
+
+    /// Pins the exact anchor output so the read/write anchor wire format
+    /// cannot silently change (prev/curr/next hashing, line numbering).
+    #[tokio::test]
+    async fn read_with_anchors_exact() {
+        let path = setup_file("anchors", "anchors.txt", "a\nb\nc\n").await;
+        let tool = ReadTool;
+        let result = tool
+            .execute(json!({"filePath": path.to_string_lossy()}))
+            .await;
+        assert!(result.is_ok());
+        let expected = format!(
+            "{}\n{}\n{}",
+            hashline::format_line_trimmed(1, &hashline::compute_anchor("", "a", "b"), "a"),
+            hashline::format_line_trimmed(2, &hashline::compute_anchor("a", "b", "c"), "b"),
+            hashline::format_line_trimmed(3, &hashline::compute_anchor("b", "c", ""), "c"),
+        );
+        assert_eq!(result.unwrap(), expected);
+        cleanup("anchors").await;
     }
 
     #[tokio::test]
