@@ -4,12 +4,14 @@ use crate::event_bus::{
     react_bus::{ReactBus, ReactEvent},
     token_bus::TokenEvent,
 };
+use crate::provider::ReasoningLevel;
 
 #[derive(Debug, Clone)]
 pub enum EnvStateEvent {
     SessionStart,
     SessionClosed,
     LlmChanged(String),
+    ReasoningLevelChanged(ReasoningLevel),
     #[cfg(feature = "tool")]
     ToolAdded(String),
     #[cfg(feature = "tool")]

@@ -7,7 +7,7 @@ use funera_core::chat::message::{MsgVariant, Role, TextMessage};
 use funera_core::chat::message::{ToolRequestMessage, ToolResponseMessage};
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
 use funera_core::event_bus::react_bus::ReactEvent;
-use funera_core::event_bus::token_bus::TokenEvent;
+use funera_core::event_bus::token_bus::{TokenEvent, TokenUsage};
 use funera_core::middleware::MiddlewareEvent;
 #[cfg(feature = "tool")]
 use funera_core::re_act::tool::ToolType;
@@ -30,6 +30,7 @@ pub enum AgentEvent {
     TurnStart,
     TurnEnd {
         finish_reason: Option<String>,
+        usage: Option<TokenUsage>,
     },
     Error(String),
     ToolApprovalRequired {
@@ -37,6 +38,9 @@ pub enum AgentEvent {
         tool_name: String,
         reason: String,
     },
+    /// 本次调用被 `cancel()` 打断。会流经 middleware 链和事件订阅者，
+    /// 但不会写入 session 历史。
+    Cancelled,
     Done,
 }
 
@@ -68,12 +72,19 @@ impl MiddlewareEvent for AgentEvent {
         AgentEvent::TurnStart
     }
 
-    fn turn_end(finish_reason: Option<String>) -> Self {
-        AgentEvent::TurnEnd { finish_reason }
+    fn turn_end(finish_reason: Option<String>, usage: Option<TokenUsage>) -> Self {
+        AgentEvent::TurnEnd {
+            finish_reason,
+            usage,
+        }
     }
 
     fn done() -> Self {
         AgentEvent::Done
+    }
+
+    fn cancelled() -> Self {
+        AgentEvent::Cancelled
     }
 
     fn into_session_message(self) -> Option<(Role, MsgVariant)> {
@@ -232,8 +243,15 @@ mod tests {
     fn agent_event_turn_end() {
         let e = AgentEvent::TurnEnd {
             finish_reason: Some("Stop".into()),
+            usage: None,
         };
-        assert!(matches!(e, AgentEvent::TurnEnd { finish_reason: Some(ref r) } if r == "Stop"));
+        assert!(matches!(
+            e,
+            AgentEvent::TurnEnd {
+                finish_reason: Some(ref r),
+                ..
+            } if r == "Stop"
+        ));
     }
 
     #[test]

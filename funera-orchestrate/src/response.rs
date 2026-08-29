@@ -1,3 +1,4 @@
+use funera_core::event_bus::token_bus::TokenUsage;
 use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone)]
@@ -6,6 +7,8 @@ pub struct ChatResponse {
     pub tool_calls: Vec<ToolCallInfo>,
     pub iterations: usize,
     pub finish_reason: Option<String>,
+    /// Token usage for the last LLM turn, when the provider reports it.
+    pub usage: Option<TokenUsage>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +29,7 @@ mod tests {
             tool_calls: vec![],
             iterations: 1,
             finish_reason: Some("stop".into()),
+            usage: None,
         };
         assert_eq!(resp.content, "Hello");
         assert_eq!(resp.iterations, 1);

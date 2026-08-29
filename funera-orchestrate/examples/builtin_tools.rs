@@ -26,6 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Ask the agent to read Cargo.toml (it will use the Read tool)
     let resp = agent
         .fire("Read Cargo.toml and tell me the dependencies.", &runtime)
+        .await?
         .await?;
     println!("{}", resp.content);
 

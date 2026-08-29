@@ -72,6 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // response should be noticeably short.
     let resp = agent
         .fire("What is the Rust programming language?", &runtime)
+        .await?
         .await?;
 
     println!("=== Response ===");

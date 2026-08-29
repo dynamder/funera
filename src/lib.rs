@@ -17,7 +17,7 @@
 //!     .system_prompt("You are a helpful assistant.")
 //!     .build();
 //!
-//! let resp = agent.fire("Hello!", &runtime).await?;
+//! let resp = agent.fire("Hello!", &runtime).await?.await?.await?;
 //! println!("{}", resp.content);
 //! ```
 //!

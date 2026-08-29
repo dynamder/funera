@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .system_prompt("You are a helpful assistant.")
         .build();
 
-    let resp = agent.fire("Hello!", &runtime).await?;
+    let resp = agent.fire("Hello!", &runtime).await?.await?.await?;
     println!("{}", resp.content);
     Ok(())
 }
@@ -39,5 +39,5 @@ Examples that do not require an LLM API key:
 
 ```bash
 cargo run -p funera-orchestrate --example reversible_effects
-cargo run -p funera-orchestrate --example tool_policy
+cargo run -p funera-orchestrate --example tool_policy --features security
 ```

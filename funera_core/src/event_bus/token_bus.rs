@@ -1,9 +1,55 @@
 use async_openai::error::OpenAIError;
 use async_openai::types::stream::StreamResponse;
 use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
 use crate::provider::StreamChunkExt;
+
+/// Token usage statistics for one LLM turn.
+///
+/// Providers report usage on the final streamed chunk (when the request asks
+/// for it via `stream_options.include_usage`). The framework only tracks
+/// tokens — cost computation is left to callers.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct TokenUsage {
+    /// Tokens in the request prompt.
+    pub prompt_tokens: u32,
+    /// Tokens in the generated completion.
+    pub completion_tokens: u32,
+    /// `prompt_tokens + completion_tokens`.
+    pub total_tokens: u32,
+    /// Prompt tokens served from the provider's cache.
+    ///
+    /// Serialized as `prompt_cache_hit_tokens` (DeepSeek's field name), or
+    /// mapped from OpenAI's `prompt_tokens_details.cached_tokens`.
+    #[serde(default, rename = "prompt_cache_hit_tokens")]
+    pub cache_read_tokens: u32,
+    /// Prompt tokens written to the provider's cache.
+    ///
+    /// Serialized as `prompt_cache_miss_tokens` (DeepSeek's field name);
+    /// OpenAI does not report cache writes, so this stays `0` there.
+    #[serde(default, rename = "prompt_cache_miss_tokens")]
+    pub cache_write_tokens: u32,
+}
+
+impl TokenUsage {
+    /// Map OpenAI's `CompletionUsage` (present on the final streamed chunk)
+    /// into the framework's unified usage record.
+    pub fn from_openai(usage: &async_openai::types::chat::CompletionUsage) -> Self {
+        Self {
+            prompt_tokens: usage.prompt_tokens,
+            completion_tokens: usage.completion_tokens,
+            total_tokens: usage.total_tokens,
+            cache_read_tokens: usage
+                .prompt_tokens_details
+                .as_ref()
+                .and_then(|d| d.cached_tokens)
+                .unwrap_or(0),
+            cache_write_tokens: 0,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum TokenEvent {
@@ -16,6 +62,8 @@ pub enum TokenEvent {
     },
     Finish(async_openai::types::chat::FinishReason),
     Reasoning(String),
+    /// Per-turn token usage, emitted once (usually on the final chunk).
+    Usage(TokenUsage),
 }
 
 pub struct TokenBus<C: StreamChunkExt> {

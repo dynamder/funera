@@ -512,6 +512,59 @@ mod tests {
         assert_eq!(result, "a\nx\ny\nc");
     }
 
+    // --- apply_ops: end anchors (range replace) ---
+
+    #[test]
+    fn replace_range_with_end_after_start() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let h1 = compute_line_anchor(&lines, 1);
+        let h2 = compute_line_anchor(&lines, 2);
+        let edit = Edit {
+            operation: serde_json::from_value(json!("replace")).unwrap(),
+            pos: Some(format!("1#{}", h1)),
+            end: Some(format!("2#{}", h2)),
+            lines: vec!["x".into(), "y".into()],
+            old_text: None,
+            new_text: None,
+        };
+        let result = EditTool::apply_ops("a\nb\nc", &[edit]).unwrap();
+        assert_eq!(result, "x\ny\nc");
+    }
+
+    #[test]
+    fn replace_range_with_end_equal_start() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let h2 = compute_line_anchor(&lines, 2);
+        let edit = Edit {
+            operation: serde_json::from_value(json!("replace")).unwrap(),
+            pos: Some(format!("2#{}", h2)),
+            end: Some(format!("2#{}", h2)),
+            lines: vec!["x".into()],
+            old_text: None,
+            new_text: None,
+        };
+        let result = EditTool::apply_ops("a\nb\nc", &[edit]).unwrap();
+        assert_eq!(result, "a\nx\nc");
+    }
+
+    #[test]
+    fn replace_range_with_end_before_start_rejected() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let h1 = compute_line_anchor(&lines, 1);
+        let h2 = compute_line_anchor(&lines, 2);
+        let edit = Edit {
+            operation: serde_json::from_value(json!("replace")).unwrap(),
+            pos: Some(format!("2#{}", h2)),
+            end: Some(format!("1#{}", h1)),
+            lines: vec!["x".into()],
+            old_text: None,
+            new_text: None,
+        };
+        let result = EditTool::apply_ops("a\nb\nc", &[edit]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("end line before start line"));
+    }
+
     // --- apply_ops: append ---
 
     #[test]
@@ -559,6 +612,22 @@ mod tests {
         );
         let result = EditTool::apply_ops("a\nb", &[edit]).unwrap();
         assert_eq!(result, "a\nx\nb");
+    }
+
+    #[test]
+    fn prepend_multiple_lines() {
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let h2 = compute_line_anchor(&lines, 2);
+        let edit = Edit {
+            operation: serde_json::from_value(json!("prepend")).unwrap(),
+            pos: Some(format!("2#{}", h2)),
+            end: None,
+            lines: vec!["x".into(), "y".into()],
+            old_text: None,
+            new_text: None,
+        };
+        let result = EditTool::apply_ops("a\nb\nc", &[edit]).unwrap();
+        assert_eq!(result, "a\nx\ny\nb\nc");
     }
 
     // --- apply_ops: replace_text ---
@@ -609,6 +678,42 @@ mod tests {
         assert!(result.unwrap_err().contains("STALE_ANCHOR"));
     }
 
+    // --- build_result_anchors: exact output ---
+
+    #[test]
+    fn build_result_anchors_exact() {
+        let new_content = "a\nb\nc";
+        let lines: Vec<String> = vec!["a".into(), "b".into(), "c".into()];
+        let h1 = compute_line_anchor(&lines, 1);
+        let edit = Edit {
+            operation: serde_json::from_value(json!("replace")).unwrap(),
+            pos: Some(format!("1#{}", h1)),
+            end: None,
+            lines: vec!["x".into()],
+            old_text: None,
+            new_text: None,
+        };
+
+        // An edit anchored at line 1 renders the affected context (lines 1-2)
+        // with exact hashline anchors — pins the wire format of the result.
+        let expected = format!(
+            "--- Anchors A-B ---\nline#hash:content\n{}\n{}\n",
+            hashline::format_line_trimmed(1, &hashline::compute_anchor("", "a", "b"), "a"),
+            hashline::format_line_trimmed(2, &hashline::compute_anchor("a", "b", "c"), "b"),
+        );
+        let out = EditTool::build_result_anchors(new_content, &[edit]);
+        assert_eq!(out, expected);
+    }
+
+    // --- description ---
+
+    #[test]
+    fn description_mentions_anchors() {
+        let d = EditTool.description();
+        assert!(d.len() > 20, "description too short: {d}");
+        assert!(d.contains("anchor"), "description should mention anchors: {d}");
+    }
+
     // --- Full execute flow ---
 
     #[tokio::test]
@@ -630,6 +735,15 @@ mod tests {
             }))
             .await;
         assert!(result.is_ok(), "replace failed: {:?}", result.err());
+        let result_str = result.unwrap();
+        assert!(
+            result_str.contains("--- Anchors A-B ---"),
+            "result should include the anchors section: {result_str}"
+        );
+        assert!(
+            result_str.contains("line#hash:content"),
+            "result should include the anchors header: {result_str}"
+        );
         let new_content = tokio::fs::read_to_string(&path).await.unwrap();
         assert_eq!(new_content, "line1\nmodified!\nline3\n");
         cleanup("replace").await;
@@ -676,6 +790,89 @@ mod tests {
             ToolCallError::ParameterMismatch(_) => {}
             e => panic!("expected ParameterMismatch, got {:?}", e),
         }
+    }
+
+    // ── LINE#HASH prefix guard in edit lines ─────────────────────
+
+    /// A 2-part "N#HASH" prefix (uppercase hash) must be rejected.
+    #[tokio::test]
+    async fn edit_execute_rejects_line_hash_prefix() {
+        let path = write_test_file("hashprefix", "hashprefix.txt", "hello\n").await;
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let hash = compute_line_anchor(&lines, 1);
+
+        let tool = EditTool;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{
+                    "op": "append",
+                    "pos": format!("1#{}", hash),
+                    "lines": ["  11#KT world"]
+                }]
+            }))
+            .await;
+        assert!(
+            matches!(result, Err(ToolCallError::ParameterMismatch(_))),
+            "a 2-part LINE#HASH prefix must be rejected: {result:?}"
+        );
+        cleanup("hashprefix").await;
+    }
+
+    /// A hash of exactly two uppercase chars must also be rejected.
+    #[tokio::test]
+    async fn edit_execute_rejects_two_char_hash_prefix() {
+        let path = write_test_file("hash2", "hash2.txt", "hello\n").await;
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let hash = compute_line_anchor(&lines, 1);
+
+        let tool = EditTool;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{
+                    "op": "append",
+                    "pos": format!("1#{}", hash),
+                    "lines": ["  1#AB"]
+                }]
+            }))
+            .await;
+        assert!(
+            matches!(result, Err(ToolCallError::ParameterMismatch(_))),
+            "a two-char uppercase hash prefix must be rejected: {result:?}"
+        );
+        cleanup("hash2").await;
+    }
+
+    /// Mixed-case 2-char hashes are NOT anchor prefixes: the edit must pass
+    /// the guard and apply successfully.
+    #[tokio::test]
+    async fn edit_execute_accepts_mixed_case_hash_prefix() {
+        let path = write_test_file("hashmix", "hashmix.txt", "hello\n").await;
+        let content = tokio::fs::read_to_string(&path).await.unwrap();
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let hash = compute_line_anchor(&lines, 1);
+
+        let tool = EditTool;
+        let result = tool
+            .execute(json!({
+                "filePath": path.to_string_lossy(),
+                "edits": [{
+                    "op": "append",
+                    "pos": format!("1#{}", hash),
+                    "lines": ["1#Ab"]
+                }]
+            }))
+            .await;
+        assert!(
+            result.is_ok(),
+            "mixed-case hash is not an anchor prefix and must pass: {result:?}"
+        );
+        let new_content = tokio::fs::read_to_string(&path).await.unwrap();
+        assert_eq!(new_content, "hello\n1#Ab\n");
+        cleanup("hashmix").await;
     }
 
     #[tokio::test]

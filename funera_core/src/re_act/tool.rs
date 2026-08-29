@@ -26,6 +26,21 @@ impl Display for ToolType {
 /// Implement this trait to define custom tools. The framework will expose
 /// the tool's [`schema`](Tool::schema) to the LLM and invoke
 /// [`execute`](Tool::execute) when the LLM requests it.
+///
+/// ## Tools are CLI-like and self-contained
+///
+/// A tool behaves like a single command-line program: it receives JSON
+/// arguments and returns a string result. It must **not** depend on another
+/// tool's *registration* — no access to the tool registry, no assumption
+/// that a peer tool is (or ever was) registered, and no cross-tool
+/// bookkeeping. Invoking external programs as subprocesses (the way the
+/// built-in `shell` tool runs `git`, `cargo`, …) is fine — that is exactly
+/// what makes a tool CLI-like. Composing *agent* capabilities happens at the
+/// LLM level through multiple tool calls, not inside a tool.
+///
+/// Optional markers refine how the framework treats a tool: returning `true`
+/// from [`is_shell_tool`](Tool::is_shell_tool) opts the tool into shell
+/// command policy scrutiny regardless of its registered name.
 #[async_trait]
 pub trait Tool: Send + Sync {
     /// Unique name for this tool (e.g. `"read"`, `"shell"`).
@@ -48,6 +63,16 @@ pub trait Tool: Send + Sync {
     ///
     /// This is sent to the LLM so it can generate well-formed invocations.
     fn schema(&self) -> JsonValue;
+
+    /// Whether this tool executes shell commands (e.g. `shell`, `bash`, `cmd`).
+    ///
+    /// Defaults to `false`. Override to `true` for tools whose
+    /// [`execute`](Tool::execute) runs shell commands, so the security
+    /// layer's `ShellPolicy` scrutiny applies — based on this explicit
+    /// opt-in, not on the tool's registered name.
+    fn is_shell_tool(&self) -> bool {
+        false
+    }
 }
 
 /// Errors that can occur during tool execution.
@@ -154,6 +179,21 @@ impl RawToolRegistry {
     }
     pub fn remove_tool(&mut self, name: &str) {
         self.tools.remove(name);
+    }
+
+    /// Set whether a registered tool is available for execution.
+    ///
+    /// Returns `true` if the tool exists and its availability actually
+    /// changed (so callers can skip rebroadcasting when nothing changed),
+    /// `false` for an unknown name or a no-op set.
+    pub fn set_tool_availability(&mut self, name: &str, available: bool) -> bool {
+        match self.tools.get_mut(name) {
+            Some(entry) if entry.available != available => {
+                entry.available = available;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Remove the tool only if the registered entry is the same `Arc` value.
@@ -288,5 +328,40 @@ mod tests {
         // Removing the registered Arc succeeds.
         assert!(reg.remove_tool_if_same("mock", &original));
         assert!(!reg.tool_exists("mock"));
+    }
+
+    #[test]
+    fn set_tool_availability_toggles_entry() {
+        let mut reg = RawToolRegistry::new();
+        // Unknown tool: no-op.
+        assert!(!reg.set_tool_availability("mock", false));
+
+        reg.add_tool(Arc::new(MockTool));
+        assert!(reg.set_tool_availability("mock", false));
+        assert!(
+            reg.get_tool("mock").is_some_and(|e| !e.is_available()),
+            "entry must be marked unavailable"
+        );
+        assert!(
+            reg.get_tool_arc("mock").is_none(),
+            "unavailable tool must not be runnable"
+        );
+        assert!(
+            reg.available_tools_json().as_array().is_some_and(|a| a.is_empty()),
+            "unavailable tool must drop out of the snapshot"
+        );
+
+        // Setting the same value again is a no-op.
+        assert!(!reg.set_tool_availability("mock", false));
+
+        assert!(reg.set_tool_availability("mock", true));
+        assert!(
+            reg.get_tool_arc("mock").is_some(),
+            "re-enabled tool must be runnable again"
+        );
+        assert!(
+            reg.available_tools_json().as_array().is_some_and(|a| a.len() == 1),
+            "re-enabled tool must return to the snapshot"
+        );
     }
 }

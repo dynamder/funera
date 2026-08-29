@@ -69,6 +69,10 @@ impl Tool for ShellTool {
         "Execute shell commands. Use with caution."
     }
 
+    fn is_shell_tool(&self) -> bool {
+        true
+    }
+
     fn schema(&self) -> JsonValue {
         json!({
             "type": "function",
@@ -267,6 +271,69 @@ mod tests {
         let result = tool.execute(json!({"command": cmd})).await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("42"));
+    }
+
+    // ── metadata / config tests ─────────────────────────────────────
+
+    #[test]
+    fn shell_description_mentions_caution() {
+        let tool = ShellTool::new();
+        let d = tool.description();
+        assert!(d.len() > 20, "description too short: {d}");
+        assert!(d.contains("caution"), "description should warn: {d}");
+    }
+
+    #[test]
+    fn shell_is_shell_tool_true() {
+        assert!(
+            ShellTool::new().is_shell_tool(),
+            "shell tool must opt into shell policy scrutiny"
+        );
+    }
+
+    #[cfg(feature = "sandbox")]
+    #[test]
+    fn with_sandbox_stores_policy() {
+        let policy = funera_core::security::sandbox::SandboxPolicy::default();
+        let tool = ShellTool::with_sandbox(policy);
+        assert!(
+            tool.sandbox_policy.is_some(),
+            "with_sandbox must store the policy"
+        );
+    }
+
+    // ── output formatting ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn shell_stdout_only_has_no_stderr_section() {
+        let tool = ShellTool::new();
+        let result = tool.execute(json!({"command": "echo hello"})).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("stdout:"));
+        assert!(
+            !output.contains("stderr:"),
+            "stdout-only output must not contain a stderr section: {output:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn shell_stderr_only_no_leading_newline() {
+        let tool = ShellTool::new();
+        let cmd = if cfg!(target_os = "windows") {
+            "cmd /c echo oops 1>&2"
+        } else {
+            "sh -c 'echo oops >&2'"
+        };
+        let result = tool.execute(json!({"command": cmd})).await;
+        assert!(result.is_ok());
+        let output = result.unwrap();
+        assert!(output.contains("stderr:"));
+        assert!(output.contains("oops"));
+        assert!(
+            !output.starts_with('\n'),
+            "stderr-only output must not start with a newline: {output:?}"
+        );
     }
 
     #[tokio::test]

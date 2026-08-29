@@ -44,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .system_prompt("You are a helpful assistant.")
         .build();
 
-    let resp = agent.fire("Hello!", &runtime).await?;
+    let resp = agent.fire("Hello!", &runtime).await?.await?.await?;
     println!("{}", resp.content);
     Ok(())
 }
@@ -179,7 +179,8 @@ sequenceDiagram
 - **Skill system** — load prompt templates from YAML-frontmatter Markdown files
 - **Middleware pipeline** — intercept agent events with inspectors (read-only, parallel) and mutators (pass/modify/block, sequential)
 - **Security layer** — tool/shell policies, path allowlisting, audit logging, secure API key storage
-- **Type-state session** — compile-time enforcement of session ownership (`Idle` / `Acquired`)
+- **Type-state session** — compile-time enforcement of session ownership (Idle / Acquired)
+- **Cancellation** — every call returns a cancellable handle (ire → FireHandle, ire_stream / send / send_stream); cancel() or dropping the handle immediately stops receiving output, abandons in-flight tool executions, and notifies middleware via AgentEvent::Cancelled (never written to session history).
 
 ## Examples
 
@@ -192,6 +193,7 @@ sequenceDiagram
 | `middleware` | Inspector/Mutator middleware pipeline |
 | `reversible_effects` | LIFO teardown of registered effects (no LLM) |
 | `tool_policy` / `security` / `sandbox` | Security policies, audit, and sandboxing |
+| `cancel` | Cancellation: explicit `cancel()`, drop-to-cancel, timeout via `select!` |
 
 ## Reversible effects
 
@@ -217,9 +219,11 @@ env.effect(|| {
   disposer is caught and logged; the rest still run).
 - `EnvActor` calls `dispose()` automatically once the runtime is dropped, so anything registered
   against the env is reverted — no memory or service leaks.
-- For tool registrations, the safe inverse is `remove_tool_if_same`: it removes a tool only if
-  the registered entry is the *same* `Arc`, so a stale teardown never deletes a replacement
-  tool that reuses the same name.
+- Tool registrations are paired with their exact inverse internally
+  (`remove_tool_if_same` removes a tool only if the registered entry is the
+  *same* `Arc`, so a stale teardown never deletes a replacement that reuses
+  the same name); external extensions register tools through the runtime API
+  and do not reach into the tool registry themselves.
 
 Run the demo:
 
@@ -277,7 +281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .system_prompt("You are a helpful assistant.")
         .build();
 
-    let resp = agent.fire("Hello!", &runtime).await?;
+    let resp = agent.fire("Hello!", &runtime).await?.await?.await?;
     println!("{}", resp.content);
     Ok(())
 }
@@ -387,6 +391,18 @@ let runtime = AgentRuntime::<DeepSeekProvider>::builder()
     .build()?;
 ```
 
+If your tool executes shell commands, opt in explicitly via `is_shell_tool`
+so the security layer's `ShellPolicy` applies — based on the marker, not on
+the tool's registered name:
+
+```rust
+impl Tool for Shell {
+    fn name(&self) -> &str { "shell" }
+    // ...
+    fn is_shell_tool(&self) -> bool { true }
+}
+```
+
 ### Security configuration
 
 Requires the `security` feature (and optionally `funera-builtin-tools`, `sandbox`):
@@ -410,7 +426,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     let agent = Agent::builder().build();
-    let resp = agent.fire("List the git log.", &runtime).await?;
+    let resp = agent.fire("List the git log.", &runtime).await?.await?.await?;
     println!("{}", resp.content);
     Ok(())
 }

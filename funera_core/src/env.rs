@@ -3,6 +3,8 @@ use std::sync::Arc;
 use async_openai::config::OpenAIConfig;
 use parking_lot::Mutex;
 
+use crate::provider::ReasoningLevel;
+
 #[cfg(feature = "skill")]
 use crate::re_act::skills::{Skill, SkillRegistry};
 #[cfg(feature = "tool")]
@@ -29,10 +31,12 @@ pub struct FuneraEnv {
     pub(crate) skill_registry: Arc<RwLock<SkillRegistry>>,
     llm_client: async_openai::Client<OpenAIConfig>,
     model: String,
+    reasoning_level: ReasoningLevel,
     #[cfg(feature = "tool")]
     tool_tx: watch::Sender<JsonValue>,
     client_tx: watch::Sender<async_openai::Client<OpenAIConfig>>,
     model_tx: watch::Sender<String>,
+    reasoning_tx: watch::Sender<ReasoningLevel>,
     #[cfg(feature = "skill")]
     skill_tx: watch::Sender<String>,
     #[cfg(feature = "sandbox")]
@@ -50,6 +54,7 @@ impl FuneraEnv {
         let model = model.into();
         let (client_tx, client_rx) = watch::channel(llm_client.clone());
         let (model_tx, model_rx) = watch::channel(model.clone());
+        let (reasoning_tx, reasoning_rx) = watch::channel(ReasoningLevel::default());
 
         #[cfg(feature = "tool")]
         let tool_registry = Arc::new(RwLock::new(ToolRegistry::new()));
@@ -69,10 +74,12 @@ impl FuneraEnv {
                 skill_registry,
                 llm_client,
                 model,
+                reasoning_level: ReasoningLevel::default(),
                 #[cfg(feature = "tool")]
                 tool_tx,
                 client_tx,
                 model_tx,
+                reasoning_tx,
                 #[cfg(feature = "skill")]
                 skill_tx,
                 #[cfg(feature = "sandbox")]
@@ -84,6 +91,7 @@ impl FuneraEnv {
                 tool_rx,
                 client_rx,
                 model_rx,
+                reasoning_rx,
                 #[cfg(feature = "skill")]
                 skill_rx,
             },
@@ -157,9 +165,11 @@ impl FuneraEnv {
     }
 
     #[cfg(feature = "tool")]
-    pub(crate) async fn set_tool_availability(&mut self, _name: &str, _available: bool) {
-        let registry = self.tool_registry.read().await;
-        let _ = self.tool_tx.send(registry.available_tools_json());
+    pub(crate) async fn set_tool_availability(&mut self, name: &str, available: bool) {
+        let mut registry = self.tool_registry.write().await;
+        if registry.set_tool_availability(name, available) {
+            let _ = self.tool_tx.send(registry.available_tools_json());
+        }
     }
 
     pub(crate) fn set_client(&mut self, client: async_openai::Client<OpenAIConfig>) {
@@ -171,6 +181,23 @@ impl FuneraEnv {
         let model = model.into();
         self.model = model.clone();
         let _ = self.model_tx.send(model);
+    }
+
+    /// Set the current reasoning level at build time (pushes the watch
+    /// channel so the value is live immediately).
+    pub fn with_reasoning_level(mut self, level: ReasoningLevel) -> Self {
+        self.reasoning_level = level;
+        let _ = self.reasoning_tx.send(level);
+        self
+    }
+
+    pub(crate) fn set_reasoning_level(&mut self, level: ReasoningLevel) {
+        self.reasoning_level = level;
+        let _ = self.reasoning_tx.send(level);
+    }
+
+    pub(crate) fn reasoning_level(&self) -> ReasoningLevel {
+        self.reasoning_level
     }
 
     #[cfg(feature = "skill")]
@@ -265,6 +292,7 @@ pub struct FuneraEnvWatcher {
     tool_rx: watch::Receiver<JsonValue>,
     client_rx: watch::Receiver<async_openai::Client<OpenAIConfig>>,
     model_rx: watch::Receiver<String>,
+    reasoning_rx: watch::Receiver<ReasoningLevel>,
     #[cfg(feature = "skill")]
     skill_rx: watch::Receiver<String>,
 }
@@ -283,6 +311,10 @@ impl FuneraEnvWatcher {
         self.model_rx.borrow_and_update().clone()
     }
 
+    pub fn watch_reasoning_level(&mut self) -> ReasoningLevel {
+        *self.reasoning_rx.borrow_and_update()
+    }
+
     #[cfg(feature = "skill")]
     pub fn watch_skill(&mut self) -> String {
         self.skill_rx.borrow_and_update().clone()
@@ -299,6 +331,10 @@ impl FuneraEnvWatcher {
 
     pub fn has_model_changed(&self) -> bool {
         self.model_rx.has_changed().unwrap_or(false)
+    }
+
+    pub fn has_reasoning_level_changed(&self) -> bool {
+        self.reasoning_rx.has_changed().unwrap_or(false)
     }
 
     #[cfg(feature = "skill")]
@@ -321,6 +357,10 @@ impl FuneraEnvWatcher {
 
     pub async fn model_changed(&mut self) -> Result<(), RecvError> {
         self.model_rx.changed().await
+    }
+
+    pub async fn reasoning_level_changed(&mut self) -> Result<(), RecvError> {
+        self.reasoning_rx.changed().await
     }
 
     #[cfg(feature = "skill")]
@@ -395,6 +435,14 @@ mod tests {
         env.set_model("m2");
         assert_eq!(env.model(), "m2");
         assert_eq!(watcher.watch_model(), "m2");
+    }
+
+    #[test]
+    fn set_reasoning_level_updates_watcher() {
+        let (mut env, mut watcher) = test_env();
+        assert_eq!(watcher.watch_reasoning_level(), ReasoningLevel::Medium);
+        env.set_reasoning_level(ReasoningLevel::High);
+        assert_eq!(watcher.watch_reasoning_level(), ReasoningLevel::High);
     }
 
     #[test]
@@ -552,13 +600,52 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn set_tool_availability_rebroadcasts_snapshot() {
+        async fn set_tool_availability_toggles_tool() {
             let (mut env, mut watcher) = FuneraEnv::new(async_openai::Client::new(), "m");
             env.add_tool(Arc::new(MockTool)).await;
             let _ = watcher.watch_tool();
             assert!(!watcher.has_tool_changed());
+
+            // Disabling drops the tool from the snapshot and blocks execution.
             env.set_tool_availability("mock", false).await;
             assert!(watcher.has_tool_changed());
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.is_empty())
+            );
+            assert!(matches!(
+                env.tool_registry
+                    .read()
+                    .await
+                    .call_tool("mock", json!({}))
+                    .await,
+                Err(ToolCallError::ToolUnavailable(_))
+            ));
+
+            // Re-enabling restores the tool in the snapshot and execution.
+            let _ = watcher.watch_tool();
+            env.set_tool_availability("mock", true).await;
+            assert!(
+                watcher
+                    .watch_tool()
+                    .as_array()
+                    .is_some_and(|a| a.len() == 1)
+            );
+            assert!(
+                env.tool_registry
+                    .read()
+                    .await
+                    .call_tool("mock", json!({}))
+                    .await
+                    .is_ok()
+            );
+
+            // Unknown tool is a silent no-op: no spurious notification.
+            let _ = watcher.watch_tool();
+            env.set_tool_availability("ghost", false).await;
+            assert!(!watcher.has_tool_changed());
         }
 
         #[test]

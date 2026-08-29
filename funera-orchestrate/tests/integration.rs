@@ -36,6 +36,8 @@ async fn fire_simple_response() {
     let resp = agent
         .fire("Say exactly: hello world", &runtime)
         .await
+        .unwrap()
+        .await
         .unwrap();
     assert!(
         non_empty(&resp.content),
@@ -51,7 +53,12 @@ async fn fire_with_custom_model() {
         .system_prompt("Reply with one word.")
         .build();
 
-    let resp = agent.fire("Say: Rust", &runtime).await.unwrap();
+    let resp = agent
+        .fire("Say: Rust", &runtime)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
     assert!(non_empty(&resp.content));
 }
 
@@ -66,7 +73,12 @@ async fn fire_respects_max_iterations() {
         .unwrap();
     let agent = Agent::builder().system_prompt("You are concise.").build();
 
-    let resp = agent.fire("What is Rust?", &runtime).await.unwrap();
+    let resp = agent
+        .fire("What is Rust?", &runtime)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
     assert!(non_empty(&resp.content));
 }
 

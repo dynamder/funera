@@ -1,0 +1,24 @@
+# cargo-mutants configuration.
+#
+# Options docs: https://github.com/sourcefrog/cargo-mutants
+
+exclude_re = [
+  # Equivalent mutants in EditTool::apply_ops (funera_builtin_tools/src/edit.rs:163).
+  # Verified anchors always satisfy `idx <= lines.len() - 1`, so
+  # `idx >= lines.len() - 1` and its `+ 1` / `/ 1` alternatives compute the
+  # same insert position in every reachable state — no black-box test can
+  # distinguish them.
+  "replace - with \\+ in EditTool::apply_ops",
+  "replace - with / in EditTool::apply_ops",
+  # Equivalent in EditTool::apply_ops (edit.rs:157): when the range bounds
+  # check is reached, both operands are statically false — the end anchor was
+  # verified within the file (end_idx < len) and the start guard at line 135
+  # guarantees end_idx >= idx. `false || false` and `false && false` are
+  # indistinguishable.
+  "replace \\|\\| with && in EditTool::apply_ops",
+  # Equivalent on Windows: `ExitStatus::code()` is always `Some` there, so the
+  # `unwrap_or(-1)` default in ShellTool::format_output is unreachable and the
+  # `- 1` replacement cannot be observed. (On Unix it can be exercised by a
+  # signal-death test; remove this pattern to re-enable it on such CI.)
+  "delete - in format_output",
+]

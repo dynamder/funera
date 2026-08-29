@@ -152,7 +152,7 @@ async fn main() {
         })
         .build();
 
-    match agent
+    let handle = match agent
         .fire(
             "Explore the current directory, then attempt operations \
              that violate the sandbox restrictions to verify the \
@@ -161,6 +161,14 @@ async fn main() {
         )
         .await
     {
+        Ok(h) => h,
+        Err(e) => {
+            eprintln!("error: agent request failed: {e}");
+            std::process::exit(1);
+        }
+    };
+
+    match handle.await {
         Ok(resp) => {
             println!("=== Agent Response ===\n{}", resp.content);
             eprintln!(

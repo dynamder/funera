@@ -1,6 +1,7 @@
 use std::{fmt, sync::Arc};
 
 use chrono::{DateTime, Utc};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 use uuid::Uuid;
@@ -12,7 +13,8 @@ pub trait Message {
     fn to_prompt_content(&self) -> String;
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Role {
     User,
     Assistant,
@@ -30,7 +32,8 @@ impl fmt::Display for Role {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum MsgVariant {
     Text(TextMessage),
     #[cfg(feature = "tool")]
@@ -39,7 +42,8 @@ pub enum MsgVariant {
     ToolResponse(ToolResponseMessage),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FuneraMessage {
     id: Uuid,
     role: Role,
@@ -47,14 +51,16 @@ pub struct FuneraMessage {
     msg_variant: MsgVariant,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextMessage {
     pub text: Arc<str>,
     pub reasoning_content: Option<Arc<str>>,
 }
 
 #[cfg(feature = "tool")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ToolRequestMessage {
     pub tool_call_id: Arc<str>,
     pub tool_type: ToolType,
@@ -64,7 +70,8 @@ pub struct ToolRequestMessage {
 }
 
 #[cfg(feature = "tool")]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ToolResponseMessage {
     pub tool_call_id: Arc<str>,
     pub result: Arc<str>,
@@ -179,5 +186,43 @@ impl FuneraMessage {
                 })
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "serde"))]
+mod serde_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn funera_message_roundtrips_text() {
+        let msg = FuneraMessage::new(
+            Role::User,
+            MsgVariant::Text(TextMessage {
+                text: Arc::from("hello"),
+                reasoning_content: Some(Arc::from("thinking...")),
+            }),
+        );
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: FuneraMessage = serde_json::from_str(&s).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[cfg(feature = "tool")]
+    #[test]
+    fn funera_message_roundtrips_tool() {
+        let msg = FuneraMessage::new(
+            Role::Assistant,
+            MsgVariant::ToolRequest(ToolRequestMessage {
+                tool_call_id: Arc::from("call_1"),
+                tool_type: ToolType::Function,
+                function_name: Arc::from("read"),
+                function_args: json!({"path": "a.txt"}),
+                reasoning_content: None,
+            }),
+        );
+        let s = serde_json::to_string(&msg).unwrap();
+        let back: FuneraMessage = serde_json::from_str(&s).unwrap();
+        assert_eq!(msg, back);
     }
 }

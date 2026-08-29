@@ -10,8 +10,8 @@ use async_openai::{
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 
-use crate::event_bus::token_bus::TokenEvent;
-use crate::provider::{ChatProvider, StreamChunkExt, build_standard_request_json};
+use crate::event_bus::token_bus::{TokenEvent, TokenUsage};
+use crate::provider::{ChatProvider, ReasoningLevel, StreamChunkExt, build_standard_request_json};
 
 #[derive(Debug, Deserialize)]
 pub struct Delta {
@@ -39,6 +39,8 @@ pub struct StreamChunk {
     pub model: String,
     #[serde(default)]
     pub system_fingerprint: Option<String>,
+    #[serde(default)]
+    pub usage: Option<TokenUsage>,
     pub object: String,
 }
 
@@ -89,6 +91,9 @@ impl StreamChunkExt for StreamChunk {
                 (None, None) => {}
             }
         }
+        if let Some(usage) = &self.usage {
+            events.push(TokenEvent::Usage(usage.clone()));
+        }
         events
     }
 }
@@ -103,6 +108,7 @@ impl ChatProvider for DeepSeekProvider {
         messages: &[JsonValue],
         skill_content: &str,
         tools_json: &JsonValue,
+        reasoning_level: ReasoningLevel,
     ) -> JsonValue {
         let mut json = build_standard_request_json(model, messages, skill_content, tools_json);
 
@@ -168,9 +174,41 @@ impl ChatProvider for DeepSeekProvider {
             *msgs = merged;
         }
 
-        json.as_object_mut()
-            .unwrap()
-            .insert("thinking".into(), serde_json::json!({"type": "enabled"}));
+        // Reasoning: mirror the official DeepSeek harness (`llm-deepseek`).
+        // `off` disables thinking entirely; `high`/`max` add `reasoning_effort`;
+        // the remaining levels keep thinking enabled at the deployment's
+        // default intensity.
+        match reasoning_level {
+            ReasoningLevel::Off => {
+                json.as_object_mut()
+                    .unwrap()
+                    .insert("thinking".into(), serde_json::json!({"type": "disabled"}));
+            }
+            ReasoningLevel::High => {
+                json.as_object_mut()
+                    .unwrap()
+                    .insert("thinking".into(), serde_json::json!({"type": "enabled"}));
+                json.as_object_mut()
+                    .unwrap()
+                    .insert("reasoning_effort".into(), serde_json::json!("high"));
+            }
+            ReasoningLevel::Max => {
+                json.as_object_mut()
+                    .unwrap()
+                    .insert("thinking".into(), serde_json::json!({"type": "enabled"}));
+                json.as_object_mut()
+                    .unwrap()
+                    .insert("reasoning_effort".into(), serde_json::json!("max"));
+            }
+            ReasoningLevel::Minimal
+            | ReasoningLevel::Low
+            | ReasoningLevel::Medium
+            | ReasoningLevel::XHigh => {
+                json.as_object_mut()
+                    .unwrap()
+                    .insert("thinking".into(), serde_json::json!({"type": "enabled"}));
+            }
+        }
         json
     }
 
@@ -201,7 +239,13 @@ mod tests {
             json!({"role": "tool", "tool_call_id": "call_2", "content": "18°C"}),
             json!({"role": "tool", "tool_call_id": "call_3", "content": "25°C"}),
         ];
-        let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
+        let result = DeepSeekProvider::build_request_json(
+            "test-model",
+            &msgs,
+            "",
+            &json!([]),
+            ReasoningLevel::Medium,
+        );
         let msgs_out = result["messages"].as_array().unwrap();
         assert_eq!(
             msgs_out.len(),
@@ -231,7 +275,13 @@ mod tests {
             json!({"role": "tool", "tool_call_id": "call_2", "content": "20°C"}),
             json!({"role": "assistant", "content": "Done."}),
         ];
-        let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
+        let result = DeepSeekProvider::build_request_json(
+            "test-model",
+            &msgs,
+            "",
+            &json!([]),
+            ReasoningLevel::Medium,
+        );
         let msgs_out = result["messages"].as_array().unwrap();
         assert_eq!(
             msgs_out[1]["reasoning_content"].as_str().unwrap(),
@@ -248,7 +298,13 @@ mod tests {
             json!({"role": "assistant", "content": "I'll get that."}),
             json!({"role": "assistant", "content": null, "tool_calls": [{"id": "c2", "function": {"name": "t2", "arguments": "{}"}}]}),
         ];
-        let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
+        let result = DeepSeekProvider::build_request_json(
+            "test-model",
+            &msgs,
+            "",
+            &json!([]),
+            ReasoningLevel::Medium,
+        );
         let msgs_out = result["messages"].as_array().unwrap();
         assert_eq!(msgs_out.len(), 4, "non-consecutive should NOT merge");
         let calls0 = msgs_out[1]["tool_calls"].as_array().unwrap();
@@ -263,7 +319,13 @@ mod tests {
             json!({"role": "user", "content": "hi"}),
             json!({"role": "assistant", "tool_calls": [{"id": "c1", "function": {"name": "t1", "arguments": "{}"}}]}),
         ];
-        let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
+        let result = DeepSeekProvider::build_request_json(
+            "test-model",
+            &msgs,
+            "",
+            &json!([]),
+            ReasoningLevel::Medium,
+        );
         let msgs_out = result["messages"].as_array().unwrap();
         assert!(msgs_out[1]["content"].is_null());
         assert_eq!(msgs_out[1]["tool_calls"].as_array().unwrap().len(), 1);
@@ -272,7 +334,76 @@ mod tests {
     #[test]
     fn build_request_includes_thinking() {
         let msgs = vec![json!({"role": "user", "content": "hi"})];
-        let result = DeepSeekProvider::build_request_json("test-model", &msgs, "", &json!([]));
+        let result = DeepSeekProvider::build_request_json(
+            "test-model",
+            &msgs,
+            "",
+            &json!([]),
+            ReasoningLevel::Medium,
+        );
         assert_eq!(result["thinking"]["type"], "enabled");
+    }
+
+    #[test]
+    fn reasoning_level_mapping() {
+        let msgs = vec![json!({"role": "user", "content": "hi"})];
+        let tools = json!([]);
+
+        // Off → thinking disabled, no reasoning_effort.
+        let req = DeepSeekProvider::build_request_json("m", &msgs, "", &tools, ReasoningLevel::Off);
+        assert_eq!(req["thinking"]["type"], "disabled");
+        assert!(req.get("reasoning_effort").is_none());
+
+        // High → thinking enabled + reasoning_effort "high".
+        let req =
+            DeepSeekProvider::build_request_json("m", &msgs, "", &tools, ReasoningLevel::High);
+        assert_eq!(req["thinking"]["type"], "enabled");
+        assert_eq!(req["reasoning_effort"], "high");
+
+        // Max → thinking enabled + reasoning_effort "max".
+        let req = DeepSeekProvider::build_request_json("m", &msgs, "", &tools, ReasoningLevel::Max);
+        assert_eq!(req["thinking"]["type"], "enabled");
+        assert_eq!(req["reasoning_effort"], "max");
+
+        // Medium → thinking enabled at the deployment's default intensity.
+        let req =
+            DeepSeekProvider::build_request_json("m", &msgs, "", &tools, ReasoningLevel::Medium);
+        assert_eq!(req["thinking"]["type"], "enabled");
+        assert!(req.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn extract_events_includes_usage() {
+        let chunk = StreamChunk {
+            id: "chunk_1".into(),
+            choices: vec![],
+            created: 0,
+            model: "deepseek-chat".into(),
+            system_fingerprint: None,
+            usage: Some(TokenUsage {
+                prompt_tokens: 10,
+                completion_tokens: 5,
+                total_tokens: 15,
+                cache_read_tokens: 4,
+                cache_write_tokens: 6,
+            }),
+            object: "chat.completion.chunk".into(),
+        };
+        let events = chunk.extract_events();
+        assert!(matches!(
+            events.as_slice(),
+            [TokenEvent::Usage(u)] if u.total_tokens == 15
+        ));
+    }
+
+    #[test]
+    fn usage_deserializes_from_deepseek_shape() {
+        let raw = r#"{"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "prompt_cache_hit_tokens": 4, "prompt_cache_miss_tokens": 6}"#;
+        let u: TokenUsage = serde_json::from_str(raw).unwrap();
+        assert_eq!(u.prompt_tokens, 10);
+        assert_eq!(u.completion_tokens, 5);
+        assert_eq!(u.total_tokens, 15);
+        assert_eq!(u.cache_read_tokens, 4);
+        assert_eq!(u.cache_write_tokens, 6);
     }
 }

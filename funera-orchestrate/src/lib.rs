@@ -37,7 +37,7 @@
 //!         .system_prompt("You are a helpful assistant.")
 //!         .build();
 //!
-//!     let resp = agent.fire("Hello!", &runtime).await?;
+//!     let resp = agent.fire("Hello!", &runtime).await?.await?;
 //!     println!("{}", resp.content);
 //!     Ok(())
 //! }
@@ -122,7 +122,7 @@
 //! let agent = Agent::builder().build();
 //!
 //! let (fast, _) = agent.send("Hello", fast).await?.await?;              // fast model
-//! agent.fire("What is Rust?", &powerful).await?;                        // powerful model (temp)
+//! agent.fire("What is Rust?", &powerful).await?.await?;                        // powerful model (temp)
 //! let (_fast, _) = agent.send("Tell me more", fast).await?.await?;       // back to fast
 //! # Ok(())
 //! # }
@@ -135,9 +135,10 @@
 //! while the agent is running — works with `fire()`, `send()`, and `send_stream()`.
 //!
 //! ```rust,no_run
+//! # #[cfg(all(feature = "tool", feature = "security"))]
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! # use funera_orchestrate::{Agent, AgentRuntime, ApprovalHandle, DeepSeekProvider};
 //! # use std::time::Duration;
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let (approval_tx, mut approval_rx) = tokio::sync::mpsc::unbounded_channel();
 //!
 //! let runtime = AgentRuntime::<DeepSeekProvider>::builder()
@@ -169,7 +170,7 @@
 //!
 //! - [`runtime`] — [`AgentRuntimeBuilder`] and [`AgentRuntime`]
 //! - [`agent`] — [`AgentBuilder`] and [`Agent`]
-//! - [`send_handle`] — [`SendHandle`], [`SendStreamHandle`], [`FireStreamHandle`], [`ApprovalHandle`]
+//! - [`send_handle`] — [`FireHandle`], [`SendHandle`], [`SendStreamHandle`], [`FireStreamHandle`], [`ApprovalHandle`]
 //! - [`dispatcher`] — Event bus subscription and callback dispatch
 //! - [`event`] — [`AgentEvent`] enum
 //! - [`response`] — [`ChatResponse`] and [`ToolCallInfo`]
@@ -198,7 +199,7 @@ pub use response::{ChatResponse, ToolCallInfo};
 pub use runtime::{Acquired, AgentRuntime, AgentRuntimeBuilder, Idle};
 #[cfg(all(feature = "tool", feature = "security"))]
 pub use send_handle::ApprovalHandle;
-pub use send_handle::{FireStreamHandle, SendHandle, SendStreamHandle};
+pub use send_handle::{FireHandle, FireStreamHandle, SendHandle, SendStreamHandle};
 
 // Re-export security policy types for convenience.
 #[cfg(feature = "security")]
@@ -211,7 +212,8 @@ pub use funera_core::event_bus::env_state_bus::EnvStateEvent;
 pub use funera_core::event_bus::react_bus::{
     ReactEvent, ToolCallErrorInfo, ToolCallRequest, ToolCallResponse,
 };
-pub use funera_core::event_bus::token_bus::TokenEvent;
+pub use funera_core::event_bus::token_bus::{TokenEvent, TokenUsage};
+pub use funera_core::provider::ReasoningLevel;
 
 /// Middleware 相关的类型和 trait。
 ///

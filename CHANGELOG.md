@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Cancellation — every entry point (`fire` → `FireHandle`, `fire_stream`,
+  `send`, `send_stream`) carries a per-call `CancellationToken`; `cancel()`
+  or dropping the handle immediately stops receiving output, abandons
+  in-flight tool executions (workers survive), and notifies middleware via
+  `AgentEvent::Cancelled` (never written to session history). `fire` now
+  returns a `FireHandle` — `await` it for the `ChatResponse`.
+- `serde` feature on `funera-core` — gated `Serialize`/`Deserialize` derives
+  for the chat message types (`FuneraMessage`, `MsgVariant`, `Role`,
+  `TextMessage`, `ToolRequestMessage`, `ToolResponseMessage`).
+- `AgentRuntime::session_id` — stable conversation id reused by `send` /
+  `send_stream`; `fire` / `fire_stream` keep a fresh one-shot id (fork
+  semantics).
+- Token usage tracking — `TokenUsage` + `TokenEvent::Usage`; requests ask for
+  `stream_options.include_usage`; `ChatResponse.usage` carries the last turn's
+  usage. Cost computation is left to callers.
+- Parallel tool execution — the tool bus fans out to `max_concurrent_tools`
+  (default 4) workers via `AgentRuntimeBuilder::max_concurrent_tools`, so
+  multiple tool calls in one turn run concurrently.
+- Reasoning levels — `ReasoningLevel`
+  (`Off`/`Minimal`/`Low`/`Medium`/`High`/`XHigh`/`Max`, default `Medium`) with
+  hot-reload via `AgentRuntime::set_reasoning_level`; providers interpret it
+  (DeepSeek mirrors the official harness: `thinking` + `reasoning_effort` for
+  `high`/`max`; OpenAI maps to `reasoning_effort`, clamping `xhigh`/`max` to
+  `high`).
+- `Tool::is_shell_tool` marker (default `false`) — tools that execute shell
+  commands opt in explicitly, and `ShellPolicy` scrutiny is now driven by the
+  marker instead of a hard-coded tool-name list
+  (`shell`/`bash`/`sh`/`cmd`/`powershell`). `ToolPolicy::check_shell_command`
+  now takes the tool itself.
 - `FuneraEnv::effect` / `dispose` — reversible effects with LIFO teardown: every
   registration can be paired with its inverse, and disposal runs all inverses in
   reverse registration order (idempotent and panic-isolated). `EnvActor` calls

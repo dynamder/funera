@@ -29,7 +29,7 @@ pub struct ToolPolicy {
     /// Maximum allowed timeout in seconds.
     pub max_timeout_secs: f64,
 
-    /// Shell command policy (applies to shell/bash/sh/cmd/powershell tools).
+    /// Shell command policy (applies to tools that opt in via `Tool::is_shell_tool`).
     pub shell_policy: Option<ShellPolicy>,
 
     /// Allowed working directories for shell tools.
@@ -100,18 +100,18 @@ impl ToolPolicy {
 
     /// Check a shell command against the configured shell policy.
     ///
-    /// Only applies if the tool is recognized as a shell tool and a
+    /// Only applies if the tool opts in via `Tool::is_shell_tool` and a
     /// [`ShellPolicy`] is configured.
     pub fn check_shell_command(
         &self,
-        tool_name: &str,
+        tool: &dyn crate::re_act::tool::Tool,
         args: &JsonValue,
     ) -> Result<(), PolicyError> {
         let policy = match self.shell_policy {
             Some(ref p) => p,
             None => return Ok(()),
         };
-        if !policy.is_relevant_tool(tool_name) {
+        if !tool.is_shell_tool() {
             return Ok(());
         }
         let command = match args.get("command").and_then(|v| v.as_str()) {
@@ -149,6 +149,10 @@ impl ToolPolicy {
 ///
 /// Controls which commands are allowed or denied, with built-in detection of
 /// dangerous patterns (e.g., `rm -rf`, `diskpart`, `reg add`, etc.).
+///
+/// Applies only to tools that opt in via `Tool::is_shell_tool` (the built-in
+/// `shell` tool does; third-party shell tools should do the same) — never by
+/// tool name.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShellPolicy {
     /// Commands matching these prefixes are allowed.
@@ -187,10 +191,6 @@ impl ShellPolicy {
             deny_patterns: vec![],
             block_builtin_dangerous: true,
         }
-    }
-
-    fn is_relevant_tool(&self, tool_name: &str) -> bool {
-        matches!(tool_name, "shell" | "bash" | "sh" | "cmd" | "powershell")
     }
 
     /// Evaluate a shell command against all allow/deny rules.
@@ -429,6 +429,66 @@ mod tests {
         };
         assert!(policy.check_command("cat /tmp/secret_file").is_err());
         assert!(policy.check_command("echo hello").is_ok());
+    }
+
+    #[test]
+    fn shell_policy_applies_only_to_opted_in_tools() {
+        use crate::re_act::tool::ToolCallError;
+
+        struct NotShell;
+        #[async_trait::async_trait]
+        impl crate::re_act::tool::Tool for NotShell {
+            fn name(&self) -> &str {
+                "shell" // name alone must NOT trigger shell policy
+            }
+            fn description(&self) -> &str {
+                "not a shell tool"
+            }
+            fn schema(&self) -> JsonValue {
+                JsonValue::Null
+            }
+            async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+                Ok(String::new())
+            }
+        }
+
+        struct MyShell;
+        #[async_trait::async_trait]
+        impl crate::re_act::tool::Tool for MyShell {
+            fn name(&self) -> &str {
+                "my-shell" // unrelated name, but opts in explicitly
+            }
+            fn description(&self) -> &str {
+                "runs shell commands"
+            }
+            fn schema(&self) -> JsonValue {
+                JsonValue::Null
+            }
+            async fn execute(&self, _args: JsonValue) -> Result<String, ToolCallError> {
+                Ok(String::new())
+            }
+            fn is_shell_tool(&self) -> bool {
+                true
+            }
+        }
+
+        let policy = ToolPolicy {
+            shell_policy: Some(ShellPolicy::strict()),
+            ..Default::default()
+        };
+
+        // Not opted in → the dangerous command passes policy scrutiny.
+        assert!(
+            policy
+                .check_shell_command(&NotShell, &serde_json::json!({"command": "rm -rf /"}))
+                .is_ok()
+        );
+        // Opted in → the same command is rejected.
+        assert!(
+            policy
+                .check_shell_command(&MyShell, &serde_json::json!({"command": "rm -rf /"}))
+                .is_err()
+        );
     }
 
     #[cfg(feature = "regex")]

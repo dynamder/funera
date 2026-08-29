@@ -76,10 +76,17 @@ pub struct FuneraSession {
 
 impl FuneraSession {
     pub fn new(session_tx: mpsc::UnboundedSender<SessionCmd>) -> Self {
-        Self {
-            id: Uuid::new_v4(),
-            session_tx,
-        }
+        Self::with_id(Uuid::new_v4(), session_tx)
+    }
+
+    /// Create a session wrapper bound to a specific, stable session id.
+    ///
+    /// `Agent::send` / `Agent::send_stream` pass the runtime's stable session
+    /// id here so every turn of a conversation shares one identity; `fire` /
+    /// `fire_stream` keep the fresh-id `new` constructor (one-shot fork
+    /// semantics).
+    pub fn with_id(id: Uuid, session_tx: mpsc::UnboundedSender<SessionCmd>) -> Self {
+        Self { id, session_tx }
     }
 
     pub fn id(&self) -> Uuid {
@@ -139,5 +146,26 @@ impl FuneraSession {
 
         let _ = env_state_tx.send(EnvStateEvent::SessionClosed);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_generates_fresh_ids() {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let a = FuneraSession::new(tx.clone());
+        let b = FuneraSession::new(tx);
+        assert_ne!(a.id(), b.id());
+    }
+
+    #[test]
+    fn with_id_uses_provided_id() {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let id = Uuid::new_v4();
+        let session = FuneraSession::with_id(id, tx);
+        assert_eq!(session.id(), id);
     }
 }

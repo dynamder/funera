@@ -8,7 +8,9 @@ use tokio::task::JoinHandle;
 
 use funera_core::chat::session::SessionCmd;
 use funera_core::event_bus::env_state_bus::EnvStateEvent;
+use funera_core::event_bus::token_bus::TokenUsage;
 use funera_core::provider::ChatProvider;
+use tokio_util::sync::CancellationToken;
 
 use crate::error::OrchestrateError;
 use crate::event::AgentEvent;
@@ -39,10 +41,11 @@ use crate::runtime::{Acquired, AgentRuntime, Idle};
 /// # }
 /// ```
 pub struct SendHandle<P: ChatProvider> {
-    pub(crate) runtime: AgentRuntime<P, Acquired>,
-    pub(crate) handle: JoinHandle<anyhow::Result<()>>,
-    pub(crate) event_rx: broadcast::Receiver<AgentEvent>,
+    pub(crate) runtime: Option<AgentRuntime<P, Acquired>>,
+    pub(crate) handle: Option<JoinHandle<anyhow::Result<()>>>,
+    pub(crate) event_rx: Option<broadcast::Receiver<AgentEvent>>,
     pub(crate) env_state_tx: broadcast::Sender<EnvStateEvent>,
+    pub(crate) cancel: CancellationToken,
 }
 
 impl<P: ChatProvider> SendHandle<P> {
@@ -51,6 +54,8 @@ impl<P: ChatProvider> SendHandle<P> {
         let (respond, rx) = tokio::sync::oneshot::channel();
         let _ = self
             .runtime
+            .as_ref()
+            .expect("runtime present")
             .session_tx
             .send(SessionCmd::FetchContext { respond });
         rx.await.unwrap_or_default()
@@ -60,21 +65,32 @@ impl<P: ChatProvider> SendHandle<P> {
     /// during react_loop execution.
     #[cfg(all(feature = "tool", feature = "security"))]
     pub fn approval_handle(&self) -> ApprovalHandle {
-        ApprovalHandle::new(self.runtime.env_cmd_tx.clone())
+        ApprovalHandle::new(
+            self.runtime
+                .as_ref()
+                .expect("runtime present")
+                .env_cmd_tx
+                .clone(),
+        )
     }
 
-    async fn wait(self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
-        // Wait for react_loop to complete
-        self.handle
-            .await
-            .map_err(|e| OrchestrateError::Session(e.into()))??;
+    async fn wait(mut self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
+        // Wait for react_loop to complete (an aborted task surfaces as Cancelled).
+        let handle = self.handle.take().expect("handle taken once");
+        handle.await.map_err(|_| OrchestrateError::Cancelled)??;
 
         let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
 
-        // Aggregate filtered events into ChatResponse
-        let resp = aggregate_from_broadcast(self.event_rx).await?;
+        if self.cancel.is_cancelled() {
+            return Err(OrchestrateError::Cancelled);
+        }
 
-        Ok((self.runtime.into_idle(), resp))
+        // Aggregate filtered events into ChatResponse
+        let event_rx = self.event_rx.take().expect("event rx taken once");
+        let resp = aggregate_from_broadcast(event_rx).await?;
+
+        let runtime = self.runtime.take().expect("runtime taken once");
+        Ok((runtime.into_idle(), resp))
     }
 }
 
@@ -87,6 +103,12 @@ impl<P: ChatProvider + 'static> IntoFuture for SendHandle<P> {
     }
 }
 
+impl<P: ChatProvider> Drop for SendHandle<P> {
+    fn drop(&mut self) {
+        drop_cancel(&self.cancel);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SendStreamHandle — stateful send + streaming
 // ═══════════════════════════════════════════════════════════════
@@ -95,17 +117,23 @@ impl<P: ChatProvider + 'static> IntoFuture for SendHandle<P> {
 ///
 /// Like [`SendHandle`] but also provides `recv()` for per-event streaming.
 pub struct SendStreamHandle<P: ChatProvider> {
-    pub(crate) runtime: AgentRuntime<P, Acquired>,
-    pub(crate) handle: JoinHandle<anyhow::Result<()>>,
-    pub(crate) event_rx: broadcast::Receiver<AgentEvent>,
-    pub(crate) stream_rx: mpsc::Receiver<AgentEvent>,
+    pub(crate) runtime: Option<AgentRuntime<P, Acquired>>,
+    pub(crate) handle: Option<JoinHandle<anyhow::Result<()>>>,
+    pub(crate) event_rx: Option<broadcast::Receiver<AgentEvent>>,
+    pub(crate) stream_rx: Option<mpsc::Receiver<AgentEvent>>,
     pub(crate) env_state_tx: broadcast::Sender<EnvStateEvent>,
+    pub(crate) cancel: CancellationToken,
 }
 
 impl<P: ChatProvider> SendStreamHandle<P> {
     /// Receive the next streaming event.
+    ///
+    /// Returns `None` once the call is cancelled (or the stream is exhausted).
     pub async fn recv(&mut self) -> Option<AgentEvent> {
-        self.stream_rx.recv().await
+        if self.cancel.is_cancelled() {
+            return None;
+        }
+        self.stream_rx.as_mut()?.recv().await
     }
 
     /// Query session context while streaming is in progress.
@@ -113,6 +141,8 @@ impl<P: ChatProvider> SendStreamHandle<P> {
         let (respond, rx) = tokio::sync::oneshot::channel();
         let _ = self
             .runtime
+            .as_ref()
+            .expect("runtime present")
             .session_tx
             .send(SessionCmd::FetchContext { respond });
         rx.await.unwrap_or_default()
@@ -122,16 +152,26 @@ impl<P: ChatProvider> SendStreamHandle<P> {
     /// during react_loop execution.
     #[cfg(all(feature = "tool", feature = "security"))]
     pub fn approval_handle(&self) -> ApprovalHandle {
-        ApprovalHandle::new(self.runtime.env_cmd_tx.clone())
+        ApprovalHandle::new(
+            self.runtime
+                .as_ref()
+                .expect("runtime present")
+                .env_cmd_tx
+                .clone(),
+        )
     }
 
-    async fn wait(self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
-        self.handle
-            .await
-            .map_err(|e| OrchestrateError::Session(e.into()))??;
+    async fn wait(mut self) -> Result<(AgentRuntime<P, Idle>, ChatResponse), OrchestrateError> {
+        let handle = self.handle.take().expect("handle taken once");
+        handle.await.map_err(|_| OrchestrateError::Cancelled)??;
         let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
-        let resp = aggregate_from_broadcast(self.event_rx).await?;
-        Ok((self.runtime.into_idle(), resp))
+        if self.cancel.is_cancelled() {
+            return Err(OrchestrateError::Cancelled);
+        }
+        let event_rx = self.event_rx.take().expect("event rx taken once");
+        let resp = aggregate_from_broadcast(event_rx).await?;
+        let runtime = self.runtime.take().expect("runtime taken once");
+        Ok((runtime.into_idle(), resp))
     }
 }
 
@@ -141,6 +181,63 @@ impl<P: ChatProvider + 'static> IntoFuture for SendStreamHandle<P> {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move { self.wait().await })
+    }
+}
+
+impl<P: ChatProvider> Drop for SendStreamHandle<P> {
+    fn drop(&mut self) {
+        drop_cancel(&self.cancel);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FireHandle — one-shot result handle (no per-event stream)
+// ═══════════════════════════════════════════════════════════════
+
+/// Handle returned by [`Agent::fire`](crate::Agent::fire).
+///
+/// One-shot (temporary session): `cancel()` interrupts the call and stops all
+/// background work spawned for it, `await`/`wait()` yields the final
+/// [`ChatResponse`]. Dropping the handle cancels automatically.
+pub struct FireHandle {
+    pub(crate) handle: Option<JoinHandle<anyhow::Result<()>>>,
+    pub(crate) cancel: CancellationToken,
+    pub(crate) event_rx: Option<broadcast::Receiver<AgentEvent>>,
+    pub(crate) env_state_tx: broadcast::Sender<EnvStateEvent>,
+}
+
+impl FireHandle {
+    /// Immediately interrupt this call: stop receiving output, abandon
+    /// in-flight tool executions, and notify middleware via
+    /// [`AgentEvent::Cancelled`].
+    pub fn cancel(&self) {
+        drop_cancel(&self.cancel);
+    }
+
+    async fn wait(mut self) -> Result<ChatResponse, OrchestrateError> {
+        let handle = self.handle.take().expect("handle taken once");
+        handle.await.map_err(|_| OrchestrateError::Cancelled)??;
+        let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
+        if self.cancel.is_cancelled() {
+            return Err(OrchestrateError::Cancelled);
+        }
+        let event_rx = self.event_rx.take().expect("event rx taken once");
+        aggregate_from_broadcast(event_rx).await
+    }
+}
+
+impl IntoFuture for FireHandle {
+    type Output = Result<ChatResponse, OrchestrateError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move { self.wait().await })
+    }
+}
+
+impl Drop for FireHandle {
+    fn drop(&mut self) {
+        drop_cancel(&self.cancel);
     }
 }
 
@@ -154,24 +251,40 @@ impl<P: ChatProvider + 'static> IntoFuture for SendStreamHandle<P> {
 /// temporary. Provides `recv()` for streaming and `wait()` (`IntoFuture`) for
 /// the final [`ChatResponse`].
 pub struct FireStreamHandle {
-    pub(crate) handle: JoinHandle<anyhow::Result<()>>,
-    pub(crate) event_rx: broadcast::Receiver<AgentEvent>,
-    pub(crate) stream_rx: mpsc::Receiver<AgentEvent>,
+    pub(crate) handle: Option<JoinHandle<anyhow::Result<()>>>,
+    pub(crate) event_rx: Option<broadcast::Receiver<AgentEvent>>,
+    pub(crate) stream_rx: Option<mpsc::Receiver<AgentEvent>>,
     pub(crate) env_state_tx: broadcast::Sender<EnvStateEvent>,
+    pub(crate) cancel: CancellationToken,
 }
 
 impl FireStreamHandle {
     /// Receive the next streaming event.
+    ///
+    /// Returns `None` once the call is cancelled (or the stream is exhausted).
     pub async fn recv(&mut self) -> Option<AgentEvent> {
-        self.stream_rx.recv().await
+        if self.cancel.is_cancelled() {
+            return None;
+        }
+        self.stream_rx.as_mut()?.recv().await
     }
 
-    async fn wait(self) -> Result<ChatResponse, OrchestrateError> {
-        self.handle
-            .await
-            .map_err(|e| OrchestrateError::Session(e.into()))??;
+    /// Immediately interrupt this call: stop receiving output, abandon
+    /// in-flight tool executions, and notify middleware via
+    /// [`AgentEvent::Cancelled`].
+    pub fn cancel(&self) {
+        drop_cancel(&self.cancel);
+    }
+
+    async fn wait(mut self) -> Result<ChatResponse, OrchestrateError> {
+        let handle = self.handle.take().expect("handle taken once");
+        handle.await.map_err(|_| OrchestrateError::Cancelled)??;
         let _ = self.env_state_tx.send(EnvStateEvent::SessionClosed);
-        aggregate_from_broadcast(self.event_rx).await
+        if self.cancel.is_cancelled() {
+            return Err(OrchestrateError::Cancelled);
+        }
+        let event_rx = self.event_rx.take().expect("event rx taken once");
+        aggregate_from_broadcast(event_rx).await
     }
 }
 
@@ -184,9 +297,27 @@ impl IntoFuture for FireStreamHandle {
     }
 }
 
+impl Drop for FireStreamHandle {
+    fn drop(&mut self) {
+        drop_cancel(&self.cancel);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Internal helpers
 // ═══════════════════════════════════════════════════════════════
+
+/// Cancel a call's token.
+///
+/// Cancellation is fully cooperative: every blocking await point of the ReAct
+/// loop — stream consumption, the initial provider request, in-flight tool
+/// executions — listens for the token via `select!`, so cancelling makes the
+/// loop exit promptly and emit [`AgentEvent::Cancelled`] to middleware and
+/// subscribers. No abort is needed, which keeps the notification reliable.
+/// Used by every handle's `cancel()` and `Drop`.
+fn drop_cancel(cancel: &CancellationToken) {
+    cancel.cancel();
+}
 
 /// Aggregate filtered events from a broadcast receiver into a ChatResponse.
 async fn aggregate_from_broadcast(
@@ -196,6 +327,7 @@ async fn aggregate_from_broadcast(
     let mut tool_calls = Vec::new();
     let mut iterations = 0usize;
     let mut finish_reason: Option<String> = None;
+    let mut usage: Option<TokenUsage> = None;
     let mut pending: Vec<(Arc<str>, String, serde_json::Value)> = Vec::new();
 
     loop {
@@ -220,7 +352,13 @@ async fn aggregate_from_broadcast(
                 }
             }
             Ok(AgentEvent::TurnStart) => iterations += 1,
-            Ok(AgentEvent::TurnEnd { finish_reason: fr }) => finish_reason = fr,
+            Ok(AgentEvent::TurnEnd {
+                finish_reason: fr,
+                usage: u,
+            }) => {
+                finish_reason = fr;
+                usage = u;
+            }
             Ok(AgentEvent::Done) => break,
             Err(broadcast::error::RecvError::Closed) => break,
             Err(broadcast::error::RecvError::Lagged(_)) => continue,
@@ -233,6 +371,7 @@ async fn aggregate_from_broadcast(
         tool_calls,
         iterations,
         finish_reason,
+        usage,
     })
 }
 

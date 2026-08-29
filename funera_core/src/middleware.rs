@@ -83,6 +83,7 @@ use serde_json::Value as JsonValue;
 use tokio::sync::mpsc;
 
 use crate::chat::message::{MsgVariant, Role};
+use crate::event_bus::token_bus::TokenUsage;
 
 // ═══════════════════════════════════════════════════════════════
 // Inspector — 只读观察，后台并行，不等待
@@ -622,11 +623,15 @@ pub trait MiddlewareEvent: Clone + Send + 'static {
     /// Factory：turn 开始。
     fn turn_start() -> Self;
 
-    /// Factory：turn 结束，携带 finish_reason。
-    fn turn_end(finish_reason: Option<String>) -> Self;
+    /// Factory：turn 结束，携带 finish_reason 与本轮 token 用量。
+    fn turn_end(finish_reason: Option<String>, usage: Option<TokenUsage>) -> Self;
 
     /// Factory：会话结束。
     fn done() -> Self;
+
+    /// Factory：会话被外部取消（middleware 可借此清理自己持有的外部服务；
+    /// 该事件流经管道但不会写入 session 历史）。
+    fn cancelled() -> Self;
 
     /// 转换为 session 历史消息。
     ///
